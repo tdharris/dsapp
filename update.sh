@@ -52,26 +52,21 @@ EOF
 	fi
 
 	echo -e "\nVersion: " $version "\n"
-	read -p "Script Uploaded... dsapp.tgz [Continue]";
+	echo -e "Successful Upload!";
+	read -p "[Exit]";
+	exit 0
 	;;
 
- 2)	
-	d=`date +%m-%d-%y_%H%M%S`
-	bakDirectory="backup-dsapp"
-	mkdir $bakDirectory 2>/dev/null;
-	cp dsapp-test.sh dsapp_$d.sh
-	tar czf "$bakDirectory/dsapp_$d.tgz" dsapp_$d.sh
+ 2)	echo 
+	git pull 2> /dev/null
 	if [ $? -eq 0 ]; then
-		echo -e "\nBackup created: " $bakDirectory"/"dsapp_$d.tgz"\n"
-	fi
-	rm dsapp_$d.sh 2>/dev/null
-	wget -q ftp://ftp.novell.com/outgoing/dsapp.tgz;
-	if [ $? -eq 0 ]; then
-		tar -xzf dsapp.tgz;
-		mv dsapp.sh dsapp-test.sh;
-		rm dsapp.tgz;
-		read -p "Script Downloaded... dsapp-test.sh [Continue]";
-	else echo "There was a problem downloading..."
+		echo -e "\nChecked GitHub Successfully!";
+		read -p "[Exit]";
+		exit 0
+	else 
+		echo -e "\nThere was a problem downloading the script with: git pull";
+		read -p "[Exit]";
+		exit 1
 	fi
 	;;
 
