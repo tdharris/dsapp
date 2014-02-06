@@ -28,6 +28,22 @@ echo '
 EOF
 	scp dsapp.tgz root@tharris7.lab.novell.com:/wrk/outgoing
 	rm dsapp.sh dsapp.tgz;
+
+	# Upload to Github.com
+	git add dsapp-test.sh update.sh 2> /dev/null
+	if [ $? -eq 0 ]; then
+		#prompt for commit message
+		read -ep "Commit message? " message
+		git commit -m "$message"
+		if [ $? -eq 0 ]; then
+			git push
+			if [ $? -eq 0 ]; then
+				echo -e "\nSuccessfully added to GitHub!"
+			fi
+		fi
+	else echo "Problem adding files for new commit: git add dsapp-test.sh update.sh"
+	fi
+
 	echo -e "\nVersion: " $version "\n"
 	read -p "Script Uploaded... dsapp.tgz [Continue]";
 	;;
