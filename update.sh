@@ -26,10 +26,15 @@ echo '
 	ha
 	put dsapp.tgz
 EOF
+	echo -e "\nCopying to root@tharris7:/wrk/outgoing: "
 	scp dsapp.tgz root@tharris7.lab.novell.com:/wrk/outgoing
 	rm dsapp.sh dsapp.tgz;
-
+	echo -e "-----------------------------------------"
+	echo -e "Added to FTP Successfully!"
+	echo "-----------------------------------------"
+	
 	# Upload to Github.com
+	echo -e "\nUpload to Github.com:"
 	git add dsapp-test.sh update.sh 2> /dev/null
 	if [ $? -eq 0 ]; then
 		#prompt for commit message
@@ -38,7 +43,9 @@ EOF
 		if [ $? -eq 0 ]; then
 			git push
 			if [ $? -eq 0 ]; then
+				echo "-----------------------------------------"
 				echo -e "\nSuccessfully added to GitHub!"
+				echo -e "-----------------------------------------\n"
 			fi
 		fi
 	else echo "Problem adding files for new commit: git add dsapp-test.sh update.sh"
