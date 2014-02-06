@@ -1876,11 +1876,11 @@ done
 							err=false
 							errDate=`grep -i "$uid" $mAlog | grep -i "expired for user" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
 							if [ $? -eq 0 ]; then
-								echo -e "User $uid has an authentication problem. $errDate\nThe user's password is expired.\n"
+								echo -e "User $uid has an authentication problem. $errDate\nThe account is expired.\n"
 								grep -i "<authentication>ldap</authentication>" $mconf > /dev/null
-									ifReturn $"\n\tChange user's expiration date:\n\t\t1. Properties of user\n\t\t2. Restrictions tab | Login Restrictions\n\t\t3. Expiration Date"
+									ifReturn $"\tChange user's expiration date:\n\t\t1. Properties of user\n\t\t2. Restrictions tab | Login Restrictions\n\t\t3. Expiration Date\n"
 								grep -i "<authentication>groupwise</authentication>" $mconf > /dev/null
-									ifReturn $"\n\tChange user's expiration date:\n\t\t1. Properties of user\n\t\t2. GroupWise tab | Account\n\t\t3. Expiration Date"
+									ifReturn $"\tChange user's expiration date:\n\t\t1. Properties of user\n\t\t2. GroupWise tab | Account\n\t\t3. Expiration Date\n"
 							fi 
 						fi
 
