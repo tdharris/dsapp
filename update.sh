@@ -44,7 +44,7 @@ EOF
 			git push
 			if [ $? -eq 0 ]; then
 				echo "-----------------------------------------"
-				echo -e "\nSuccessfully added to GitHub!"
+				echo -e "Successfully added to GitHub!"
 				echo -e "-----------------------------------------\n"
 			fi
 		fi
