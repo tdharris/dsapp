@@ -28,7 +28,6 @@
 	mconf="/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml"
 
 	# Mobility logs
-	log="/var/log/datasync"
 	configenginelog="$log/configengine/configengine.log"
 	connectormanagerlog="$log/syncengine/connectorManager.log"
 	syncenginelog="$log/syncengine/engine.log"
@@ -38,6 +37,15 @@
 	# System logs
 	messages="/var/log/messages"
 	warn="/var/log/warn"
+
+	# Mobility Directories
+	dirOptMobility="/opt/novell/datasync"
+	dirEtcMobility="/etc/datasync"
+	dirVarMobility="/var/lib/datasync"
+	log="/var/log/datasync"
+	dirPGSQL="/var/lib/pgsql"
+	
+
 
 	##################################################################################################
 	#	Version: Eenou+
@@ -77,10 +85,13 @@
 	fi
 
 	#Check for Datasync installed.
+	echo $1;
+	if [ "$1" != 'force' ];then
 	dsInstalled=`chkconfig |grep -iom 1 datasync`;
 	if [ "$dsInstalled" != "datasync" ];then
 		read -p "Datasync is not installed on this server."
 		exit 1;
+	fi
 	fi
 
 	#Get datasync version.
@@ -283,6 +294,21 @@ EOF
 				reindex database mobility;
 				\q
 EOF
+				if [ $2 == 'uninstall' ];then
+					rcpostgresql stop; killall -9 postgres &>/dev/null; killall -9 python &>/dev/null;
+					rpm -e `rpm -qa | grep "datasync-"`
+					rpm -e `rpm -qa | grep "postgresql"`
+					rm -r $dirPGSQL;
+					rm -r $dirEtcMobility;
+					rm -r $dirVarMobility;
+					rm -r $dirOptMobility;
+					rm -r $log
+
+					echo -e "Mobility uninstalled."
+					read -p "Press [Enter] to complete"
+					exit 0;
+				fi
+
 				echo -e "\nClean up complete."
 
 		}
@@ -1584,6 +1610,7 @@ EOF
 		cd $cPWD;
 		echo -e "1. Clean up and start over (Except Users)"
 		echo -e "2. Clean up and start over (Everything)"
+		echo -e "\n3. Uninstall Mobility"
 		echo -e "\n0. Back"
  		echo -n -e "\nSelection: "
  		read opt
@@ -1605,6 +1632,16 @@ EOF
 			fi
 			read -p "Press [Enter] to continue";
 		;;
+
+			3) 
+			clear;
+			echo -e "Please run the uninstall.sh script first in "$dirOptMobility;
+			if askYesOrNo $"Uninstall Mobility?"; then
+				cuso 'true' 'uninstall';
+			fi
+			read -p "Press [Enter] to continue";
+		;;
+
 		/q | q | 0) break;;
 		*) ;;
 	esac
