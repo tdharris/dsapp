@@ -1,3 +1,24 @@
+# Functions
+function githubPush {
+	# Upload to Github.com
+	echo -e "\nUpload to Github.com:"
+	git add dsapp-test.sh update.sh 2> /dev/null
+	if [ $? -eq 0 ]; then
+		#prompt for commit message
+		read -ep "Commit message? " message
+		git commit -m "$message" 2> /dev/null
+		if [ $? -eq 0 ]; then
+			git push
+			if [ $? -eq 0 ]; then
+				echo "-----------------------------------------"
+				echo -e "Successfully added to GitHub!"
+				echo -e "-----------------------------------------\n"
+			fi
+		fi
+	else echo "Problem adding files for new commit: git add dsapp-test.sh update.sh"
+	fi
+}
+
 #Menu loop
 while true;
 do
@@ -5,14 +26,15 @@ do
 echo '     
 	SCRIPT MENU      
    '
- echo -e "\t1. Upload Script to Novell FTP"
- echo -e "\t2. Download Script from Novell FTP"
+ echo -e "\t1. Make Public (FTP + Github)"
+ echo -e "\t2. Push to Github"
+ echo -e "\t3. Pull from Github"
  echo -e "\n\t0. Quit"
  echo -n -e "\n\tSelection: "
  read opt;
  case $opt in
 
- 1)	
+ 1)	# Release to FTP
 	version=`cat dsapp-test.sh | grep -wm 1 "dsappversion" | cut -f2 -d"'"`;
 	version=$((version+1))
 	version=`printf "'$version'"`
@@ -33,23 +55,7 @@ EOF
 	echo -e "Added to FTP Successfully!"
 	echo "-----------------------------------------"
 	
-	# Upload to Github.com
-	echo -e "\nUpload to Github.com:"
-	git add dsapp-test.sh update.sh 2> /dev/null
-	if [ $? -eq 0 ]; then
-		#prompt for commit message
-		read -ep "Commit message? " message
-		git commit -m "$message" 2> /dev/null
-		if [ $? -eq 0 ]; then
-			git push
-			if [ $? -eq 0 ]; then
-				echo "-----------------------------------------"
-				echo -e "Successfully added to GitHub!"
-				echo -e "-----------------------------------------\n"
-			fi
-		fi
-	else echo "Problem adding files for new commit: git add dsapp-test.sh update.sh"
-	fi
+	githubPush
 
 	echo -e "\nVersion: " $version "\n"
 	echo -e "Successful Upload!";
@@ -57,7 +63,15 @@ EOF
 	exit 0
 	;;
 
- 2)	echo 
+ 2) # Push to Github
+	githubPush
+	echo -e "Successful Upload!";
+	read -p "[Exit]";
+	exit 0
+	;;
+
+ 3)	# Pull from Github
+	echo 
 	git pull 2> /dev/null
 	if [ $? -eq 0 ]; then
 		echo -e "\nChecked GitHub Successfully!";
