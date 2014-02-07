@@ -85,7 +85,6 @@
 	fi
 
 	#Check for Datasync installed.
-	echo $1;
 	if [ "$1" != 'force' ];then
 	dsInstalled=`chkconfig |grep -iom 1 datasync`;
 	if [ "$dsInstalled" != "datasync" ];then
