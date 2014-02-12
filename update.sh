@@ -6,7 +6,7 @@ function githubPush {
 	if [ $? -eq 0 ]; then
 		#prompt for commit message
 		read -ep "Commit message? " message
-		git commit -m "$message" 2> /dev/null
+		git commit -m "$version $message" 2> /dev/null
 		if [ $? -eq 0 ]; then
 			git push
 			if [ $? -eq 0 ]; then
