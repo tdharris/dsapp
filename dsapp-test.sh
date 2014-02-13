@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='113'
+	dsappversion='114'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -693,7 +693,9 @@ function addGroup {
 	ldapPort=`grep -i "<ldapPort>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	ldapAdmin=`grep -im1 "<dn>" /etc/datasync/configengine/configengine.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	ldapPassword=`grep -im1 "<password>" /etc/datasync/configengine/configengine.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	read -ep "ldap password for $ldapAdmin: " $ldapPassword
+	if [ $dsVersion -gt $dsVersionCompare ];then
+	read -ep "ldap password for $ldapAdmin: " -s ldapPassword
+	fi
 	psql -U $dbUsername datasync -c "select distinct dn from targets where \"targetType\"='group'" | grep -i cn > $ldapGroups;
 	echo -e "\nMobility Group(s):"
 	cat $ldapGroups
@@ -1913,11 +1915,11 @@ done
 							err=false
 							errDate=`grep -i "$uid" $mAlog | grep -i "expired for user" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
 							if [ $? -eq 0 ]; then
-								echo -e "User $uid has an authentication problem. $errDate\nThe user's password is expired.\n"
+								echo -e "User $uid has an authentication problem. $errDate\nThe account is expired.\n"
 								grep -i "<authentication>ldap</authentication>" $mconf > /dev/null
-									ifReturn $"\n\tChange user's expiration date:\n\t\t1. Properties of user\n\t\t2. Restrictions tab | Login Restrictions\n\t\t3. Expiration Date"
+									ifReturn $"\tChange user's expiration date:\n\t\t1. Properties of user\n\t\t2. Restrictions tab | Login Restrictions\n\t\t3. Expiration Date\n"
 								grep -i "<authentication>groupwise</authentication>" $mconf > /dev/null
-									ifReturn $"\n\tChange user's expiration date:\n\t\t1. Properties of user\n\t\t2. GroupWise tab | Account\n\t\t3. Expiration Date"
+									ifReturn $"\tChange user's expiration date:\n\t\t1. Properties of user\n\t\t2. GroupWise tab | Account\n\t\t3. Expiration Date\n"
 							fi 
 						fi
 
