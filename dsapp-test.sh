@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='114'
+	dsappversion='115'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
