@@ -178,6 +178,32 @@
 #	Declaration of Functions
 #
 ##################################################################################################
+	function updateDsapp {
+		clear; 
+		# Remove any current versions
+		rm -f dsapp*
+
+		# FTP
+		echo -e "\nUpdating dsapp from Novell FTP..."
+		netcat -z -w 5 ftp.novell.com 21;
+		if [ $? -eq 0 ]; then
+		ftp ftp.novell.com -a <<EOF
+			cd outgoing
+			bin
+			get dsapp.tgz
+EOF
+		echo -e "\nDownloaded dsapp.tgz"
+		else
+			echo -e "Failed FTP: host (connection) might have problems\n"
+		fi
+
+		# Untar and run
+		echo -e "\nUntaring package contents..."
+		tar xzfv dsapp.tgz
+		echo -e "\nUpdate finished: v"`grep -wm 1 "dsappversion" dsapp* | cut -f2 -d"'"`
+		read -p "Press [Enter] to exit."
+		exit 0
+	}
 	function getLogs {
 		clear; 
 		rm -r $dsappupload/* 2>/dev/null
@@ -1108,6 +1134,7 @@ cd $cPWD;
  echo -e "\t4. Certificates"
  echo -e "\n\t5. User Issues"
  echo -e "\t6. Checks & Queries"
+ echo -e "\n\t7. Update dsapp"
  echo -e "\n\t0. Quit"
  echo -n -e "\n\tSelection: "
  read opt
@@ -2253,6 +2280,16 @@ EOF
 	ru+) clear;
   		removeUser;
 		;;
+
+
+##################################################################################################
+#	
+#	Update dsapp
+#
+##################################################################################################
+
+7) updateDsapp ;;
+
 # # # # # # # # # # # # # # # # # # # # # #
 
   /q | q | 0) 
