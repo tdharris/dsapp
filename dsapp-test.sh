@@ -101,7 +101,7 @@
 	}
 	getDSVersion;
 
-	echo "Checking db credentials..."
+#	echo "Checking db credentials..."
 	#Database .pgpass file / version check.
 	dbUsername="datasync_user";
 	if [ $dsVersion -gt $dsVersionCompare ];then
@@ -310,15 +310,11 @@ EOF
 				rm -fv -R /var/lib/datasync/syncengine/attachments/*
 				rm -fv -R /var/lib/datasync/mobility/attachments/*
 				#Vacuum database
-				vacuumdb -U $dbUsername -d datasync --full -v;
-				vacuumdb -U $dbUsername -d mobility --full -v;
+				vacuumDB;
 				#Index database
-				psql -U $dbUsername datasync << EOF
-				reindex database datasync;
-				\c mobility;
-				reindex database mobility;
-				\q
-EOF
+				indexDB;
+
+				#Check if uninstall parameter was passed in - Force uninstall
 				if [ $2 == 'uninstall' ];then
 					rcpostgresql stop; killall -9 postgres &>/dev/null; killall -9 python &>/dev/null;
 					rpm -e `rpm -qa | grep "datasync-"`
@@ -1110,6 +1106,67 @@ done
 echo
 read -p "Press [Enter] to continue";
 }
+
+function vacuumDB {
+	vacuumdb -U $dbUsername -d datasync --full -v;
+	vacuumdb -U $dbUsername -d mobility --full -v;
+}
+
+function indexDB {
+	psql -U $dbUsername datasync << EOF
+	reindex database datasync;
+	\c mobility;
+	reindex database mobility;
+	\q
+EOF
+}
+
+##################################################################################################
+#	
+#	Switches
+#
+##################################################################################################
+
+dsappSwitch=0
+while [ "$1" != "" ]; do
+	case $1 in #Start of Case
+
+	--help) dsappSwitch=1
+		echo -e "dsapp switches:";
+		echo -e "  --vacuum\tVacuum postgres database";
+		echo -e "  --index\tIndex postgres database";
+	;;
+
+	--vacuum) dsappSwitch=1
+		rcDS stop silent
+		vacuumDB;
+		rcDS start silent
+	;;
+
+	--index) dsappSwitch=1
+		rcDS stop silent
+		indexDB;
+		rcDS start silent
+	;;
+
+	--test2) dsappSwitch=1
+		echo "This is test2";
+	;;
+
+	--test3) dsappSwitch=1
+		echo "This is test3";
+	;;
+
+  *) ;; # End of Case
+	esac
+	shift;
+	done
+
+if [ "$dsappSwitch" -eq "1" ];then
+	exit 0;
+fi
+
+
 ##################################################################################################
 #	
 #	Main Menu
@@ -1535,8 +1592,7 @@ EOF
 		 1) clear; #Vacuum Database
 				echo -e "\nThe amount of time this takes can vary depending on the last time it was completed.\nIt is recommended that this be run every 6 months.\n"	
 			if askYesOrNo $"Do you want to continue?"; then
-			vacuumdb -U $dbUsername -d datasync --full -v;
-			vacuumdb -U $dbUsername -d mobility --full -v;
+			vacuumDB;
 			echo -e "\nDone.\n"
 			fi
 			read -p "Press [Enter] to continue";
@@ -1545,12 +1601,7 @@ EOF
 		 2) clear; #Index Database
 			echo -e "\nThe amount of time this takes can vary depending on the last time it was completed.\nIt is recommended that this be run after a database vacuum.\n"	
 			if askYesOrNo $"Do you want to continue?"; then
-				psql -U $dbUsername datasync << EOF
-					reindex database datasync;
-					\c mobility;
-					reindex database mobility;
-					\q
-EOF
+				indexDB;
 			echo -e "\nDone.\n"
 			fi
 			read -p "Press [Enter] to continue";
