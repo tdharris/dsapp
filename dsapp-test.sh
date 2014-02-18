@@ -85,7 +85,7 @@
 	fi
 
 	#Check for Datasync installed.
-	if [ "$1" != 'force' ];then
+	if [ "$1" != '--force' ];then
 	dsInstalled=`chkconfig |grep -iom 1 datasync`;
 	if [ "$dsInstalled" != "datasync" ];then
 		read -p "Datasync is not installed on this server."
@@ -101,6 +101,7 @@
 	}
 	getDSVersion;
 
+if [ "$1" != '--force' ];then
 #	echo "Checking db credentials..."
 	#Database .pgpass file / version check.
 	dbUsername="datasync_user";
@@ -149,6 +150,7 @@
 		echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 		chmod 0600 /root/.pgpass;
 	fi
+fi
 
 	##################################################################################################
 	#	Initialize Variables
@@ -1089,6 +1091,9 @@ EOF
 )"
 
 echo -e "$s\n\t\t\t      v$dsappversion\n"
+if [ $dsappForce ];then
+	echo -e "  Running --force. Some functions may not work properly.\n"
+fi
 }
 
 function whatDeviceDeleted {
@@ -1131,10 +1136,11 @@ dsappSwitch=0
 while [ "$1" != "" ]; do
 	case $1 in #Start of Case
 
-	--help) dsappSwitch=1
+	--help | '?' | -help ) dsappSwitch=1
 		echo -e "dsapp switches:";
 		echo -e "  --vacuum\tVacuum postgres database";
 		echo -e "  --index\tIndex postgres database";
+		echo -e "  --force\tForce runs dsapp (Run alone)"
 	;;
 
 	--vacuum) dsappSwitch=1
@@ -1149,16 +1155,20 @@ while [ "$1" != "" ]; do
 		rcDS start silent
 	;;
 
-	--test2) dsappSwitch=1
-		echo "This is test2";
+	--force) dsappSwitch=0
+		dsappForce=true;
+		##Force is done above, but added here to keep track of switches.
 	;;
 
 	--test3) dsappSwitch=1
 		echo "This is test3";
 	;;
 
-  *) ;; # End of Case
-	esac
+ 	*) dsappSwitch=1
+ 	 echo "dsapp: '"$1"' is not a valid command. See '--help'."
+ 	 read -p "Press [Enter] to continue."
+ 	 ;; 
+	esac # End of Case
 	shift;
 	done
 
@@ -1179,6 +1189,14 @@ NO_STRING=$"n"
 YES_NO_PROMPT=$"[y/n]: "
 YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
 NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
+
+
+#Window Size check
+if [ `tput lines` -lt '24' ] && [ `tput cols` -lt '85' ];then
+	echo -e "Terminal window to small. Please resize."
+	read -p "Press [Enter] to Continue."
+	exit 1;
+fi
 
 while :
 do
