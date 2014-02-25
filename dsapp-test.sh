@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='115'
+	dsappversion='116'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -729,9 +729,9 @@ function addGroup {
 	echo -e "\nGroup Membership:"
 	while read p; do
 		if [ $ldapPort==389 ]; then
-  			`ldapsearch -x -H ldap://$ldapAddress -D $ldapAdmin -w $ldapPassword -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/^/"/' | sed 's/$/","'$p'"/' >> $ldapGroupMembership`
+  			`ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/^/"/' | sed 's/$/","'$p'"/' >> $ldapGroupMembership`
 		elif [ $ldapPort==636 ]; then
-			`ldapsearch -x -H ldaps://$ldapAddress -D $ldapAdmin -w $ldapPassword -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/^/"/' | sed 's/$/","'$p'"/' >> $ldapGroupMembership`
+			`ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/^/"/' | sed 's/$/","'$p'"/' >> $ldapGroupMembership`
 		fi
 	done < $ldapGroups
 	cat $ldapGroupMembership
@@ -1526,6 +1526,7 @@ EOF
 		echo -e "\n\t3. Back up Databases"
 		echo -e "\t4. Restore Databases"
 		echo -e "\t5. Fix targets/membershipCache"
+		echo -e "\n\t6. CUSO Clean-Up Start-Over"
 		echo -e "\n\t0. Back -- Start Datasync"
 		echo -n -e "\n\tSelection: "
 		read opt
@@ -1631,7 +1632,7 @@ EOF
 			;;
 
 
-		cuso+ | CUSO+) #Deletes everything in the database except targets and membershipCache. Removes all attachments
+		6 | cuso+ | CUSO+) #Deletes everything in the database except targets and membershipCache. Removes all attachments
 			   #Cleans everything up except users and starts fresh.
 			   while :
 		do
@@ -1677,7 +1678,7 @@ EOF
 	done
 	;; 
 
-	  /q | q | 0) echo "Starting Datasync..."; rcDS start; break;;
+	  /q | q | 0) clear; echo -e "\nStarting Datasync..."; rcDS start; break;;
 	  *) ;;
 	esac
 	done
