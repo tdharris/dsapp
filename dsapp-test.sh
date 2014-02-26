@@ -440,7 +440,7 @@ EOF
 		fi
 
 		if [ "$1" = "start" ] && [ "$2" = "silent" ]; then
-				$rcScript start 1>/dev/null;
+				$rcScript start &>/dev/null;
 		fi
 
 		if [ "$1" = "stop" ] && [ "$2" = "" ]; then
@@ -449,7 +449,7 @@ EOF
 		fi
 
 		if [ "$1" = "stop" ] && [ "$2" = "silent" ]; then
-				$rcScript stop 1>/dev/null;
+				$rcScript stop &>/dev/null;
 				killall -9 python &>/dev/null;
 		fi
 	}
@@ -1131,7 +1131,6 @@ EOF
 #	Switches
 #
 ##################################################################################################
-
 dsappSwitch=0
 while [ "$1" != "" ]; do
 	case $1 in #Start of Case
@@ -1141,6 +1140,8 @@ while [ "$1" != "" ]; do
 		echo -e "  --vacuum\tVacuum postgres database";
 		echo -e "  --index\tIndex postgres database";
 		echo -e "  --force\tForce runs dsapp (Run alone)"
+		echo -e "  --users\tPrint a list of all users with count"
+		echo -e "  --devices\tPrint a list of all devices with count"
 	;;
 
 	--vacuum) dsappSwitch=1
@@ -1160,8 +1161,34 @@ while [ "$1" != "" ]; do
 		##Force is done above, but added here to keep track of switches.
 	;;
 
-	--test3) dsappSwitch=1
-		echo "This is test3";
+	--users) dsappSwitch=1
+		if [ -f ./db.log ];then
+			echo "Count of users:" > db.log;
+			psql -U $dbUsername mobility -t -c "select count(*) from users;" >> db.log;
+			echo "Count of devices:" >> db.log; 
+			psql -U $dbUsername mobility -t -c "select count(*) from devices where devicetype!='';" >> db.log;
+			psql -U $dbUsername mobility -c "select u.userid, devicetype from devices d INNER JOIN users u ON d.userid = u.guid;" >> db.log;
+		else
+			echo "Count of users:"> db.log;
+			psql -U $dbUsername mobility -t -c "select count(*) from users;" >> db.log;
+			echo "Users:" >> db.log;
+			psql -U $dbUsername mobility -c "select userid from users;" >> db.log;
+		fi
+	;;
+
+	--devices) dsappSwitch=1
+		if [ -f ./db.log ];then
+			echo "Count of users:" > db.log;
+			psql -U $dbUsername mobility -t -c "select count(*) from users;" >> db.log;
+			echo "Count of devices:" >> db.log; 
+			psql -U $dbUsername mobility -t -c "select count(*) from devices where devicetype!='';" >> db.log;
+			psql -U $dbUsername mobility -c "select u.userid, devicetype from devices d INNER JOIN users u ON d.userid = u.guid;" >> db.log;
+		else
+			echo "Count of devices:" > db.log; 
+			psql -U $dbUsername mobility -t -c "select count(*) from devices where devicetype!='';" >> db.log; 
+			echo "Devices:" >> db.log; 
+			psql -U $dbUsername mobility -c "select devicetype,description from devices where devicetype!='';" >> db.log;
+		fi
 	;;
 
  	*) dsappSwitch=1
@@ -1171,6 +1198,11 @@ while [ "$1" != "" ]; do
 	esac # End of Case
 	shift;
 	done
+
+if [ -f ./db.log ];then
+	less db.log
+	rm db.log
+fi
 
 if [ "$dsappSwitch" -eq "1" ];then
 	exit 0;
