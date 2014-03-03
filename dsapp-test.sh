@@ -1135,7 +1135,7 @@ dsappSwitch=0
 while [ "$1" != "" ]; do
 	case $1 in #Start of Case
 
-	--help | '?' | -help ) dsappSwitch=1
+	--help | '?' | -h) dsappSwitch=1
 		echo -e "dsapp switches:";
 		echo -e "  -v  --vacuum\tVacuum postgres database";
 		echo -e "  -i  --index\tIndex postgres database";
