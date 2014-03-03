@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='118'
+	dsappversion='119'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -1137,31 +1137,31 @@ while [ "$1" != "" ]; do
 
 	--help | '?' | -help ) dsappSwitch=1
 		echo -e "dsapp switches:";
-		echo -e "  --vacuum\tVacuum postgres database";
-		echo -e "  --index\tIndex postgres database";
-		echo -e "  --force\tForce runs dsapp (Run alone)"
-		echo -e "  --users\tPrint a list of all users with count"
-		echo -e "  --devices\tPrint a list of all devices with count"
+		echo -e "  -v  --vacuum\tVacuum postgres database";
+		echo -e "  -i  --index\tIndex postgres database";
+		echo -e "  -f  --force\tForce runs dsapp (Run alone)"
+		echo -e "  -u  --users\tPrint a list of all users with count"
+		echo -e "  -d  --devices\tPrint a list of all devices with count"
 	;;
 
-	--vacuum) dsappSwitch=1
+	--vacuum | -v) dsappSwitch=1
 		rcDS stop silent
 		vacuumDB;
 		rcDS start silent
 	;;
 
-	--index) dsappSwitch=1
+	--index | -i) dsappSwitch=1
 		rcDS stop silent
 		indexDB;
 		rcDS start silent
 	;;
 
-	--force) dsappSwitch=0
+	--force | -f ) dsappSwitch=0
 		dsappForce=true;
 		##Force is done above, but added here to keep track of switches.
 	;;
 
-	--users) dsappSwitch=1
+	--users | -u) dsappSwitch=1
 		if [ -f ./db.log ];then
 			echo "Count of users:" > db.log;
 			psql -U $dbUsername mobility -t -c "select count(*) from users;" >> db.log;
@@ -1176,7 +1176,7 @@ while [ "$1" != "" ]; do
 		fi
 	;;
 
-	--devices) dsappSwitch=1
+	--devices | -d) dsappSwitch=1
 		if [ -f ./db.log ];then
 			echo "Count of users:" > db.log;
 			psql -U $dbUsername mobility -t -c "select count(*) from users;" >> db.log;
