@@ -180,6 +180,64 @@ fi
 #	Declaration of Functions
 #
 ##################################################################################################
+	function askYesOrNo {
+		REPLY=""
+		while [ -z "$REPLY" ] ; do
+			read -ep "$1 $YES_NO_PROMPT" REPLY
+			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+			case $REPLY in
+				$YES_CAPS ) printf '\n'; return 0 ;;
+				$NO_CAPS ) printf '\n'; return 1 ;;
+				* ) REPLY=""
+			esac
+		done
+	}
+
+	function askYesOrNoPromptContinue {
+		REPLY=""
+		while [ -z "$REPLY" ] ; do
+			read -ep "$1 $YES_NO_PROMPT" REPLY
+			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+			case $REPLY in
+				$YES_CAPS ) return 0 ;;
+				$NO_CAPS ) return 1 `read -p "Press [Enter] when completed..."` ;;
+				* ) REPLY=""
+			esac
+		done
+	}
+
+	function ask {
+		REPLY=""
+		while [ -z "$REPLY" ] ; do
+			read -ep "$1 $YES_NO_PROMPT" REPLY
+			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+			case $REPLY in
+				$YES_CAPS ) $2; return 0 ;;
+				$NO_CAPS ) return 1 ;;
+				* ) REPLY=""
+			esac
+		done
+	}
+
+	# Initialize the yes/no prompt
+	YES_STRING=$"y"
+	NO_STRING=$"n"
+	YES_NO_PROMPT=$"[y/n]: "
+	YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
+	NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
+
+	function askRegister {
+		REPLY=""
+		while [ -z "$REPLY" ] ; do
+			read -ep "$1 $YES_NO_PROMPT" REPLY
+			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+			case $REPLY in
+				$YES_CAPS ) return 0 ;;
+				$NO_CAPS ) registerDS ;;
+				* ) REPLY=""
+			esac
+		done
+	}
 	function updateDsapp {
 		clear; 
 		# Remove any current versions
@@ -206,6 +264,7 @@ EOF
 		read -p "Press [Enter] to exit."
 		exit 0
 	}
+
 	function getLogs {
 		clear; 
 		rm -r $dsappupload/* 2>/dev/null
@@ -368,58 +427,6 @@ EOF
 			sed -i "s|maxage.*|maxage 14|g" /etc/logrotate.d/datasync-*;
 			echo -e "\nDone.\n"
 		fi
-	}
-
-	function askYesOrNo {
-		REPLY=""
-		while [ -z "$REPLY" ] ; do
-			read -ep "$1 $YES_NO_PROMPT" REPLY
-			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
-			case $REPLY in
-				$YES_CAPS ) printf '\n'; return 0 ;;
-				$NO_CAPS ) printf '\n'; return 1 ;;
-				* ) REPLY=""
-			esac
-		done
-	}
-
-	function askYesOrNoPromptContinue {
-		REPLY=""
-		while [ -z "$REPLY" ] ; do
-			read -ep "$1 $YES_NO_PROMPT" REPLY
-			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
-			case $REPLY in
-				$YES_CAPS ) return 0 ;;
-				$NO_CAPS ) return 1 `read -p "Press [Enter] when completed..."` ;;
-				* ) REPLY=""
-			esac
-		done
-	}
-
-	function ask {
-		REPLY=""
-		while [ -z "$REPLY" ] ; do
-			read -ep "$1 $YES_NO_PROMPT" REPLY
-			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
-			case $REPLY in
-				$YES_CAPS ) $2; return 0 ;;
-				$NO_CAPS ) return 1 ;;
-				* ) REPLY=""
-			esac
-		done
-	}
-
-	function askRegister {
-		REPLY=""
-		while [ -z "$REPLY" ] ; do
-			read -ep "$1 $YES_NO_PROMPT" REPLY
-			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
-			case $REPLY in
-				$YES_CAPS ) return 0 ;;
-				$NO_CAPS ) registerDS ;;
-				* ) REPLY=""
-			esac
-		done
 	}
 
 	function progressDot {
@@ -1071,6 +1078,70 @@ fi
 rm $dsapptmp/tempFile*.xml
 }
 
+function updateMobilityFTP {
+	clear;
+	if askYesOrNo $"Permission to restart datasync when applying update?"; then
+		echo -e "\n"
+		echo -e "Connecting to ftp..."
+		netcat -z -w 5 ftp.novell.com 21;
+		if [ $? -ne 1 ];then
+		read -ep "FTP Filename: " ds;
+		dbuild=`echo $ds | cut -f1 -d"."`;
+		cd /root/Downloads;
+		wget "ftp://ftp.novell.com/outgoing/$ds"
+		if [ $? -ne 1 ];then
+			tar xvfz $ds 2>/dev/null;
+			unzip $ds 2>/dev/null;
+		dsISO=`find /root/Downloads/ -type f -name 'novell*mobility-*'$dbuild'.iso' | sed 's!.*/!!'`
+			zypper rr mobility 2>/dev/null;
+			zypper addrepo 'iso:///?iso='$dsISO'&url=file:///root/Downloads' mobility;
+		dsUpdate mobility;
+		fi
+		else
+			echo -e "Failed FTP: host (connection) might have problems\n"
+		fi
+		else
+			echo -e "\nInvalid file name... Returning to Main Menu.";		
+		fi
+	read -p "Press [Enter] to continue";
+}
+
+function checkNightlyMaintenance {
+	echo -e "\nNightly Maintenance:"
+	cat /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | grep -i database
+	echo -e "\nNightly Maintenance History:"
+	history=`cat $mAlog | grep -i  "nightly maintenance" | tail -5`
+	if [ -z "$history" ]; then
+		daysOld=0;
+		while [[ $daysOld -le 5 ]]; do
+			daysOld=$(($daysOld+1));
+			appendDate=`date +"%Y%m%d" --date="-$daysOld day"`
+			history=`grep -i "nightly maintenance" "$mAlog-$appendDate.gz" 2>/dev/null | tail -5`
+			if [ -n "$history" ]; then
+				echo "$mAlog-"$appendDate".gz"
+				echo -e "$history"
+				break;
+			fi
+		done
+		if [ -z "$history" ]; then
+			echo -e "Nothing found. Nightly Maintenance has not run recently."
+		fi
+	else echo -e "$mAlog\n""$history"
+	fi
+	echo ""
+}
+
+function showStatus {
+	# Pending sync items - Monitor
+	echo -e "\nGroupWise-connector:"
+	tac $gAlog | grep -im1 queue
+	psql -U $dbUsername datasync -c "select state,count(*) from consumerevents where state!='1000' group by state;"
+	
+	echo -e "\nMobility-connector:"
+	tac $mAlog | grep -im1 queue
+	psql -U $dbUsername mobility -c "select state,count(*) from syncevents where state!='1000' group by state;"
+}
+
 function mpsql {
 	psql -U $dbUsername mobility
 }
@@ -1128,7 +1199,7 @@ EOF
 
 ##################################################################################################
 #	
-#	Switches
+#	Switches / Command-line parameters
 #
 ##################################################################################################
 dsappSwitch=0
@@ -1137,11 +1208,15 @@ while [ "$1" != "" ]; do
 
 	--help | '?' | -h) dsappSwitch=1
 		echo -e "dsapp switches:";
-		echo -e "  -v  --vacuum\tVacuum postgres database";
-		echo -e "  -i  --index\tIndex postgres database";
-		echo -e "  -f  --force\tForce runs dsapp (Run alone)"
-		echo -e "  -u  --users\tPrint a list of all users with count"
-		echo -e "  -d  --devices\tPrint a list of all devices with count"
+		echo -e "  -f  \t--force\t\tForce runs dsapp (Run alone)"
+		echo -e "  -ul \t--uploadLogs\tUpload Mobility logs to Novell FTP";
+		echo -e "  -c  \t--check\t\tCheck Nightly Maintenance"
+		echo -e "  -s  \t--status\tShow Sync status of connectors"
+		echo -e "  -up \t--update\tUpdate Mobility (FTP ISO)";
+		echo -e "  -v  \t--vacuum\tVacuum postgres database";
+		echo -e "  -i  \t--index\t\tIndex postgres database";
+		echo -e "  -u \t--users\t\tPrint a list of all users with count"
+		echo -e "  -d  \t--devices\tPrint a list of all devices with count"
 	;;
 
 	--vacuum | -v) dsappSwitch=1
@@ -1161,7 +1236,23 @@ while [ "$1" != "" ]; do
 		##Force is done above, but added here to keep track of switches.
 	;;
 
-	--users | -u) dsappSwitch=1
+	--update | -up) dsappSwitch=1
+		updateMobilityFTP
+	;;
+
+	--uploadLogs | -ul) dsappSwitch=1
+		getLogs
+	;;
+
+	--checkMaintenance | -c) dsappSwitch=1
+		checkNightlyMaintenance
+	;;
+
+	--status | -s) dsappSwitch=1
+		showStatus
+	;;
+
+	-u | --users) dsappSwitch=1
 		if [ -f ./db.log ];then
 			echo "Count of users:" > db.log;
 			psql -U $dbUsername mobility -t -c "select count(*) from users;" >> db.log;
@@ -1214,14 +1305,6 @@ fi
 #	Main Menu
 #
 ##################################################################################################
-
-# Initialize the yes/no prompt
-YES_STRING=$"y"
-NO_STRING=$"n"
-YES_NO_PROMPT=$"[y/n]: "
-YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
-NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
-
 
 #Window Size check
 if [ `tput lines` -lt '24' ] && [ `tput cols` -lt '85' ];then
@@ -1526,31 +1609,7 @@ EOF
 				;;
 
 			4) #Update Datasync FTP
-				clear;
-				if askYesOrNo $"Permission to restart datasync when applying update?"; then
-					echo -e "\n"
-					echo -e "Connecting to ftp..."
-					netcat -z -w 5 ftp.novell.com 21;
-					if [ $? -ne 1 ];then
-					read -ep "FTP Filename: " ds;
-					dbuild=`echo $ds | cut -f1 -d"."`;
-					cd /root/Downloads;
-					wget "ftp://ftp.novell.com/outgoing/$ds"
-					if [ $? -ne 1 ];then
-						tar xvfz $ds 2>/dev/null;
-						unzip $ds 2>/dev/null;
-					dsISO=`find /root/Downloads/ -type f -name 'novell*mobility-*'$dbuild'.iso' | sed 's!.*/!!'`
-						zypper rr mobility 2>/dev/null;
-						zypper addrepo 'iso:///?iso='$dsISO'&url=file:///root/Downloads' mobility;
-					dsUpdate mobility;
-					fi
-					else
-						echo -e "Failed FTP: host (connection) might have problems\n"
-					fi
-					else
-						echo -e "\nInvalid file name... Returning to Main Menu.";		
-					fi
-				read -p "Press [Enter] to continue";
+				updateMobilityFTP
 				;;
 
 			5) # TID 7012819 - Some emails sent, replied or forwarded from some devices are messed up, in plain text format, blank or garbled, HTML
@@ -2155,34 +2214,10 @@ EOF
 
 ##################################################################################################
 #	
-#	Queries Menu
+#	Checks & Queries Menu
 #
 ##################################################################################################
 	6) # Queries
-		function checkNightlyMaintenance {
-			echo -e "\nNightly Maintenance:"
-			cat /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | grep -i database
-			echo -e "\nNightly Maintenance History:"
-			history=`cat $mAlog | grep -i  "nightly maintenance" | tail -5`
-			if [ -z "$history" ]; then
-				daysOld=0;
-				while [[ $daysOld -le 5 ]]; do
-					daysOld=$(($daysOld+1));
-					appendDate=`date +"%Y%m%d" --date="-$daysOld day"`
-					history=`grep -i "nightly maintenance" "$mAlog-$appendDate.gz" 2>/dev/null | tail -5`
-					if [ -n "$history" ]; then
-						echo "$mAlog-"$appendDate".gz"
-						echo -e "$history"
-						break;
-					fi
-				done
-				if [ -z "$history" ]; then
-					echo -e "Nothing found. Nightly Maintenance has not run recently."
-				fi
-			else echo -e "$mAlog\n""$history"
-			fi
-			echo ""
-		}
 		while :
 		do
 		clear;
@@ -2231,16 +2266,9 @@ EOF
 						watch -d -n$seconds "psql -U $dbUsername $database -c \"$var\""
 				fi
 				;;
-			3) # Pending sync items - Monitor
-				clear;
-				echo -e "\nGroupWise-connector:"
-				tac $gAlog | grep -im1 queue
-				psql -U $dbUsername datasync -c "select state,count(*) from consumerevents where state!='1000' group by state;"
-				
-				echo -e "\nMobility-connector:"
-				tac $mAlog | grep -im1 queue
-				psql -U $dbUsername mobility -c "select state,count(*) from syncevents where state!='1000' group by state;"
-				
+
+			3)  clear;
+				showStatus
 				read -p "Press [Enter] to continue.";
 				;;
 
