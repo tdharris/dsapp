@@ -85,7 +85,7 @@
 	fi
 
 	#Check for Datasync installed.
-	if [ "$1" != 'force' ];then
+	if [ "$1" != '--force' ];then
 	dsInstalled=`chkconfig |grep -iom 1 datasync`;
 	if [ "$dsInstalled" != "datasync" ];then
 		read -p "Datasync is not installed on this server."
@@ -101,7 +101,8 @@
 	}
 	getDSVersion;
 
-	echo "Checking db credentials..."
+if [ "$1" != '--force' ];then
+#	echo "Checking db credentials..."
 	#Database .pgpass file / version check.
 	dbUsername="datasync_user";
 	if [ $dsVersion -gt $dsVersionCompare ];then
@@ -149,6 +150,7 @@
 		echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 		chmod 0600 /root/.pgpass;
 	fi
+fi
 
 	##################################################################################################
 	#	Initialize Variables
@@ -310,15 +312,11 @@ EOF
 				rm -fv -R /var/lib/datasync/syncengine/attachments/*
 				rm -fv -R /var/lib/datasync/mobility/attachments/*
 				#Vacuum database
-				vacuumdb -U $dbUsername -d datasync --full -v;
-				vacuumdb -U $dbUsername -d mobility --full -v;
+				vacuumDB;
 				#Index database
-				psql -U $dbUsername datasync << EOF
-				reindex database datasync;
-				\c mobility;
-				reindex database mobility;
-				\q
-EOF
+				indexDB;
+
+				#Check if uninstall parameter was passed in - Force uninstall
 				if [ $2 == 'uninstall' ];then
 					rcpostgresql stop; killall -9 postgres &>/dev/null; killall -9 python &>/dev/null;
 					rpm -e `rpm -qa | grep "datasync-"`
@@ -442,7 +440,7 @@ EOF
 		fi
 
 		if [ "$1" = "start" ] && [ "$2" = "silent" ]; then
-				$rcScript start 1>/dev/null;
+				$rcScript start &>/dev/null;
 		fi
 
 		if [ "$1" = "stop" ] && [ "$2" = "" ]; then
@@ -451,7 +449,7 @@ EOF
 		fi
 
 		if [ "$1" = "stop" ] && [ "$2" = "silent" ]; then
-				$rcScript stop 1>/dev/null;
+				$rcScript stop &>/dev/null;
 				killall -9 python &>/dev/null;
 		fi
 	}
@@ -1093,6 +1091,9 @@ EOF
 )"
 
 echo -e "$s\n\t\t\t      v$dsappversion\n"
+if [ $dsappForce ];then
+	echo -e "  Running --force. Some functions may not work properly.\n"
+fi
 }
 
 function whatDeviceDeleted {
@@ -1110,6 +1111,104 @@ done
 echo
 read -p "Press [Enter] to continue";
 }
+
+function vacuumDB {
+	vacuumdb -U $dbUsername -d datasync --full -v;
+	vacuumdb -U $dbUsername -d mobility --full -v;
+}
+
+function indexDB {
+	psql -U $dbUsername datasync << EOF
+	reindex database datasync;
+	\c mobility;
+	reindex database mobility;
+	\q
+EOF
+}
+
+##################################################################################################
+#	
+#	Switches
+#
+##################################################################################################
+dsappSwitch=0
+while [ "$1" != "" ]; do
+	case $1 in #Start of Case
+
+	--help | '?' | -help ) dsappSwitch=1
+		echo -e "dsapp switches:";
+		echo -e "  --vacuum\tVacuum postgres database";
+		echo -e "  --index\tIndex postgres database";
+		echo -e "  --force\tForce runs dsapp (Run alone)"
+		echo -e "  --users\tPrint a list of all users with count"
+		echo -e "  --devices\tPrint a list of all devices with count"
+	;;
+
+	--vacuum) dsappSwitch=1
+		rcDS stop silent
+		vacuumDB;
+		rcDS start silent
+	;;
+
+	--index) dsappSwitch=1
+		rcDS stop silent
+		indexDB;
+		rcDS start silent
+	;;
+
+	--force) dsappSwitch=0
+		dsappForce=true;
+		##Force is done above, but added here to keep track of switches.
+	;;
+
+	--users) dsappSwitch=1
+		if [ -f ./db.log ];then
+			echo "Count of users:" > db.log;
+			psql -U $dbUsername mobility -t -c "select count(*) from users;" >> db.log;
+			echo "Count of devices:" >> db.log; 
+			psql -U $dbUsername mobility -t -c "select count(*) from devices where devicetype!='';" >> db.log;
+			psql -U $dbUsername mobility -c "select u.userid, devicetype from devices d INNER JOIN users u ON d.userid = u.guid;" >> db.log;
+		else
+			echo "Count of users:"> db.log;
+			psql -U $dbUsername mobility -t -c "select count(*) from users;" >> db.log;
+			echo "Users:" >> db.log;
+			psql -U $dbUsername mobility -c "select userid from users;" >> db.log;
+		fi
+	;;
+
+	--devices) dsappSwitch=1
+		if [ -f ./db.log ];then
+			echo "Count of users:" > db.log;
+			psql -U $dbUsername mobility -t -c "select count(*) from users;" >> db.log;
+			echo "Count of devices:" >> db.log; 
+			psql -U $dbUsername mobility -t -c "select count(*) from devices where devicetype!='';" >> db.log;
+			psql -U $dbUsername mobility -c "select u.userid, devicetype from devices d INNER JOIN users u ON d.userid = u.guid;" >> db.log;
+		else
+			echo "Count of devices:" > db.log; 
+			psql -U $dbUsername mobility -t -c "select count(*) from devices where devicetype!='';" >> db.log; 
+			echo "Devices:" >> db.log; 
+			psql -U $dbUsername mobility -c "select devicetype,description from devices where devicetype!='';" >> db.log;
+		fi
+	;;
+
+ 	*) dsappSwitch=1
+ 	 echo "dsapp: '"$1"' is not a valid command. See '--help'."
+ 	 read -p "Press [Enter] to continue."
+ 	 ;; 
+	esac # End of Case
+	shift;
+	done
+
+if [ -f ./db.log ];then
+	less db.log
+	rm db.log
+fi
+
+if [ "$dsappSwitch" -eq "1" ];then
+	exit 0;
+fi
+
+
 ##################################################################################################
 #	
 #	Main Menu
@@ -1122,6 +1221,14 @@ NO_STRING=$"n"
 YES_NO_PROMPT=$"[y/n]: "
 YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
 NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
+
+
+#Window Size check
+if [ `tput lines` -lt '24' ] && [ `tput cols` -lt '85' ];then
+	echo -e "Terminal window to small. Please resize."
+	read -p "Press [Enter] to Continue."
+	exit 1;
+fi
 
 while :
 do
@@ -1536,8 +1643,7 @@ EOF
 		 1) clear; #Vacuum Database
 				echo -e "\nThe amount of time this takes can vary depending on the last time it was completed.\nIt is recommended that this be run every 6 months.\n"	
 			if askYesOrNo $"Do you want to continue?"; then
-			vacuumdb -U $dbUsername -d datasync --full -v;
-			vacuumdb -U $dbUsername -d mobility --full -v;
+			vacuumDB;
 			echo -e "\nDone.\n"
 			fi
 			read -p "Press [Enter] to continue";
@@ -1546,12 +1652,7 @@ EOF
 		 2) clear; #Index Database
 			echo -e "\nThe amount of time this takes can vary depending on the last time it was completed.\nIt is recommended that this be run after a database vacuum.\n"	
 			if askYesOrNo $"Do you want to continue?"; then
-				psql -U $dbUsername datasync << EOF
-					reindex database datasync;
-					\c mobility;
-					reindex database mobility;
-					\q
-EOF
+				indexDB;
 			echo -e "\nDone.\n"
 			fi
 			read -p "Press [Enter] to continue";
