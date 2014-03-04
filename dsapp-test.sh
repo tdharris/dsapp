@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='119'
+	dsappversion='120'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -268,6 +268,7 @@ EOF
 	function getLogs {
 		clear; 
 		rm -r $dsappupload/* 2>/dev/null
+		mkdir $dsappupload/version
 
 		if askYesOrNo $"Grab log files?"; then
 			echo -e "Copying log files..."
@@ -276,13 +277,13 @@ EOF
 			cp --parents $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $dsappupload 2>/dev/null
 
 			# Get version information..
-			cat $version > $dsappupload/mobility-version
-			cat $serverinfo > $dsappupload/os-version
-			rpm -qa | grep -i $rpminfo > $dsappupload/rpm-info
-			rpm -qa | grep -i python > $dsappupload/rpm-python-info
+			cat $version > $dsappupload/version/mobility-version
+			cat $serverinfo > $dsappupload/version/os-version
+			rpm -qa | grep -i $rpminfo > $dsappupload/version/rpm-info
+			rpm -qa | grep -i python > $dsappupload/version/rpm-python-info
 
 			# Get Logging Levels
-			logginglevels="$dsappupload/mobility-logging-info"
+			logginglevels="$dsappupload/var/log/datasync/mobility-logging-info"
 			echo -e "\nLogging Levels indicated below:" >> $logginglevels;
 
 			etc="/etc/datasync"
@@ -301,6 +302,13 @@ EOF
 
 			echo -e "WebAdmin:" >> $logginglevels;
 			sed -n '/<log>/,$p; /<\/log>/q' $etc/webadmin/server.xml | egrep 'level|verbose' >> $logginglevels;
+
+			# Health Check
+			echo -e "Health Check...\n"
+			nightlyMaintenance="$dsappupload/nightlyMaintenance"
+			syncStatus="$dsappupload/syncStatus"
+			checkNightlyMaintenance > $nightlyMaintenance
+			showStatus > $syncStatus
 
 			# Compress log files..
 			cd $dsappupload
@@ -1542,7 +1550,7 @@ EOF
 		echo -e "\t2. Update with Novell Update Channel"
 		echo -e "\t3. Update with Local ISO"
 		echo -e "\t4. Update with Novell FTP"
-		echo -e "\n\t5. Update 1.2.5.299 with patch files\n\t  (fix for garbled - TID 7012819, bug 819843)"
+		# echo -e "\n\t5. Update 1.2.5.299 with patch files\n\t  (fix for garbled - TID 7012819, bug 819843)"
 		echo -e "\n\t0. Back"
  		echo -n -e "\n\tSelection: "
  		read opt
@@ -1612,57 +1620,57 @@ EOF
 				updateMobilityFTP
 				;;
 
-			5) # TID 7012819 - Some emails sent, replied or forwarded from some devices are messed up, in plain text format, blank or garbled, HTML
-			   # Apply the 3 patch files from bug 819843.
-			   clear;
-			   cat /opt/novell/datasync/version | grep 1.2.5.299 >/dev/null;
-			   if [ $? -ne 0 ]; then
-			   		echo -e "\nDataSync is not version 1.2.5.299.\n"
-			   		read -p "Press [Enter] to continue";
-			   		break;
-			   fi
-			   if askYesOrNo $"Permission to restart datasync when applying patch files?"; then
-			   	echo -e "\n"
-				echo -e "Connecting to ftp..."
-				netcat -z -w 5 ftp.novell.com 21;
-				if [ $? -eq 0 ];then
-				cd /root/Downloads;
-				rm 819843.tgz* 2>/dev/null
-				wget "ftp://ftp.novell.com/outgoing/819843.tgz"
-					if [ $? -eq 0 ];then
-						echo
-						$rcScript stop; killall -9 python;
-						echo
-						tar xvfz 819843.tgz 2>/dev/null;
-						lib='/opt/novell/datasync/syncengine/connectors/mobility/lib'
-						# Backup files
-						mv $lib/mobility_util.pyc $lib/mobility_util.orig
-						mv $lib/device/smartForward.pyc $lib/device/smartForward.orig
-						mv $lib/device/sendMail.pyc $lib/device/sendMail.orig
-						echo -e "Files backed up."
-						echo -e "\nMoving patch files into place."
-						mv -v mobility_util.pyc $lib
-						mv -v smartForward.pyc $lib/device
-						mv -v sendMail.pyc $lib/device
-						echo
-						$rcScript start;
-						if [ $? -eq 0 ]; then
-							echo ""; cd $lib
-							ls -l mobility_util.pyc
-							cd device
-							ls -l smartForward.pyc
-							ls -l sendMail.pyc
-							echo -e "\nPatch files have been applied successfully.\n"
+			# 5) # TID 7012819 - Some emails sent, replied or forwarded from some devices are messed up, in plain text format, blank or garbled, HTML
+			#    # Apply the 3 patch files from bug 819843.
+			#    clear;
+			#    cat /opt/novell/datasync/version | grep 1.2.5.299 >/dev/null;
+			#    if [ $? -ne 0 ]; then
+			#    		echo -e "\nDataSync is not version 1.2.5.299.\n"
+			#    		read -p "Press [Enter] to continue";
+			#    		break;
+			#    fi
+			#    if askYesOrNo $"Permission to restart datasync when applying patch files?"; then
+			#    	echo -e "\n"
+			# 	echo -e "Connecting to ftp..."
+			# 	netcat -z -w 5 ftp.novell.com 21;
+			# 	if [ $? -eq 0 ];then
+			# 	cd /root/Downloads;
+			# 	rm 819843.tgz* 2>/dev/null
+			# 	wget "ftp://ftp.novell.com/outgoing/819843.tgz"
+			# 		if [ $? -eq 0 ];then
+			# 			echo
+			# 			$rcScript stop; killall -9 python;
+			# 			echo
+			# 			tar xvfz 819843.tgz 2>/dev/null;
+			# 			lib='/opt/novell/datasync/syncengine/connectors/mobility/lib'
+			# 			# Backup files
+			# 			mv $lib/mobility_util.pyc $lib/mobility_util.orig
+			# 			mv $lib/device/smartForward.pyc $lib/device/smartForward.orig
+			# 			mv $lib/device/sendMail.pyc $lib/device/sendMail.orig
+			# 			echo -e "Files backed up."
+			# 			echo -e "\nMoving patch files into place."
+			# 			mv -v mobility_util.pyc $lib
+			# 			mv -v smartForward.pyc $lib/device
+			# 			mv -v sendMail.pyc $lib/device
+			# 			echo
+			# 			$rcScript start;
+			# 			if [ $? -eq 0 ]; then
+			# 				echo ""; cd $lib
+			# 				ls -l mobility_util.pyc
+			# 				cd device
+			# 				ls -l smartForward.pyc
+			# 				ls -l sendMail.pyc
+			# 				echo -e "\nPatch files have been applied successfully.\n"
 
-						else echo -e "\nThere was a problem restarting datasync.\n"; $rcScript status; netstat -ltpn | grep -i python
-						fi
-					else echo -e "Unable to download ftp://ftp.novell.com/outgoing/819843.tgz\n"
-					fi
-				else echo -e "Failed FTP: host (connection) might have problems\n"
-				fi
-				read -p "Press [Enter] to continue";
-			fi
-			;;
+			# 			else echo -e "\nThere was a problem restarting datasync.\n"; $rcScript status; netstat -ltpn | grep -i python
+			# 			fi
+			# 		else echo -e "Unable to download ftp://ftp.novell.com/outgoing/819843.tgz\n"
+			# 		fi
+			# 	else echo -e "Failed FTP: host (connection) might have problems\n"
+			# 	fi
+			# 	read -p "Press [Enter] to continue";
+			# fi
+			# ;;
 
 			  /q | q | 0) break;;
 			  *) ;;
