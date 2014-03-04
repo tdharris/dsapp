@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='120'
+	dsappversion='121'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -96,8 +96,8 @@
 	#Get datasync version.
 	function getDSVersion
 	{
-	dsVersion=`cat $version | tr -d '.'`
-	dsVersionCompare='200000'
+	dsVersion=`cat $version | cut -c1-7 | tr -d '.'`
+	dsVersionCompare='2000'
 	}
 	getDSVersion;
 
