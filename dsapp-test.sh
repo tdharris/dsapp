@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='121'
+	dsappversion='122'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -1585,15 +1585,16 @@ EOF
 				if [ ! -d "$path" ]; then
 				echo "Invalid directory entered. Please try again.";
 				fi
+				echo $path
 				if [ -d "$path" ]; then
-				ls $path/novell*mobility*.iso &>/dev/null;
+				ls "$path"/novell*mobility*.iso &>/dev/null;
 				if [ $? -ne "0" ]; then
 				echo "No mobility ISO found at this path.";
 				path="";
 				fi
 				fi
 				done
-				cd $path;
+				cd "$path";
 
 				#Get File
 				while [ ! -f "${PWD}/$isoName" ]; do
@@ -1607,7 +1608,7 @@ EOF
 
 				#zypper update process
 				zypper rr mobility 2>/dev/null;
-				zypper addrepo 'iso:///?iso='$isoName'&url=file://'$path'' mobility;
+				zypper addrepo 'iso:///?iso='$isoName'&url=file://'"$path"'' mobility;
 				dsUpdate mobility;
 				
 				path="";
