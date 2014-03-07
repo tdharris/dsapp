@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='121'
+	dsappversion='123'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -96,8 +96,8 @@
 	#Get datasync version.
 	function getDSVersion
 	{
-	dsVersion=`cat $version | tr -d '.'`
-	dsVersionCompare='200000'
+	dsVersion=`cat $version | cut -c1-7 | tr -d '.'`
+	dsVersionCompare='2000'
 	}
 	getDSVersion;
 
@@ -1585,15 +1585,16 @@ EOF
 				if [ ! -d "$path" ]; then
 				echo "Invalid directory entered. Please try again.";
 				fi
+				echo $path
 				if [ -d "$path" ]; then
-				ls $path/novell*mobility*.iso &>/dev/null;
+				ls "$path"/novell*mobility*.iso &>/dev/null;
 				if [ $? -ne "0" ]; then
 				echo "No mobility ISO found at this path.";
 				path="";
 				fi
 				fi
 				done
-				cd $path;
+				cd "$path";
 
 				#Get File
 				while [ ! -f "${PWD}/$isoName" ]; do
@@ -1607,7 +1608,7 @@ EOF
 
 				#zypper update process
 				zypper rr mobility 2>/dev/null;
-				zypper addrepo 'iso:///?iso='$isoName'&url=file://'$path'' mobility;
+				zypper addrepo 'iso:///?iso='$isoName'&url=file://'"$path"'' mobility;
 				dsUpdate mobility;
 				
 				path="";
@@ -1919,12 +1920,10 @@ if [ $? -eq 0 ];then
 read -ep "Enter key certificate name: " certKey;
 read -ep "Enter csr certificate name: " certCSR;
 if [ -f ${PWD}"/$certKey" ] && [ -f ${PWD}"/$certCSR" ];then
-
 read -ep "Enter amount of days certificate will be valid for(ie. 730): " certDays;
 	if [[ -z "$certDays" ]]; then
 		certDays=730;
 	fi
-
 echo -e "\nSigning CSR  -- Creating server.crt at ${PWD##&/}/server.crt";
 openssl x509 -req -days $certDays -in $certCSR -signkey $certKey -out server.crt 2>/dev/null;
 if [ $? -ne 1 ];then
