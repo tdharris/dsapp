@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='124'
+	dsappversion='125'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -507,14 +507,15 @@ EOF
 			errorReturn="NULL";
 			# Confirm user exists in database
 			uchk=`psql -U $dbUsername mobility -c "select userid from users where \"userid\" ilike '%$uid%'" | grep -iw "$uid" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
+			guchk=`psql -U $dbUsername datasync -c "select userid from users where \"userid\" ilike '%$uid%'" | grep -iw "$uid" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
+			# Check if user exists in GroupWise database as well
 			uidCN="cn="$(echo ${uid}|tr [:upper:] [:lower:])
 			if [ -n "$uchk" ] && [ "$uchk" = "$uidCN" ]; then
-				# Check if user exists in GroupWise database as well
-				uchk=`psql -U $dbUsername datasync -c "select userid from users where \"userid\" ilike '%$uid%'" | grep -iw "$uid" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
-				if [ -n "$uchk" ] && [ "$uchk" = "$uidCN" ]; then
-					vuid=$uid
-					errorReturn='0'; return 0;
-				fi
+				vuid=$uid
+				errorReturn='0'; return 0;
+			elif [ -n "$guchk" ] && [ "$guchk" = "$uidCN" ]; then
+				vuid=$uid
+				errorReturn='0'; return 0;
 			fi
 			echo -e "User does not exist in Mobility Database.\n"; 
 			vuid='userDoesNotExist'; 
