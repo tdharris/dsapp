@@ -27,30 +27,30 @@ function githubPush {
 	echo -e "\nUpload to Github.com:"
 	git add dsapp-test.sh update.sh 2> /dev/null
 	gitStatusDsapp=`git status | grep dsapp`;
-	if [[ $gitStatusDsapp && $makePublic ]]; then
-		pushFTP
-	fi
-	if [ $? -eq 0 ]; then
-		#prompt for commit message
-		read -ep "Commit message? " message
-		git commit -m "$version $message" 2> /dev/null
-		if [ $? -eq 0 ]; then
-			git push
-			if [ $? -eq 0 ]; then
-				echo "-----------------------------------------"
-				echo -e "Successfully added to GitHub!"
-				echo -e "-----------------------------------------\n"
-			else err=true
-			fi
-		else err=true
-		fi
-	else err=true
-	fi
-	if  [ $err ]; then
-		echo "There was a problem adding to Github!"
-		exit 1
-	fi
-	if [ $gitStatusDsapp ]; then
+	# if [[ $gitStatusDsapp && $makePublic ]]; then
+		# pushFTP
+	# fi
+	# if [ $? -eq 0 ]; then
+	# 	#prompt for commit message
+	# 	read -ep "Commit message? " message
+	# 	git commit -m "$version $message" 2> /dev/null
+	# 	if [ $? -eq 0 ]; then
+	# 		git push
+	# 		if [ $? -eq 0 ]; then
+	# 			echo "-----------------------------------------"
+	# 			echo -e "Successfully added to GitHub!"
+	# 			echo -e "-----------------------------------------\n"
+	# 		else err=true
+	# 		fi
+	# 	else err=true
+	# 	fi
+	# else err=true
+	# fi
+	# if  [ $err ]; then
+	# 	echo "There was a problem adding to Github!"
+	# 	exit 1
+	# fi
+	if [[ $gitStatusDsapp != null ]]; then
 		echo -e "\nVersion: " $version "\n"
 	fi
 }
