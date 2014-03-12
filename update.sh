@@ -40,15 +40,18 @@ function githubPush {
 				echo "-----------------------------------------"
 				echo -e "Successfully added to GitHub!"
 				echo -e "-----------------------------------------\n"
-			else err=1
+			else err=true
 			fi
-		else err=1
+		else err=true
 		fi
-	else err=1
+	else err=true
 	fi
-	if  [ $err == 1 ]; then
+	if  [ $err ]; then
 		echo "There was a problem adding to Github!"
 		exit 1
+	fi
+	if [ $makePublic ]; then
+		echo -e "\nVersion: " $version "\n"
 	fi
 }
 
@@ -69,8 +72,6 @@ echo '
 
  1)	makePublic=true;
 	githubPush
-
-	echo -e "\nVersion: " $version "\n"
 	echo -e "Successful Upload!";
 	read -p "[Exit]";
 	exit 0
