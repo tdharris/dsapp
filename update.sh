@@ -19,7 +19,7 @@ function githubPush {
 		fi
 	else err=1
 	fi
-	if  ($err == 1); then
+	if  [ $err == 1 ]; then
 		echo "There was a problem adding to Github!"
 		exit 1
 	fi
