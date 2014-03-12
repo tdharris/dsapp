@@ -1,8 +1,35 @@
 # Functions
+function pushFTP {
+	# Release to FTP
+	version=`cat dsapp-test.sh | grep -wm 1 "dsappversion" | cut -f2 -d"'"`;
+	version=$((version+1))
+	version=`printf "'$version'"`
+	sed -i "s|dsappversion=.*|dsappversion=$version|g" dsapp-test.sh;
+	
+	cp dsapp-test.sh dsapp.sh;
+	tar -czf dsapp.tgz dsapp.sh;
+	ftp ftp.novell.com -a <<EOF
+	cd outgoing
+	bin
+	ha
+	put dsapp.tgz
+EOF
+	echo -e "\nCopying to root@tharris7:/wrk/outgoing: "
+	scp dsapp.tgz root@tharris7.lab.novell.com:/wrk/outgoing
+	rm dsapp.sh dsapp.tgz;
+	echo -e "-----------------------------------------"
+	echo -e "Added to FTP Successfully!"
+	echo "-----------------------------------------"
+}
+
 function githubPush {
 	# Upload to Github.com
 	echo -e "\nUpload to Github.com:"
 	git add dsapp-test.sh update.sh 2> /dev/null
+	gitStatus=`git status`;
+	if [[ `echo $gitStatus | grep dsapp` && $makePublic ]]; then
+		pushFTP
+	fi
 	if [ $? -eq 0 ]; then
 		#prompt for commit message
 		read -ep "Commit message? " message
@@ -40,27 +67,7 @@ echo '
  read opt;
  case $opt in
 
- 1)	# Release to FTP
-	version=`cat dsapp-test.sh | grep -wm 1 "dsappversion" | cut -f2 -d"'"`;
-	version=$((version+1))
-	version=`printf "'$version'"`
-	sed -i "s|dsappversion=.*|dsappversion=$version|g" dsapp-test.sh;
-	
-	cp dsapp-test.sh dsapp.sh;
-	tar -czf dsapp.tgz dsapp.sh;
-	ftp ftp.novell.com -a <<EOF
-	cd outgoing
-	bin
-	ha
-	put dsapp.tgz
-EOF
-	echo -e "\nCopying to root@tharris7:/wrk/outgoing: "
-	scp dsapp.tgz root@tharris7.lab.novell.com:/wrk/outgoing
-	rm dsapp.sh dsapp.tgz;
-	echo -e "-----------------------------------------"
-	echo -e "Added to FTP Successfully!"
-	echo "-----------------------------------------"
-	
+ 1)	makePublic=true;
 	githubPush
 
 	echo -e "\nVersion: " $version "\n"
@@ -69,7 +76,8 @@ EOF
 	exit 0
 	;;
 
- 2) # Push to Github
+ 2) # Push to Github Only
+	makePublic=false;
 	githubPush
 	echo -e "Successful Upload!";
 	read -p "[Exit]";
@@ -95,4 +103,3 @@ EOF
  *) ;;
 esac
 done
-
