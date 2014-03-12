@@ -13,9 +13,15 @@ function githubPush {
 				echo "-----------------------------------------"
 				echo -e "Successfully added to GitHub!"
 				echo -e "-----------------------------------------\n"
+			else err=1
 			fi
+		else err=1
 		fi
-	else echo "Problem adding files for new commit: git add dsapp-test.sh update.sh"
+	else err=1
+	fi
+	if  ($err == 1); then
+		echo "There was a problem adding to Github!"
+		exit 1
 	fi
 }
 
