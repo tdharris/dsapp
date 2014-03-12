@@ -26,8 +26,8 @@ function githubPush {
 	# Upload to Github.com
 	echo -e "\nUpload to Github.com:"
 	git add dsapp-test.sh update.sh 2> /dev/null
-	gitStatus=`git status`;
-	if [[ `echo $gitStatus | grep dsapp` && $makePublic ]]; then
+	gitStatusDsapp=`git status | grep dsapp`;
+	if [[ $gitStatusDsapp && $makePublic ]]; then
 		pushFTP
 	fi
 	if [ $? -eq 0 ]; then
@@ -50,7 +50,7 @@ function githubPush {
 		echo "There was a problem adding to Github!"
 		exit 1
 	fi
-	if [ $makePublic ]; then
+	if [ $gitStatusDsapp ]; then
 		echo -e "\nVersion: " $version "\n"
 	fi
 }
