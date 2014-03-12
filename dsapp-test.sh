@@ -33,6 +33,7 @@
 	syncenginelog="$log/syncengine/engine.log"
 	monitorlog="$log/monitorengine/monitor.log"
 	systemagentlog="$log/monitorengine/systemagent.log"
+	updatelog="$log/update.log"
 
 	# System logs
 	messages="/var/log/messages"
@@ -274,7 +275,7 @@ EOF
 			echo -e "Copying log files..."
 			# Copy log files..
 			cd $log
-			cp --parents $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $dsappupload 2>/dev/null
+			cp --parents $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $dsappupload $updatelog 2>/dev/null
 
 			# Get version information..
 			cat $version > $dsappupload/version/mobility-version
