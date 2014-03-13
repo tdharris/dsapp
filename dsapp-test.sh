@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='124'
+	dsappversion='125'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -275,7 +275,7 @@ EOF
 			echo -e "Copying log files..."
 			# Copy log files..
 			cd $log
-			cp --parents $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $dsappupload $updatelog 2>/dev/null
+			cp --parents $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog $dsappupload  2>/dev/null
 
 			# Get version information..
 			cat $version > $dsappupload/version/mobility-version
@@ -285,7 +285,7 @@ EOF
 
 			# Get Logging Levels
 			logginglevels="$dsappupload/var/log/datasync/mobility-logging-info"
-			echo -e "\nLogging Levels indicated below:" >> $logginglevels;
+			echo -e "\nLogging Levels indicated below:" > $logginglevels;
 
 			etc="/etc/datasync"
 
