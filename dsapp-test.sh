@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='126'
+	dsappversion='127'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -105,7 +105,7 @@
 if [ "$1" != '--force' ];then
 #	echo "Checking db credentials..."
 	#Database .pgpass file / version check.
-	dbUsername="datasync_user";
+	dbUsername=`cat $dirEtcMobility/configengine/configengine.xml | grep database -A 7 | grep "<username>" | cut -f2 -d '>' | cut -f1 -d '<'`
 	if [ $dsVersion -gt $dsVersionCompare ];then
 		#Log into database or create .pgpass file to login.
 		dbRunning=`rcpostgresql status`;
@@ -141,12 +141,7 @@ if [ "$1" != '--force' ];then
 		fi
 	else
 		#Grabbing Username and Passwrod from configengine.xml
-		dbUsername=`tac /etc/datasync/configengine/configengine.xml | grep -iwo -m 1 "<username>.*</username>"`;
-		dbUsername=${dbUsername%\</*};
-		dbUsername=${dbUsername:10:${#dbUsername}};
-		dbPassword=`tac /etc/datasync/configengine/configengine.xml | grep -iwo -m 1 "<password>.*</password>"`;
-		dbPassword=${dbPassword%\</*};
-		dbPassword=${dbPassword:10:${#dbPassword}};
+		dbPassword=`cat /etc/datasync/configengine/configengine.xml | grep database -A 7 | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
 		#Creating new .pgpass file
 		echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 		chmod 0600 /root/.pgpass;
