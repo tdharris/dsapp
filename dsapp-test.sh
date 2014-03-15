@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='127'
+	dsappversion='128'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -85,11 +85,16 @@
 		exit 1;
 	fi
 
-	#Check for Datasync installed.
-	if [ "$1" != '--force' ];then
+	#Check and set force to true
+	if [ "$1" == "--force" ] || [ "$1" == "-f" ] || [ "$1" == "?" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ];then
+		forceMode=1;
+	fi
+
+	#Check for Mobility installed.
+	if [[ "$forceMode" -ne "1" ]];then
 	dsInstalled=`chkconfig |grep -iom 1 datasync`;
 	if [ "$dsInstalled" != "datasync" ];then
-		read -p "Datasync is not installed on this server."
+		read -p "Mobility is not installed on this server."
 		exit 1;
 	fi
 	fi
@@ -102,10 +107,12 @@
 	}
 	getDSVersion;
 
-if [ "$1" != '--force' ];then
-#	echo "Checking db credentials..."
-	#Database .pgpass file / version check.
+	#Get database username (datasync_user by default)
 	dbUsername=`cat $dirEtcMobility/configengine/configengine.xml | grep database -A 7 | grep "<username>" | cut -f2 -d '>' | cut -f1 -d '<'`
+
+
+if [[ "$forceMode" -ne "1" ]];then
+	#Database .pgpass file / version check.
 	if [ $dsVersion -gt $dsVersionCompare ];then
 		#Log into database or create .pgpass file to login.
 		dbRunning=`rcpostgresql status`;
@@ -141,16 +148,16 @@ if [ "$1" != '--force' ];then
 		fi
 	else
 		#Grabbing Username and Passwrod from configengine.xml
-		dbPassword=`cat /etc/datasync/configengine/configengine.xml | grep database -A 7 | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
+		dbPassword=`cat $dirEtcMobility/configengine/configengine.xml | grep database -A 7 | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
 		#Creating new .pgpass file
 		echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 		chmod 0600 /root/.pgpass;
 	fi
 fi
 
-	##################################################################################################
-	#	Initialize Variables
-	##################################################################################################
+##################################################################################################
+#	Initialize Variables
+##################################################################################################
 		function setVariables
 		{
 		# Depends on version 1.0 or 2.0
@@ -1206,6 +1213,45 @@ function indexDB {
 EOF
 }
 
+function changeDBPass {
+clear;
+read -p "Enter new database password: " input
+if [ -z "$input" ];then
+	echo "Invalid input";
+	exit 1
+fi
+isHostname=`hostname -f`
+inputEncrpt=`echo "$input" | openssl enc -aes-256-cbc -a -k $isHostname | base64`
+
+echo "Changing database password"
+su postgres -c "psql -c \"ALTER USER datasync_user WITH password '"$input"';\"" &>/dev/null
+
+lineNumber=`grep "database" -A 7 -n $dirEtcMobility/configengine/configengine.xml | grep password | cut -d '-' -f1`
+isProtected=`grep "database" -A 7 $dirEtcMobility/configengine/configengine.xml | grep "<protected>" | cut -f2 -d '>' | cut -f1 -d '<'`
+if [[ "$isProtected" -eq "1" ]];then
+	sed -i ""$lineNumber"s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $dirEtcMobility/configengine/configengine.xml
+else
+	sed -i ""$lineNumber"s|<password>.*</password>|<password>"$input"</password>|g" $dirEtcMobility/configengine/configengine.xml
+fi
+
+isProtected=`grep "<protected>" $dirEtcMobility/configengine/engines/default/engine.xml | cut -f2 -d '>' | cut -f1 -d '<'`
+if [[ "$isProtected" -eq "1" ]];then
+	sed -i "s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $dirEtcMobility/configengine/engines/default/engine.xml
+else
+	sed -i "s|<password>.*</password>|<password>"$input"</password>|g" $dirEtcMobility/configengine/engines/default/engine.xml
+fi
+
+isProtected=`grep "<protected>" $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | cut -f2 -d '>' | cut -f1 -d '<'`
+if [[ "$isProtected" -eq "1" ]];then
+	sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$inputEncrpt"</dbpass>|g" $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml
+else
+	sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$input"</dbpass>|g" $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml
+fi
+
+echo -e "\nDatabase password updated. Please restart mobility."
+read -p "Press [Enter] to continue."
+}
+
 ##################################################################################################
 #	
 #	Switches / Command-line parameters
@@ -1218,14 +1264,15 @@ while [ "$1" != "" ]; do
 	--help | '?' | -h) dsappSwitch=1
 		echo -e "dsapp switches:";
 		echo -e "  -f  \t--force\t\tForce runs dsapp (Run alone)"
-		echo -e "  -ul \t--uploadLogs\tUpload Mobility logs to Novell FTP";
+		echo -e "  -ul \t--uploadLogs\tUpload Mobility logs to Novell FTP"
 		echo -e "  -c  \t--check\t\tCheck Nightly Maintenance"
 		echo -e "  -s  \t--status\tShow Sync status of connectors"
-		echo -e "  -up \t--update\tUpdate Mobility (FTP ISO)";
-		echo -e "  -v  \t--vacuum\tVacuum postgres database";
-		echo -e "  -i  \t--index\t\tIndex postgres database";
+		echo -e "  -up \t--update\tUpdate Mobility (FTP ISO)"
+		echo -e "  -v  \t--vacuum\tVacuum postgres database"
+		echo -e "  -i  \t--index\t\tIndex postgres database"
 		echo -e "  -u \t--users\t\tPrint a list of all users with count"
 		echo -e "  -d  \t--devices\tPrint a list of all devices with count"
+		echo -e "  -db \t--database\tChange database password"
 	;;
 
 	--vacuum | -v) dsappSwitch=1
@@ -1291,6 +1338,12 @@ while [ "$1" != "" ]; do
 		fi
 	;;
 
+	--database | -db) dsappSwitch=1
+		changeDBPass;
+	;;
+
+
+	#Not valid switch case
  	*) dsappSwitch=1
  	 echo "dsapp: '"$1"' is not a valid command. See '--help'."
  	 read -p "Press [Enter] to continue."
