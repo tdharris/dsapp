@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='128'
+	dsappversion='129'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -749,9 +749,9 @@ function addGroup {
 	# | sed '1s/^/memberdn,groupdn\n/' ---> TO-DO: Add first line
 	echo -e "\nGroup Membership:"
 	while read p; do
-		if [ $ldapPort==389 ]; then
+		if [[ "$ldapPort" -eq "389" ]]; then
   			`ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/^/"/' | sed 's/$/","'$p'"/' >> $ldapGroupMembership`
-		elif [ $ldapPort==636 ]; then
+		elif [[ "$ldapPort" -eq "636" ]]; then
 			`ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/^/"/' | sed 's/$/","'$p'"/' >> $ldapGroupMembership`
 		fi
 	done < $ldapGroups
