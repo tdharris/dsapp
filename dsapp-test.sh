@@ -2397,7 +2397,7 @@ EOF
 					if askYesOrNo $"Attempt to manually cleanup?"; then
 						read -ep "How many files for manual cleanup ($n)? " cleanupLimit
 						if [ "$cleanupLimit" = "" ]; then 
-							cleanupLimit = $n; 
+							cleanupLimit=$n; 
 						fi
 						echo -e "\nHow many files for manual cleanup (cleanupLimit): "$cleanupLimit >> $attachmentLog
 						dbCount=0
