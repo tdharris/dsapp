@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='130'
+	dsappversion='131'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -1224,7 +1224,7 @@ echo "Changing database password"
 su postgres -c "psql -c \"ALTER USER datasync_user WITH password '"$input"';\"" &>/dev/null
 
 lineNumber=`grep "database" -A 7 -n $dirEtcMobility/configengine/configengine.xml | grep password | cut -d '-' -f1`
-isProtected=`grep "database" -A 7 $dirEtcMobility/configengine/configengine.xml | grep "<protected>" | cut -f2 -d '>' | cut -f1 -d '<'`
+isProtected=`sed -n "/<database>/,/<\/database>/p" $dirEtcMobility/configengine/configengine.xml | grep "<protected>" | cut -f2 -d '>' | cut -f1 -d '<'`
 if [[ "$isProtected" -eq "1" ]];then
 	sed -i ""$lineNumber"s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $dirEtcMobility/configengine/configengine.xml
 else
