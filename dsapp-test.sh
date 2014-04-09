@@ -561,7 +561,7 @@ EOF
 		# verifyUser sets vuid variable used in setUserState and removeAUser functions
 		verifyUser
 		if [ $? != 1 ]; then
-			if askYesOrNo $"Remove "$vuid" from database?"; then
+			if askYesOrNo $"Remove $vuid from database?"; then
 			dpsql << EOF
 			update targets set disabled='3' where dn ilike '%$vuid%';
 			\q
