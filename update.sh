@@ -1,3 +1,11 @@
+#Create / check gitAuth
+if [ ! -f /root/.gitAuth ];then
+read -p "Enter git username: " gitUsername
+read -p "Enter git password: " gitPassword
+echo "$gitUsername:$gitPassword" > /root/.gitAuth
+fi
+auth=`cat /root/.gitAuth`
+
 # Functions
 function pushFTP {
 	# Release to FTP
@@ -23,37 +31,50 @@ EOF
 }
 
 function githubPush {
-	# Upload to Github.com
-	echo -e "\nUpload to Github.com:"
-	git add dsapp-test.sh update.sh 2> /dev/null
-	gitStatusDsapp=`git status | grep dsapp`;
-	if [[ $gitStatusDsapp && $makePublic ]]; then
-		pushFTP
-	fi
+	#Download latest from Github.com first
+	git pull https://$auth@github.com/tdharris/dsapp.git
 	if [ $? -eq 0 ]; then
-		#prompt for commit message
-		read -ep "Commit message? " message
-		git commit -m "$version $message" 2> /dev/null
+		# Upload to Github.com
+		echo -e "\nUpload to Github.com:"
+		git add dsapp-test.sh update.sh 2> /dev/null
+		gitStatusDsapp=`git status | grep dsapp`;
+		if [[ $gitStatusDsapp && $makePublic ]]; then
+			pushFTP
+		fi
 		if [ $? -eq 0 ]; then
-			git push
+			#prompt for commit message
+			read -ep "Commit message? " message
+			git commit -m "$version $message" 2> /dev/null
 			if [ $? -eq 0 ]; then
-				echo "-----------------------------------------"
-				echo -e "Successfully added to GitHub!"
-				echo -e "-----------------------------------------\n"
+				git push https://$auth@github.com/tdharris/dsapp.git
+				if [ $? -eq 0 ]; then
+					echo "-----------------------------------------"
+					echo -e "Successfully added to GitHub!"
+					echo -e "-----------------------------------------\n"
+				else err=true
+				fi
 			else err=true
 			fi
 		else err=true
 		fi
-	else err=true
-	fi
-	if  [ $err ]; then
-		echo "There was a problem adding to Github!"
-		exit 1
+		if  [ $err ]; then
+			echo "There was a problem adding to Github!"
+			exit 1
+		fi
+ 
+		if [[ $gitStatusDsapp ]]; then
+			echo -e "\nVersion: " $version "\n"
+		fi
+	else
+		echo "Stashing branch..."
+		git stash
+		echo "Pulling latest..."
+		git pull https://$auth@github.com/tdharris/dsapp.git
+		echo "Popping stashed branch..."
+		git stash pop
+		echo "Up-to-date. Please upload again."
 	fi
 
-	if [[ $gitStatusDsapp ]]; then
-		echo -e "\nVersion: " $version "\n"
-	fi
 }
 
 #Menu loop
@@ -88,7 +109,7 @@ echo '
 
  3)	# Pull from Github
 	echo 
-	git pull 2> /dev/null
+	git pull https://$auth@github.com/tdharris/dsapp.git 2> /dev/null;
 	if [ $? -eq 0 ]; then
 		echo -e "\nChecked GitHub Successfully!";
 		read -p "[Exit]";
