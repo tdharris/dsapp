@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='132'
+	dsappversion='133'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -244,28 +244,33 @@ fi
 	function updateDsapp {
 		clear; 
 		# Remove any current versions
-		rm -f dsapp*
+		rm -f dsapp.sh
 
-		# FTP
-		echo -e "\nUpdating dsapp from Novell FTP..."
-		netcat -z -w 5 ftp.novell.com 21;
-		if [ $? -eq 0 ]; then
-		ftp ftp.novell.com -a <<EOF
-			cd outgoing
-			bin
-			get dsapp.tgz
-EOF
-		echo -e "\nDownloaded dsapp.tgz"
-		else
-			echo -e "Failed FTP: host (connection) might have problems\n"
-		fi
+# 		##### FTP
+# 		echo -e "\nUpdating dsapp from Novell FTP..."
+# 		netcat -z -w 5 ftp.novell.com 21;
+# 		if [ $? -eq 0 ]; then
+# 		ftp ftp.novell.com -a <<EOF
+# 			cd outgoing
+# 			bin
+# 			get dsapp.tgz
+# EOF
+# 		echo -e "\nDownloaded dsapp.tgz"
+# 		else
+# 			echo -e "Failed FTP: host (connection) might have problems\n"
+# 		fi
 
-		# Untar and run
-		echo -e "\nUntaring package contents..."
-		tar xzfv dsapp.tgz
-		echo -e "\nUpdate finished: v"`grep -wm 1 "dsappversion" dsapp* | cut -f2 -d"'"`
+# 		# Untar and run
+# 		echo -e "\nUntaring package contents..."
+# 		tar xzfv dsapp.tgz
+		curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -zx 2>/dev/null;
+		if [ $? -eq 0 ];then
+		echo -e "\nUpdate finished: v"`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
 		read -p "Press [Enter] to exit."
 		exit 0
+		else
+			echo -e "Failed update: host (connection) might have problems\n"
+		fi
 	}
 
 	function getLogs {
@@ -1173,8 +1178,12 @@ s="$(cat <<EOF
                     |_|   |_|                                          
 EOF
 )"
-
-echo -e "$s\n\t\t\t      v$dsappversion\n"
+dsappversionNew=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep dsappversion='133'
+if [ "$dsappversion" -eq "$dsappversionNew" ];then
+	echo -e "$s\n\t\t\t      v$dsappversion\n"
+else 
+	echo -e "$s\n\t\t\t      v$dsappversion (v$dsappversionNew available)\n"
+fi
 if [ $dsappForce ];then
 	echo -e "  Running --force. Some functions may not work properly.\n"
 fi
