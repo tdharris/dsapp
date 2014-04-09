@@ -8,22 +8,27 @@ auth=`cat /root/.gitAuth`
 
 # Functions
 function incrementBuild {
-	clear; echo
+	clear; echo; increment=false;
 	while true; do
 		read -p "Increment version? [y/n] " ans
 		case $ans in
-			y | Y | yes) makePublic=true; break ;;
-			n | N | no) makePublic=false; break ;;
+			y | Y | yes) increment=true; break ;;
+			n | N | no) increment=false; break ;;
 			*) echo -e "Invalid entry.\n" ;;
 		esac
 	done
-	if [[ $makePublic ]]; then
+
+	# Get current version
+	version=`cat dsapp-test.sh | grep -wm 1 "dsappversion" | cut -f2 -d"'"`;
+
+	if ($increment); then
 		# Release to FTP
-		version=`cat dsapp-test.sh | grep -wm 1 "dsappversion" | cut -f2 -d"'"`;
 		version=$((version+1))
 		version=`printf "'$version'"`
 		sed -i "s|dsappversion=.*|dsappversion=$version|g" dsapp-test.sh;
 	fi
+
+	echo -e $version"\n"
 }
 
 function uploadFTP {
@@ -96,6 +101,7 @@ function githubPush {
 function newPublicRelease {
 	incrementBuild
 	uploadFTP
+	echo "v"$version
 	read -p "[Exit]";
 	exit 0
 }
@@ -103,6 +109,7 @@ function newPublicRelease {
 function newInternalRelease {
 	incrementBuild
 	githubPush
+	echo "v"$version
 	read -p "[Exit]";
 	exit 0
 }
