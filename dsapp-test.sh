@@ -170,7 +170,6 @@ function updateDsapp {
 }
 
 function autoUpdateDsapp {
-	echo "autoUpdateDsapp"
 	if ($autoUpdate); then
 		publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
 		if [[ -z "$publicVersion" ]]; then
@@ -187,7 +186,6 @@ function autoUpdateDsapp {
 }
 
 function setupDsappAlias {
-	echo "setupDsappAlias"
 	# If there is dsapp.sh
 	ls dsapp.sh &>/dev/null
 	if [ $? -eq 0 ]; then
