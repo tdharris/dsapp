@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='138'
+	dsappversion='139'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -173,7 +173,7 @@ function autoUpdateDsapp {
 	# Skips auto-update if file is not called dsapp.sh (good for testing purposes when using dsapp-test.sh)
 	if [[ "$0" = *dsapp.sh ]]; then
 		if ($autoUpdate); then
-			publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
+			publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion='139'
 			if [[ -z "$publicVersion" ]]; then
 				echo -e "\nThere appears to be network connectivity issues, skipping autoUpdate..."
 				echo "To disable autoUpdate, set autoUpdate=false in dsapp.sh"
@@ -203,7 +203,7 @@ function setupDsappAlias {
 		fi
 		
 		# Check if running version is newer than installed version
-		installedVersion=`grep -m1 dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
+		installedVersion=`grep -m1 dsappversion='139'
 		if [[ "$dsappversion" -gt "$installedVersion" ]];then
 			tellUserAboutAlias=true
 			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
@@ -2175,7 +2175,7 @@ done
  	echo -e "\t5. Remote GWCheck DELDUPFOLDERS (beta)"
  	echo -e "\n\t6. Remove user & db references"
  	echo -e "\t7. Reinitialize user (WebAdmin is recommended)"
- 	echo -e "\t8. Remove user db references only (remove from WebAdmin first)"
+ 	echo -e "\t8. Remove user & group db references only (remove from WebAdmin first)"
  	echo -e "\n\t9. List subjects of deleted items from device"
  	echo -e "\t10. List All Devices from db"
  	echo -e "\n\t11. Reinitialize all users (CAUTION)"
