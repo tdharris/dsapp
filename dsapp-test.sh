@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='136'
+	dsappversion='137'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -171,11 +171,11 @@ function updateDsapp {
 
 function autoUpdateDsapp {
 	if ($autoUpdate); then
-		publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
+		publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion='137'
 		if [[ -z "$publicVersion" ]]; then
 			echo "\nThere appears to be network connectivity issues, skipping autoUpdate..."
 			echo "To disable autoUpdate, set autoUpdate=false in dsapp.sh"
-			sleep 2
+			# sleep 2
 		elif [ "$dsappversion" -ne "$publicVersion" ];then
 				clear;
 				echo -e "\nChecking for new dsapp..."
@@ -200,7 +200,7 @@ function setupDsappAlias {
 		fi
 		
 		# Check if running version is newer than installed version
-		installedVersion=`grep -m1 dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
+		installedVersion=`grep -m1 dsappversion='137'
 		if [[ "$dsappversion" -gt "$installedVersion" ]];then
 			tellUserAboutAlias=true
 			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
