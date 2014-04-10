@@ -13,7 +13,8 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='133'
+	dsappversion='134'
+	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
@@ -154,6 +155,46 @@ if [[ "$forceMode" -ne "1" ]];then
 		chmod 0600 /root/.pgpass;
 	fi
 fi
+
+function autoUpdateDsapp {
+	if ($autoUpdate); then
+		publicDsappVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep dsappversion='134'
+		if [ "$dsappversion" -ne "$publicDsappVersion" ];then
+			clear;
+			echo -e "\nUpdating dsapp..."
+			echo -e "v$dsappversion (v$publicDsappVersion available)\n"
+			updateDsapp
+			read -p "[ Exit ]"
+		fi
+	fi
+}
+
+function setupDsappAlias {
+	# If there is dsapp.sh
+	ls dsapp.sh &>/dev/null
+	if [ $? -eq 0 ]; then
+		# Check if running version is newer than installed version
+		installedVersion=`grep dsappversion='134'
+		if [[ "$dsappversion" -gt "$installedVersion" ]];then
+			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
+			mv -v dsapp.sh $dsappDirectory
+			if [ $? -ne 0 ]; then
+				echo -e "\nThere was a problem copying dsapp.sh to /opt/novell/datasync/tools/dsapp..."
+			else
+				# Insert alias shortcut if not already there
+				if [[ -z `grep "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" /etc/profile` ]]; then
+					echo "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" >> /etc/profile
+					echo "Configured dsapp alias."
+				fi
+				echo -e "\nTo launch, enter the following anywhere: dsapp"
+			fi
+			exit 0
+		fi
+	fi
+}
+
+autoUpdateDsapp
+setupDsappAlias
 
 ##################################################################################################
 #	Initialize Variables
@@ -1178,15 +1219,12 @@ s="$(cat <<EOF
                     |_|   |_|                                          
 EOF
 )"
-dsappversionNew=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep dsappversion='133'
-if [ "$dsappversion" -eq "$dsappversionNew" ];then
+
 	echo -e "$s\n\t\t\t      v$dsappversion\n"
-else 
-	echo -e "$s\n\t\t\t      v$dsappversion (v$dsappversionNew available)\n"
-fi
-if [ $dsappForce ];then
-	echo -e "  Running --force. Some functions may not work properly.\n"
-fi
+
+	if [ $dsappForce ];then
+		echo -e "  Running --force. Some functions may not work properly.\n"
+	fi
 }
 
 function whatDeviceDeleted {
@@ -1373,6 +1411,9 @@ fi
 #	Main Menu
 #
 ##################################################################################################
+
+# # Auto Update
+# autoUpdateDsapp
 
 #Window Size check
 if [ `tput lines` -lt '24' ] && [ `tput cols` -lt '85' ];then
