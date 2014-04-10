@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='135'
+	dsappversion='136'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -171,12 +171,16 @@ function updateDsapp {
 
 function autoUpdateDsapp {
 	if ($autoUpdate); then
-		publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
-		if [ "$dsappversion" -ne "$publicVersion" ];then
-			clear;
-			echo -e "\nChecking for new dsapp..."
-			echo -e "v$dsappversion (v$publicVersion available)"
-			updateDsapp
+		publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion='136'
+		if [ -z "$publicVersion" ]; then
+			echo "\nThere appears to be network connectivity issues, skipping autoUpdate..."
+			echo "To disable autoUpdate, set autoUpdate=false in dsapp.sh"
+			sleep 2
+		elif [ "$dsappversion" -ne "$publicVersion" ];then
+				clear;
+				echo -e "\nChecking for new dsapp..."
+				echo -e "v$dsappversion (v$publicVersion available)"
+				updateDsapp
 		fi
 	fi
 }
@@ -196,7 +200,7 @@ function setupDsappAlias {
 		fi
 		
 		# Check if running version is newer than installed version
-		installedVersion=`grep -m1 dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
+		installedVersion=`grep -m1 dsappversion='136'
 		if [[ "$dsappversion" -gt "$installedVersion" ]];then
 			tellUserAboutAlias=true
 			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
@@ -1307,6 +1311,7 @@ while [ "$1" != "" ]; do
 
 	--help | '?' | -h) dsappSwitch=1
 		echo -e "dsapp switches:";
+		echo -e "      \t--version\tReport dsapp version"
 		echo -e "  -f  \t--force\t\tForce runs dsapp (Run alone)"
 		echo -e "  -ul \t--uploadLogs\tUpload Mobility logs to Novell FTP"
 		echo -e "  -c  \t--check\t\tCheck Nightly Maintenance"
@@ -1317,6 +1322,10 @@ while [ "$1" != "" ]; do
 		echo -e "  -u \t--users\t\tPrint a list of all users with count"
 		echo -e "  -d  \t--devices\tPrint a list of all devices with count"
 		echo -e "  -db \t--database\tChange database password"
+	;;
+
+	--version | version) dsappSwitch=1
+		echo -e "\nThis running instance of dsapp is v"$dsappversion"\n"
 	;;
 
 	--vacuum | -v) dsappSwitch=1
@@ -1411,9 +1420,6 @@ fi
 #	Main Menu
 #
 ##################################################################################################
-
-# # Auto Update
-# autoUpdateDsapp
 
 #Window Size check
 if [ `tput lines` -lt '24' ] && [ `tput cols` -lt '85' ];then
