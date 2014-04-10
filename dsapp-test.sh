@@ -170,9 +170,10 @@ function updateDsapp {
 }
 
 function autoUpdateDsapp {
+	echo "autoUpdateDsapp"
 	if ($autoUpdate); then
-		publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion='136'
-		if [ -z "$publicVersion" ]; then
+		publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
+		if [[ -z "$publicVersion" ]]; then
 			echo "\nThere appears to be network connectivity issues, skipping autoUpdate..."
 			echo "To disable autoUpdate, set autoUpdate=false in dsapp.sh"
 			sleep 2
@@ -186,6 +187,7 @@ function autoUpdateDsapp {
 }
 
 function setupDsappAlias {
+	echo "setupDsappAlias"
 	# If there is dsapp.sh
 	ls dsapp.sh &>/dev/null
 	if [ $? -eq 0 ]; then
@@ -200,7 +202,7 @@ function setupDsappAlias {
 		fi
 		
 		# Check if running version is newer than installed version
-		installedVersion=`grep -m1 dsappversion='136'
+		installedVersion=`grep -m1 dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
 		if [[ "$dsappversion" -gt "$installedVersion" ]];then
 			tellUserAboutAlias=true
 			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
