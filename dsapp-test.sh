@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='134'
+	dsappversion='135'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -157,13 +157,13 @@ if [[ "$forceMode" -ne "1" ]];then
 fi
 
 function updateDsapp {
-	clear; echo -e "\nUpdating dsapp..."
+	echo -e "\nUpdating dsapp..."
 	# Remove any current versions
 	rm -f dsapp.sh
 	curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -zx 2>/dev/null;
 	if [ $? -eq 0 ];then
-	echo -e "Update finished: v"`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
-	exit 0
+		echo -e "Update finished: v"`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
+		cp dsapp.sh $dsappDirectory
 	else
 		echo -e "Failed update: host (connection) might have problems\n"
 	fi
@@ -171,13 +171,12 @@ function updateDsapp {
 
 function autoUpdateDsapp {
 	if ($autoUpdate); then
-		publicDsappVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep dsappversion= | cut -f2 -d "'"`
-		if [ "$dsappversion" -ne "$publicDsappVersion" ];then
+		publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion='135'
+		if [ "$dsappversion" -ne "$publicVersion" ];then
 			clear;
-			echo -e "\nUpdating dsapp..."
-			echo -e "v$dsappversion (v$publicDsappVersion available)\n"
+			echo -e "\nChecking for new dsapp..."
+			echo -e "v$dsappversion (v$publicVersion available)"
 			updateDsapp
-			read -p "[ Exit ]"
 		fi
 	fi
 }
@@ -186,25 +185,32 @@ function setupDsappAlias {
 	# If there is dsapp.sh
 	ls dsapp.sh &>/dev/null
 	if [ $? -eq 0 ]; then
+		# Insert alias shortcut if not already there
+		if [[ -z `grep "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" /etc/profile` ]]; then
+			echo "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" >> /etc/profile
+			echo "Configured dsapp alias."
+			echo -e "\nPlease use /opt/novell/datasync/tools/dsapp/dsapp.sh"
+			echo -e "To launch, enter the following anywhere: dsapp\n"
+			echo -e "Refreshing environment variables"
+			# Reset environment variables (loads /etc/profile for dsapp alias)
+			su -
+		fi
+		
 		# Check if running version is newer than installed version
-		installedVersion=`grep dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
-		echo "$dsappversion"
-		echo "$installedVersion"
+		installedVersion=`grep -m1 dsappversion='135'
 		if [[ "$dsappversion" -gt "$installedVersion" ]];then
 			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
 			mv -v dsapp.sh $dsappDirectory
 			if [ $? -ne 0 ]; then
 				echo -e "\nThere was a problem copying dsapp.sh to /opt/novell/datasync/tools/dsapp..."
-			else
-				# Insert alias shortcut if not already there
-				if [[ -z `grep "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" /etc/profile` ]]; then
-					echo "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" >> /etc/profile
-					echo "Configured dsapp alias."
-				fi
-				echo -e "\nTo launch, enter the following anywhere: dsapp"
+				exit 1
 			fi
 			exit 0
+		else 
+			rm dsapp.sh
+			exit 0
 		fi
+
 	fi
 }
 
