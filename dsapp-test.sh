@@ -156,9 +156,22 @@ if [[ "$forceMode" -ne "1" ]];then
 	fi
 fi
 
+function updateDsapp {
+	clear; echo -e "\nUpdating dsapp..."
+	# Remove any current versions
+	rm -f dsapp.sh
+	curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -zx 2>/dev/null;
+	if [ $? -eq 0 ];then
+	echo -e "Update finished: v"`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
+	exit 0
+	else
+		echo -e "Failed update: host (connection) might have problems\n"
+	fi
+}
+
 function autoUpdateDsapp {
 	if ($autoUpdate); then
-		publicDsappVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep dsappversion='134'
+		publicDsappVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep dsappversion= | cut -f2 -d "'"`
 		if [ "$dsappversion" -ne "$publicDsappVersion" ];then
 			clear;
 			echo -e "\nUpdating dsapp..."
@@ -174,7 +187,9 @@ function setupDsappAlias {
 	ls dsapp.sh &>/dev/null
 	if [ $? -eq 0 ]; then
 		# Check if running version is newer than installed version
-		installedVersion=`grep dsappversion='134'
+		installedVersion=`grep dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
+		echo "$dsappversion"
+		echo "$installedVersion"
 		if [[ "$dsappversion" -gt "$installedVersion" ]];then
 			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
 			mv -v dsapp.sh $dsappDirectory
@@ -281,37 +296,6 @@ setupDsappAlias
 				* ) REPLY=""
 			esac
 		done
-	}
-	function updateDsapp {
-		clear; 
-		# Remove any current versions
-		rm -f dsapp.sh
-
-# 		##### FTP
-# 		echo -e "\nUpdating dsapp from Novell FTP..."
-# 		netcat -z -w 5 ftp.novell.com 21;
-# 		if [ $? -eq 0 ]; then
-# 		ftp ftp.novell.com -a <<EOF
-# 			cd outgoing
-# 			bin
-# 			get dsapp.tgz
-# EOF
-# 		echo -e "\nDownloaded dsapp.tgz"
-# 		else
-# 			echo -e "Failed FTP: host (connection) might have problems\n"
-# 		fi
-
-# 		# Untar and run
-# 		echo -e "\nUntaring package contents..."
-# 		tar xzfv dsapp.tgz
-		curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -zx 2>/dev/null;
-		if [ $? -eq 0 ];then
-		echo -e "\nUpdate finished: v"`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
-		read -p "Press [Enter] to exit."
-		exit 0
-		else
-			echo -e "Failed update: host (connection) might have problems\n"
-		fi
 	}
 
 	function getLogs {
