@@ -198,6 +198,7 @@ function setupDsappAlias {
 		# Check if running version is newer than installed version
 		installedVersion=`grep -m1 dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
 		if [[ "$dsappversion" -gt "$installedVersion" ]];then
+			tellUserAboutAlias=true
 			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
 			mv -v dsapp.sh $dsappDirectory
 			if [ $? -ne 0 ]; then
