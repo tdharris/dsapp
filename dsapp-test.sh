@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='137'
+	dsappversion='138'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -170,17 +170,20 @@ function updateDsapp {
 }
 
 function autoUpdateDsapp {
-	if ($autoUpdate); then
-		publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion='137'
-		if [[ -z "$publicVersion" ]]; then
-			echo -e "\nThere appears to be network connectivity issues, skipping autoUpdate..."
-			echo "To disable autoUpdate, set autoUpdate=false in dsapp.sh"
-			# sleep 2
-		elif [ "$dsappversion" -ne "$publicVersion" ];then
-				clear;
-				echo -e "\nChecking for new dsapp..."
-				echo -e "v$dsappversion (v$publicVersion available)"
-				updateDsapp
+	# Skips auto-update if file is not called dsapp.sh (good for testing purposes when using dsapp-test.sh)
+	if [[ "$0" = *dsapp.sh ]]; then
+		if ($autoUpdate); then
+			publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
+			if [[ -z "$publicVersion" ]]; then
+				echo -e "\nThere appears to be network connectivity issues, skipping autoUpdate..."
+				echo "To disable autoUpdate, set autoUpdate=false in dsapp.sh"
+				# sleep 2
+			elif [ "$dsappversion" -ne "$publicVersion" ];then
+					clear;
+					echo -e "\nChecking for new dsapp..."
+					echo -e "v$dsappversion (v$publicVersion available)"
+					updateDsapp
+			fi
 		fi
 	fi
 }
@@ -200,7 +203,7 @@ function setupDsappAlias {
 		fi
 		
 		# Check if running version is newer than installed version
-		installedVersion=`grep -m1 dsappversion='137'
+		installedVersion=`grep -m1 dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
 		if [[ "$dsappversion" -gt "$installedVersion" ]];then
 			tellUserAboutAlias=true
 			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
@@ -1439,7 +1442,6 @@ cd $cPWD;
  echo -e "\t4. Certificates"
  echo -e "\n\t5. User Issues"
  echo -e "\t6. Checks & Queries"
- echo -e "\n\t7. Update dsapp"
  echo -e "\n\t0. Quit"
  echo -n -e "\n\tSelection: "
  read opt
@@ -2529,15 +2531,6 @@ EOF
 	ru+) clear;
   		removeUser;
 		;;
-
-
-##################################################################################################
-#	
-#	Update dsapp
-#
-##################################################################################################
-
-7) updateDsapp ;;
 
 # # # # # # # # # # # # # # # # # # # # # #
 
