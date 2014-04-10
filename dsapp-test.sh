@@ -171,7 +171,7 @@ function updateDsapp {
 
 function autoUpdateDsapp {
 	if ($autoUpdate); then
-		publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion='135'
+		publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
 		if [ "$dsappversion" -ne "$publicVersion" ];then
 			clear;
 			echo -e "\nChecking for new dsapp..."
@@ -185,32 +185,41 @@ function setupDsappAlias {
 	# If there is dsapp.sh
 	ls dsapp.sh &>/dev/null
 	if [ $? -eq 0 ]; then
+		resetEnvironment=false
+		tellUserAboutAlias=false
 		# Insert alias shortcut if not already there
 		if [[ -z `grep "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" /etc/profile` ]]; then
 			echo "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" >> /etc/profile
-			echo "Configured dsapp alias."
-			echo -e "\nPlease use /opt/novell/datasync/tools/dsapp/dsapp.sh"
-			echo -e "To launch, enter the following anywhere: dsapp\n"
-			echo -e "Refreshing environment variables"
-			# Reset environment variables (loads /etc/profile for dsapp alias)
-			su -
+			echo -e "\nConfigured dsapp alias."
+			tellUserAboutAlias=true
+			resetEnvironment=true
 		fi
 		
 		# Check if running version is newer than installed version
-		installedVersion=`grep -m1 dsappversion='135'
+		installedVersion=`grep -m1 dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
 		if [[ "$dsappversion" -gt "$installedVersion" ]];then
 			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
 			mv -v dsapp.sh $dsappDirectory
 			if [ $? -ne 0 ]; then
 				echo -e "\nThere was a problem copying dsapp.sh to /opt/novell/datasync/tools/dsapp..."
-				exit 1
 			fi
-			exit 0
 		else 
+			tellUserAboutAlias=true
 			rm dsapp.sh
-			exit 0
 		fi
 
+		# Reset environment variables (loads /etc/profile for dsapp alias)
+		if ($resetEnvironment); then
+			echo -e "Refreshing environment variables..."
+			su -
+		fi
+
+		if($tellUserAboutAlias); then
+			echo -e "\nPlease use /opt/novell/datasync/tools/dsapp/dsapp.sh"
+			echo -e "To launch, enter the following anywhere: dsapp\n"
+		fi
+
+		exit 0
 	fi
 }
 
