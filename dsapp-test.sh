@@ -173,7 +173,7 @@ function autoUpdateDsapp {
 	if ($autoUpdate); then
 		publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion='137'
 		if [[ -z "$publicVersion" ]]; then
-			echo "\nThere appears to be network connectivity issues, skipping autoUpdate..."
+			echo -e "\nThere appears to be network connectivity issues, skipping autoUpdate..."
 			echo "To disable autoUpdate, set autoUpdate=false in dsapp.sh"
 			# sleep 2
 		elif [ "$dsappversion" -ne "$publicVersion" ];then
