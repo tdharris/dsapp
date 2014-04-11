@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='138'
+	dsappversion='139'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -537,6 +537,7 @@ EOF
 			zypper --non-interactive update --force -r $1;
 			getDSVersion;
 			setVariables;
+			rccron stop 2>/dev/null; pkill cron 2>/dev/null
 			$rcScript stop;
 			killall -9 python &>/dev/null;
 			python /opt/novell/datasync/common/lib/upgrade.pyc;
@@ -547,6 +548,7 @@ EOF
 			setVariables;
 			rcpostgresql start;
 			$rcScript start;
+			rccron start;
 			echo -e "\nYour DataSync product has been successfully updated to "`cat /opt/novell/datasync/version`"\n";
 		fi
 	}
