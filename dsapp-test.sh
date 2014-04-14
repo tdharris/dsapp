@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='140'
+	dsappversion='141'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -1466,6 +1466,42 @@ cd $cPWD;
 	dpsql;
 	;;
 
+
+app+)
+	clear;
+	read -p "Username: " userInput;
+	if [ -n "$userInput" ];then
+		defaultMAppName=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$userInput%' AND \"connectorID\"='default.pipeline1.mobility';" | sed 's/^ *//'`
+		defaultGAppName=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$userInput%' AND \"connectorID\"='default.pipeline1.groupwise';" | sed 's/^ *//'`
+
+		if [ -n "$defaultMAppName" ] && [ -n "$defaultGAppName" ];then
+			echo "defaultMppName: $defaultMAppName";
+			echo "defaultGAppName: $defaultGAppName";
+
+			mAppName="$defaultMAppName"
+			gAppName="$defaultGAppName"
+
+			read -p "Enter users device application name [$mAppName] : " mAppName
+				mAppName="${mAppName:-$defaultMAppName}"
+
+			read -p "Enter users Groupwise application name [$gAppName] : " gAppName
+				gAppName="${gAppName:-$defaultGAppName}"
+
+			echo "device application name: $mAppName"
+			echo "Groupwise application name: $gAppName"
+
+			if askYesOrNo $"Update user [$userInput] application name?"; then
+			psql -U $dbUsername	datasync -c "UPDATE targets set \"targetName\"='$mAppName' where dn ilike '%$userInput%' AND \"connectorID\"='default.pipeline1.mobility';"
+			psql -U $dbUsername	datasync -c "UPDATE targets set \"targetName\"='$gAppName' where dn ilike '%$userInput%' AND \"connectorID\"='default.pipeline1.groupwise';"
+			fi
+		else
+			echo "No application names found for user [$userInput]"
+		fi
+	else
+		echo "Invalid input"
+	fi
+	read -p "Press [Enter] to continue."
+	;;
 ##################################################################################################
 #	
 #	Logging Menu
