@@ -225,7 +225,7 @@ function setupDsappAlias {
 				su -
 			fi
 
-			if($tellUserAboutAlias); then
+			if ($tellUserAboutAlias); then
 				echo -e "\nPlease use /opt/novell/datasync/tools/dsapp/dsapp.sh"
 				echo -e "To launch, enter the following anywhere: dsapp\n"
 			fi
