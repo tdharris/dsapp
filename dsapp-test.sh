@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='141'
+	dsappversion='142'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -567,16 +567,21 @@ EOF
 			done
 
 			errorReturn="NULL";
-			# Confirm user exists in database
+			# Confirm user exists in mobility database as DirectoryID
 			uchk=`psql -U $dbUsername mobility -c "select userid from users where \"userid\" ilike '%$uid%'" | grep -iw "$uid" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
-			guchk=`psql -U $dbUsername datasync -c "select dn from targets where \"dn\" ilike '%$uid%'" | grep -iw "$uid" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
-			# Check if user exists in GroupWise database as well
+			# Check if user exists in GroupWise database as DirectoryID
+			guchk=`psql -U $dbUsername datasync -c "select dn from targets where \"dn\" ilike '%$uid%'" | grep -iwm1 "$uid" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
+			# Check if user exists in GroupWise database as GroupwiseID
+			guchk2=`psql -U $dbUsername datasync -t -c "select dn from targets where \"targetName\" ilike '%$uid%' AND \"connectorID\"='default.pipeline1.groupwise';" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
 			uidCN="cn="$(echo ${uid}|tr [:upper:] [:lower:])
 			if [ -n "$uchk" ] && [ "$uchk" = "$uidCN" ]; then
 				vuid=$uid
 				errorReturn='0'; return 0;
 			elif [ -n "$guchk" ] && [ "$guchk" = "$uidCN" ]; then
 				vuid=$uid
+				errorReturn='0'; return 0;
+			elif [ -n "$guchk2" ];then
+				vuid=$guchk2
 				errorReturn='0'; return 0;
 			else
 				echo -e "User does not exist in Mobility Database.\n"; 
@@ -1495,7 +1500,7 @@ cd $cPWD;
  v+) ##Test verifyUser function --Not on Menu--
  	clear; 
 	verifyUser
-	echo -e "\n----------------------------------\nMobility Database Found: "$uchk "\nDatasync Database Found: "$uchk"\nCN User Compare: "$uidCN "\nValid User Check: "$vuid "\nError Return: "$errorReturn "\n----------------------------------"
+	echo -e "\n----------------------------------\nMobility Database Found: "$uchk "\nDatasync Database Found: "$guchk "\nDatasync AppName Database Found: "$guchk2"\nCN User Compare: "$uidCN "\nValid User Check: "$vuid "\nError Return: "$errorReturn "\n----------------------------------"
 	[[ "$errorReturn" -eq "0" ]] && echo -e "No errors found\n\nPress [Enter] to continue."
 	read;
 	;;
