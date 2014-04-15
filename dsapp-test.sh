@@ -1309,6 +1309,44 @@ echo -e "\nDatabase password updated. Please restart mobility."
 read -p "Press [Enter] to continue."
 }
 
+function changeAppName
+{
+	clear;
+	verifyUser
+	if [ $? = 0 ]; then
+		#Assign application names from database to default variables
+		defaultMAppName=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.mobility';" | sed 's/^ *//'`
+		defaultGAppName=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.groupwise';" | sed 's/^ *//'`
+
+		if [ -n "$defaultMAppName" ] && [ -n "$defaultGAppName" ];then
+
+			mAppName="$defaultMAppName"
+			gAppName="$defaultGAppName"
+			echo
+
+			#Prompt user for new device app name and display default
+			read -p "Enter users device application name [$mAppName] : " mAppName
+				mAppName="${mAppName:-$defaultMAppName}"
+
+			#Prompt user for new groupwise app name and display default
+			read -p "Enter users Groupwise application name [$gAppName] : " gAppName
+				gAppName="${gAppName:-$defaultGAppName}"
+
+			echo -e "\nDevice application name: $mAppName"
+			echo "Groupwise application name: $gAppName"
+
+			if askYesOrNo $"Update [$vuid] application names?"; then
+				#Updates users application names with variable entries
+				psql -U $dbUsername	datasync -c "UPDATE targets set \"targetName\"='$mAppName' where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.mobility';"
+				psql -U $dbUsername	datasync -c "UPDATE targets set \"targetName\"='$gAppName' where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.groupwise';"
+			fi
+		else
+			echo -e "No application names found for user [$vuid]\n"
+		fi
+		read -p "Press [Enter] to continue."
+	fi
+}
+
 ##################################################################################################
 #	
 #	Switches / Command-line parameters
@@ -1454,7 +1492,7 @@ cd $cPWD;
  a=true;
  case $opt in
 
- v+) ##Test verifyUser function
+ v+) ##Test verifyUser function --Not on Menu--
  	clear; 
 	verifyUser
 	echo -e "\n----------------------------------\nMobility Database Found: "$uchk "\nDatasync Database Found: "$uchk"\nCN User Compare: "$uidCN "\nValid User Check: "$vuid "\nError Return: "$errorReturn "\n----------------------------------"
@@ -1466,42 +1504,6 @@ cd $cPWD;
 	dpsql;
 	;;
 
-
-app+)
-	clear;
-	read -p "Username: " userInput;
-	if [ -n "$userInput" ];then
-		defaultMAppName=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$userInput%' AND \"connectorID\"='default.pipeline1.mobility';" | sed 's/^ *//'`
-		defaultGAppName=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$userInput%' AND \"connectorID\"='default.pipeline1.groupwise';" | sed 's/^ *//'`
-
-		if [ -n "$defaultMAppName" ] && [ -n "$defaultGAppName" ];then
-			echo "defaultMppName: $defaultMAppName";
-			echo "defaultGAppName: $defaultGAppName";
-
-			mAppName="$defaultMAppName"
-			gAppName="$defaultGAppName"
-
-			read -p "Enter users device application name [$mAppName] : " mAppName
-				mAppName="${mAppName:-$defaultMAppName}"
-
-			read -p "Enter users Groupwise application name [$gAppName] : " gAppName
-				gAppName="${gAppName:-$defaultGAppName}"
-
-			echo "device application name: $mAppName"
-			echo "Groupwise application name: $gAppName"
-
-			if askYesOrNo $"Update user [$userInput] application name?"; then
-			psql -U $dbUsername	datasync -c "UPDATE targets set \"targetName\"='$mAppName' where dn ilike '%$userInput%' AND \"connectorID\"='default.pipeline1.mobility';"
-			psql -U $dbUsername	datasync -c "UPDATE targets set \"targetName\"='$gAppName' where dn ilike '%$userInput%' AND \"connectorID\"='default.pipeline1.groupwise';"
-			fi
-		else
-			echo "No application names found for user [$userInput]"
-		fi
-	else
-		echo "Invalid input"
-	fi
-	read -p "Press [Enter] to continue."
-	;;
 ##################################################################################################
 #	
 #	Logging Menu
@@ -2218,9 +2220,10 @@ done
  	echo -e "\n\t6. Remove user & db references"
  	echo -e "\t7. Reinitialize user (WebAdmin is recommended)"
  	echo -e "\t8. Remove user & group db references only (remove from WebAdmin first)"
- 	echo -e "\n\t9. List subjects of deleted items from device"
- 	echo -e "\t10. List All Devices from db"
- 	echo -e "\n\t11. Reinitialize all users (CAUTION)"
+ 	echo -e "\t9. Change user application name"
+ 	echo -e "\n\t10. List subjects of deleted items from device"
+ 	echo -e "\t11. List All Devices from db"
+ 	echo -e "\n\t12. Reinitialize all users (CAUTION)"
 	echo -e "\n\t0. Back"
  	echo -n -e "\n\tSelection: "
  	read opt;
@@ -2342,10 +2345,14 @@ done
 		ru+ | 8) # Remove User Database References
 	     	removeUser;;
 
-		9) whatDeviceDeleted
+	     9) #Calls changeAppName function to change users app names
+			changeAppName
 			;;
 
-		10) #Device Info
+		10) whatDeviceDeleted
+			;;
+
+		11) #Device Info
 			clear; 
 			echo -e "\nBelow is a list of users and devices. For more details about each device (i.e. OS version), look up what is in the description column. For an iOS device, there could be a listing of Apple-iPhone3C1/902.176. Use the following website, http://enterpriseios.com/wiki/UserAgent to convert to an Apple product, iOS Version and Build.\n"
 			mpsql << EOF
@@ -2355,7 +2362,7 @@ EOF
 			;;
 				
 
-		11) clear; #Re-initialize all users
+		12) clear; #Re-initialize all users
 			echo -e "Note: During the re-initialize, users will not be able to log in. This may take some time."
 			if askYesOrNo $"Are you sure you want to re-initialize all the users?";then
 				mpsql << EOF
