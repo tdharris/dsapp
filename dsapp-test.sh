@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='142'
+	dsappversion='143'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -86,6 +86,15 @@
 		exit 1;
 	fi
 
+	#Create folders to store script files
+	rm -R -f /tmp/novell/ 2>/dev/null;
+	rm -R -f $dsappLogs $dsapptmp 2>/dev/null;
+	mkdir -p $dsappDirectory 2>/dev/null;
+	mkdir -p $dsappLogs 2>/dev/null;
+	mkdir -p $dsapptmp 2>/dev/null;
+	mkdir -p $dsappupload 2>/dev/null;
+	mkdir -p /root/Downloads 2>/dev/null;
+
 	#Check and set force to true
 	if [ "$1" == "--force" ] || [ "$1" == "-f" ] || [ "$1" == "?" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ] || [ "$1" == "-db" ] || [ "$1" == "--database" ];then
 		forceMode=1;
@@ -99,62 +108,6 @@
 		exit 1;
 	fi
 	fi
-
-	#Get datasync version.
-	function getDSVersion
-	{
-	dsVersion=`cat $version | cut -c1-7 | tr -d '.'`
-	dsVersionCompare='2000'
-	}
-	getDSVersion;
-
-	#Get database username (datasync_user by default)
-	dbUsername=`cat $dirEtcMobility/configengine/configengine.xml | grep database -A 7 | grep "<username>" | cut -f2 -d '>' | cut -f1 -d '<'`
-
-
-if [[ "$forceMode" -ne "1" ]];then
-	#Database .pgpass file / version check.
-	if [ $dsVersion -gt $dsVersionCompare ];then
-		#Log into database or create .pgpass file to login.
-		dbRunning=`rcpostgresql status`;
-		if [ $? -eq '0' ];then
-			if [ -f "/root/.pgpass" ];then
-				dbLogin=`psql -U $dbUsername datasync -c "select dn from targets" 2>/dev/null`;
-				if [ $? -ne '0' ];then
-					read -sp "Enter database password: " dbPassword;
-					echo -e '\n'
-					#Creating new .pgpass file
-					echo "*:*:*:*:"$dbPassword > /root/.pgpass;
-					chmod 0600 /root/.pgpass;
-
-					dbLogin=`psql -U $dbUsername datasync -c "select dn from targets" 2>/dev/null`;
-					if [ $? -ne '0' ];then
-						read -p "Incorrect password.";exit 1;
-					fi
-				fi
-			else
-				read -sp "Enter database password: " dbPassword;
-				echo -e '\n'
-				#Creating new .pgpass file
-				echo "*:*:*:*:"$dbPassword > /root/.pgpass;
-				chmod 0600 /root/.pgpass;
-
-				dbLogin=`psql -U $dbUsername datasync -c "select dn from targets" 2>/dev/null`;
-				if [ $? -ne '0' ];then
-					read -p "Incorrect password.";exit 1;
-				fi
-			fi
-		else
-			read -p "Postgresql is not running";exit 1;
-		fi
-	else
-		#Grabbing Username and Passwrod from configengine.xml
-		dbPassword=`cat $dirEtcMobility/configengine/configengine.xml | grep database -A 7 | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
-		#Creating new .pgpass file
-		echo "*:*:*:*:"$dbPassword > /root/.pgpass;
-		chmod 0600 /root/.pgpass;
-	fi
-fi
 
 function updateDsapp {
 	echo -e "\nUpdating dsapp..."
@@ -219,17 +172,15 @@ function setupDsappAlias {
 				rm dsapp.sh
 			fi
 
+			if ($tellUserAboutAlias); then
+				echo -e "\nPlease use /opt/novell/datasync/tools/dsapp/dsapp.sh"
+				echo -e "To launch, enter the following anywhere: dsapp\n"
+			fi
 			# Reset environment variables (loads /etc/profile for dsapp alias)
 			if ($resetEnvironment); then
 				echo -e "Refreshing environment variables..."
 				su -
 			fi
-
-			if ($tellUserAboutAlias); then
-				echo -e "\nPlease use /opt/novell/datasync/tools/dsapp/dsapp.sh"
-				echo -e "To launch, enter the following anywhere: dsapp\n"
-			fi
-
 			exit 0
 		fi
 	fi
@@ -237,6 +188,62 @@ function setupDsappAlias {
 
 autoUpdateDsapp
 setupDsappAlias
+
+	#Get datasync version.
+	function getDSVersion
+	{
+	dsVersion=`cat $version | cut -c1-7 | tr -d '.'`
+	dsVersionCompare='2000'
+	}
+	getDSVersion;
+
+	#Get database username (datasync_user by default)
+	dbUsername=`cat $dirEtcMobility/configengine/configengine.xml | grep database -A 7 | grep "<username>" | cut -f2 -d '>' | cut -f1 -d '<'`
+
+
+if [[ "$forceMode" -ne "1" ]];then
+	#Database .pgpass file / version check.
+	if [ $dsVersion -gt $dsVersionCompare ];then
+		#Log into database or create .pgpass file to login.
+		dbRunning=`rcpostgresql status`;
+		if [ $? -eq '0' ];then
+			if [ -f "/root/.pgpass" ];then
+				dbLogin=`psql -U $dbUsername datasync -c "select dn from targets" 2>/dev/null`;
+				if [ $? -ne '0' ];then
+					read -sp "Enter database password: " dbPassword;
+					echo -e '\n'
+					#Creating new .pgpass file
+					echo "*:*:*:*:"$dbPassword > /root/.pgpass;
+					chmod 0600 /root/.pgpass;
+
+					dbLogin=`psql -U $dbUsername datasync -c "select dn from targets" 2>/dev/null`;
+					if [ $? -ne '0' ];then
+						read -p "Incorrect password.";exit 1;
+					fi
+				fi
+			else
+				read -sp "Enter database password: " dbPassword;
+				echo -e '\n'
+				#Creating new .pgpass file
+				echo "*:*:*:*:"$dbPassword > /root/.pgpass;
+				chmod 0600 /root/.pgpass;
+
+				dbLogin=`psql -U $dbUsername datasync -c "select dn from targets" 2>/dev/null`;
+				if [ $? -ne '0' ];then
+					read -p "Incorrect password.";exit 1;
+				fi
+			fi
+		else
+			read -p "Postgresql is not running";exit 1;
+		fi
+	else
+		#Grabbing Username and Passwrod from configengine.xml
+		dbPassword=`cat $dirEtcMobility/configengine/configengine.xml | grep database -A 7 | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
+		#Creating new .pgpass file
+		echo "*:*:*:*:"$dbPassword > /root/.pgpass;
+		chmod 0600 /root/.pgpass;
+	fi
+fi
 
 ##################################################################################################
 #	Initialize Variables
@@ -252,14 +259,6 @@ setupDsappAlias
 		}
 		setVariables;
 
-	#Create folders to store script files
-	rm -R -f /tmp/novell/ 2>/dev/null;
-	rm -R -f $dsappLogs $dsapptmp 2>/dev/null;
-	mkdir -p $dsappDirectory 2>/dev/null;
-	mkdir -p $dsappLogs 2>/dev/null;
-	mkdir -p $dsapptmp 2>/dev/null;
-	mkdir -p $dsappupload 2>/dev/null;
-	mkdir -p /root/Downloads 2>/dev/null;
 
 ##################################################################################################
 #
