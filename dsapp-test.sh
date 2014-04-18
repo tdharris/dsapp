@@ -987,8 +987,9 @@ if [ $dsVersion -gt $dsVersionCompare ];then
 			echo -e "No such file."
 			break;
 		fi
-		trustedKey=`cat $trustedAppFile`;
-		cat $trustedAppFile > $dsappDirectory/trustedApp.key;
+		echo "$(cat $trustedAppFile)" > $dsappDirectory/trustedApp.key;
+		dos2unix $dsappDirectory/trustedApp.key 2>/dev/null
+		trustedKey=`cat $dsappDirectory/trustedApp.key`;
 	fi
 fi
 
@@ -1031,8 +1032,9 @@ if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`
 				echo -e "No such file."
 				break;
 			fi
-			trustedKey=`cat $trustedAppFile`;
-			cat $trustedAppFile > $dsappDirectory/trustedApp.key;
+			echo "$(cat $trustedAppFile)" > $dsappDirectory/trustedApp.key;
+			dos2unix $dsappDirectory/trustedApp.key 2>/dev/null
+			trustedKey=`cat $dsappDirectory/trustedApp.key`;
 		fi
 	fi
 	read -p "Press [Enter] to continue."; continue;
@@ -1085,8 +1087,9 @@ if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`
 				echo -e "No such file."
 				break;
 			fi
-			trustedKey=`cat $trustedAppFile`;
-			cat $trustedAppFile > $dsappDirectory/trustedApp.key;
+			echo "$(cat $trustedAppFile)" > $dsappDirectory/trustedApp.key;
+			dos2unix $dsappDirectory/trustedApp.key 2>/dev/null
+			trustedKey=`cat $dsappDirectory/trustedApp.key`;
 		fi
 	fi
 	read -p "Press [Enter] to continue."; continue;
