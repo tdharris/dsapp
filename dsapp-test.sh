@@ -972,15 +972,15 @@ soapSession=''
 poa=''
 userPO=''
 function soapLogin {
-gw='/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/groupwise/connector.xml'
+gw=''$dirEtcMobility'/configengine/engines/default/pipelines/pipeline1/connectors/groupwise/connector.xml'
 poa=`cat $gw | grep -i soap | sed 's/<[^>]*[>]//g' | tr -d ' ' | sed 's|[a-zA-Z,]||g' | tr -d '//' | sed 's/^.//'`
 poaAddress=`echo $poa | sed 's+:.*++g'`
 port=`echo $poa | sed 's+.*:++g'`
 trustedName=`cat $gw | grep -i trustedAppName | sed 's/<[^>]*[>]//g' | tr -d ' '`
 trustedKey=`cat $gw | grep -i trustedAppKey | sed 's/<[^>]*[>]//g' | tr -d ' '`
 if [ $dsVersion -gt $dsVersionCompare ];then
-	if [ -f "/root/trustedApp.key" ]; then
-		trustedKey=`cat /root/trustedApp.key`
+	if [ -f "$dsappDirectory/trustedApp.key" ]; then
+		trustedKey=`cat $dsappDirectory/trustedApp.key`
 	else
 		read -ep "Enter path to trusted application file: " trustedAppFile;
 		if [ ! -f $trustedAppFile ];then
@@ -988,7 +988,7 @@ if [ $dsVersion -gt $dsVersionCompare ];then
 			break;
 		fi
 		trustedKey=`cat $trustedAppFile`;
-		cat $trustedAppFile > /root/trustedApp.key;
+		cat $trustedAppFile > $dsappDirectory/trustedApp.key;
 	fi
 fi
 
@@ -1024,17 +1024,17 @@ EOF`
 if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`); then 
 	echo "Invalid key for trusted application."
 
-if [ $dsVersion -gt $dsVersionCompare ];then
-	if askYesOrNo $"Use new trusted application file?" ; then
-	read -ep "Enter path to trusted application file: " trustedAppFile;
-		if [ ! -f $trustedAppFile ];then
-			echo -e "No such file."
-			break;
+	if [ $dsVersion -gt $dsVersionCompare ];then
+		if askYesOrNo $"Use new trusted application file?" ; then
+		read -ep "Enter path to trusted application file: " trustedAppFile;
+			if [ ! -f $trustedAppFile ];then
+				echo -e "No such file."
+				break;
+			fi
+			trustedKey=`cat $trustedAppFile`;
+			cat $trustedAppFile > $dsappDirectory/trustedApp.key;
 		fi
-		trustedKey=`cat $trustedAppFile`;
-		cat $trustedAppFile > /root/trustedApp.key;
 	fi
-fi
 	read -p "Press [Enter] to continue."; continue;
 fi
 if (`echo "$soapLoginResponse" | grep -q "redirect"`); then 
@@ -1070,9 +1070,26 @@ Content-Type: text/xml
    </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>
 EOF`
+
 fi
 if [ $? != 0 ]; then
 	echo -e "Redirection detected.\nFailure to connect to $poa"
+fi
+if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`); then 
+	echo "Invalid key for trusted application."
+
+	if [ $dsVersion -gt $dsVersionCompare ];then
+		if askYesOrNo $"Use new trusted application file?" ; then
+		read -ep "Enter path to trusted application file: " trustedAppFile;
+			if [ ! -f $trustedAppFile ];then
+				echo -e "No such file."
+				break;
+			fi
+			trustedKey=`cat $trustedAppFile`;
+			cat $trustedAppFile > $dsappDirectory/trustedApp.key;
+		fi
+	fi
+	read -p "Press [Enter] to continue."; continue;
 fi
 userPO=`echo $soapLoginResponse | grep -iwo "<gwt:postOffice>.*</gwt:postOffice>" | sed 's/<[^>]*[>]//g' | tr -d ' ' | tr [:upper:] [:lower:]`
 gwVersion=`echo $soapLoginResponse | grep -iwo "<gwm:gwVersion>.*</gwm:gwVersion>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
