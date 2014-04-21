@@ -220,17 +220,15 @@ if [[ "$forceMode" -ne "1" ]];then
 		#Log into database or create .pgpass file to login.
 		dbRunning=`rcpostgresql status`;
 		if [ $? -eq '0' ];then
-			if [ -f "/root/.pgpass" ];then
-				dbLogin=`psql -U $dbUsername datasync -c "\d" 2>/dev/null`;
-				if [ $? -ne '0' ];then
+			if [ $(checkDBPass) -eq 0 ];then
+				if [ $(checkDBPass) -eq 1 ];then
 					read -sp "Enter database password: " dbPassword;
 					echo -e '\n'
 					#Creating new .pgpass file
 					echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 					chmod 0600 /root/.pgpass;
 
-					dbLogin=`psql -U $dbUsername datasync -c "\d" 2>/dev/null`;
-					if [ $? -ne '0' ];then
+					if [ $(checkDBPass) -eq 1 ];then
 						read -p "Incorrect password.";exit 1;
 					fi
 				fi
@@ -241,8 +239,7 @@ if [[ "$forceMode" -ne "1" ]];then
 				echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 				chmod 0600 /root/.pgpass;
 
-				dbLogin=`psql -U $dbUsername datasync -c "\d" 2>/dev/null`;
-				if [ $? -ne '0' ];then
+				if [ $(checkDBPass) -eq 1 ];then
 					read -p "Incorrect password.";exit 1;
 				fi
 			fi
