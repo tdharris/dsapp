@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='145'
+	dsappversion='146'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -1237,11 +1237,11 @@ function updateMobilityFTP {
 		read -ep "FTP Filename: " ds;
 		dbuild=`echo $ds | cut -f1 -d"."`;
 		cd /root/Downloads;
-		wget "ftp://ftp.novell.com/outgoing/$ds"
+		wget -r "ftp://ftp.novell.com/outgoing/$ds"
 		if [ $? -ne 1 ];then
-			tar xvfz $ds 2>/dev/null;
-			unzip $ds 2>/dev/null;
-		dsISO=`find /root/Downloads/ -type f -name 'novell*mobility-*'$dbuild'.iso' | sed 's!.*/!!'`
+			tar xvfz --overwrite $ds 2>/dev/null;
+			unzip -o $ds 2>/dev/null;
+		dsISO=`find /root/Downloads/ -type f -name 'novell*mobility-*'$dbuild'.iso' | head -n 1 |sed 's!.*/!!'`
 			zypper rr mobility 2>/dev/null;
 			zypper addrepo 'iso:///?iso='$dsISO'&url=file:///root/Downloads' mobility;
 		dsUpdate mobility;
