@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='146'
+	dsappversion='147'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -579,7 +579,15 @@ EOF
 		zLU=`zypper lu -r $1`;
 		zLU=`echo $zLU | grep -iwo "No updates found."`;
 		if [ "$zLU" = "No updates found." ]; then
-			echo -e "\nDatasync is already this version, or newer.";		
+			echo -e "\nDatasync is already this version, or newer.";
+			if askYesOrNo $"List $1 packages?";then
+				zypper pa -ir $1
+				echo
+				if askYesOrNo $"Force install $1 packages?";then
+					zypper --non-interactive install --force $1:
+					echo -e "\nPlease run $dirOptMobility/update.sh"
+				fi
+			fi
 		else
 			echo -e "Updating Datasync..."
 
