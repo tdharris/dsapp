@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='144'
+	dsappversion='145'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -200,6 +200,19 @@ setupDsappAlias
 	#Get database username (datasync_user by default)
 	dbUsername=`cat $dirEtcMobility/configengine/configengine.xml | grep database -A 7 | grep "<username>" | cut -f2 -d '>' | cut -f1 -d '<'`
 
+	function checkDBPass 
+	{
+		if [ -f "/root/.pgpass" ];then
+			dbLogin=`psql -U $dbUsername datasync -c "\d" 2>/dev/null`;
+			if [ $? -eq '0' ];then
+				echo "0";
+			else
+				echo "1";
+			fi
+		else
+			echo "1";
+		fi
+	}
 
 if [[ "$forceMode" -ne "1" ]];then
 	#Database .pgpass file / version check.
@@ -208,7 +221,7 @@ if [[ "$forceMode" -ne "1" ]];then
 		dbRunning=`rcpostgresql status`;
 		if [ $? -eq '0' ];then
 			if [ -f "/root/.pgpass" ];then
-				dbLogin=`psql -U $dbUsername datasync -c "select dn from targets" 2>/dev/null`;
+				dbLogin=`psql -U $dbUsername datasync -c "\d" 2>/dev/null`;
 				if [ $? -ne '0' ];then
 					read -sp "Enter database password: " dbPassword;
 					echo -e '\n'
@@ -216,7 +229,7 @@ if [[ "$forceMode" -ne "1" ]];then
 					echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 					chmod 0600 /root/.pgpass;
 
-					dbLogin=`psql -U $dbUsername datasync -c "select dn from targets" 2>/dev/null`;
+					dbLogin=`psql -U $dbUsername datasync -c "\d" 2>/dev/null`;
 					if [ $? -ne '0' ];then
 						read -p "Incorrect password.";exit 1;
 					fi
@@ -228,7 +241,7 @@ if [[ "$forceMode" -ne "1" ]];then
 				echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 				chmod 0600 /root/.pgpass;
 
-				dbLogin=`psql -U $dbUsername datasync -c "select dn from targets" 2>/dev/null`;
+				dbLogin=`psql -U $dbUsername datasync -c "\d" 2>/dev/null`;
 				if [ $? -ne '0' ];then
 					read -p "Incorrect password.";exit 1;
 				fi
@@ -400,6 +413,38 @@ EOF
 	}
 
 	function  cuso {
+		local tempVar=true
+		if [ $(checkDBPass) -eq 0 ];then
+			if [ $1 == 'true' ];then
+				#Dropping Tables
+				dropdb -U $dbUsername datasync;
+				dropdb -U $dbUsername mobility;
+				dropdb -U $dbUsername dsmonitor;
+
+				#Recreating Tables - Code from postgres_setup_1.sh
+				PGPASSWORD="$dbPassword" createdb "datasync" -U "$dbUsername" -h "localhost" -p "5432"
+				echo "create datasync database done.."
+				PGPASSWORD="$dbPassword" psql -d "datasync" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/common/sql/postgresql/configengine.sql"
+				echo "extend schema configengine done.."
+				PGPASSWORD="$dbPassword" psql -d "datasync" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/common/sql/postgresql/datasync.sql"
+				echo "extend schema syncengine done.."
+
+				DATE=`date +"%Y-%m-%d %H:%M:%S"`
+				VERSION=`cat $dirOptMobility/version`
+				COMMAND="INSERT INTO services (service, initial_version, initial_timestamp, previous_version, previous_timestamp, service_version, service_timestamp) VALUES ('Mobility','"$VERSION"', '"$DATE"', '"$VERSION"', '"$DATE"', '"$VERSION"', '"$DATE"');"
+				PGPASSWORD="$dbPassword" psql -d "datasync" -U "$dbUsername" -h "localhost" -p "5432" -c "$COMMAND"
+				echo "add service record done.."
+
+				PGPASSWORD="$dbPassword" createdb "mobility" -U $dbUsername
+				echo "create mobility database done.."
+				PGPASSWORD="$dbPassword" psql -d "mobility" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/syncengine/connectors/mobility/mobility_pgsql.sql"
+				echo "extend schema mobility done.."
+				
+				PGPASSWORD="$dbPassword" createdb "dsmonitor" -U $dbUsername
+				echo "create monitor database done.."
+				PGPASSWORD="$dbPassword" psql -d "dsmonitor" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/monitorengine/sql/monitor.sql"
+				echo "extend schema for monitor done.."
+			else
 				#Cleaning up datasync table.
 				psql -U $dbUsername datasync -c "delete from attachments";
 				psql -U $dbUsername datasync -c "delete from \"attachments_attachmentID_seq\"";
@@ -412,10 +457,6 @@ EOF
 				psql -U $dbUsername datasync -c "delete from \"folderMappings\"";
 				psql -U $dbUsername datasync -c "delete from \"objectMappings\"";
 				psql -U $dbUsername datasync -c "delete from retention";
-				if [ $1 == 'true' ];then
-					psql -U $dbUsername datasync -c "delete from targets";
-					psql -U $dbUsername datasync -c "delete from \"membershipCache\"";
-				fi
 				if [ $1 == 'false' ];then
 					psql -U $dbUsername datasync -c "delete from targets where disabled='1'";
 				fi
@@ -434,16 +475,23 @@ EOF
 				psql -U $dbUsername mobility -c "delete from syncenginedata";
 				psql -U $dbUsername mobility -c "delete from syncevents";
 				psql -U $dbUsername mobility -c "delete from users";
+			fi
+		else
+			if askYesOrNo $"Unable to clean up tables (Database connection). Continue?"; then
+				local tempVar=true; else local tempVar=false;
+			fi
+		fi
+			if($tempVar);then
 				#Remove attachments.
-				rm -fv -R /var/lib/datasync/syncengine/attachments/*
-				rm -fv -R /var/lib/datasync/mobility/attachments/*
+				rm -fv -R $dirVarMobility/syncengine/attachments/*
+				rm -fv -R $dirVarMobility/mobility/attachments/*
 				#Vacuum database
 				vacuumDB;
 				#Index database
 				indexDB;
 
 				#Check if uninstall parameter was passed in - Force uninstall
-				if [ $2 == 'uninstall' ];then
+				if [[ "$2" == 'uninstall' ]];then
 					rcpostgresql stop; killall -9 postgres &>/dev/null; killall -9 python &>/dev/null;
 					rpm -e `rpm -qa | grep "datasync-"`
 					rpm -e `rpm -qa | grep "postgresql"`
@@ -459,6 +507,7 @@ EOF
 				fi
 
 				echo -e "\nClean up complete."
+			fi
 
 		}
 
