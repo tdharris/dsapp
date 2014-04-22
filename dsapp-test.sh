@@ -579,7 +579,7 @@ EOF
 		zLU=`zypper lu -r $1`;
 		zLU=`echo $zLU | grep -iwo "No updates found."`;
 		if [ "$zLU" = "No updates found." ]; then
-			echo -e "\nDatasync is already this version, or newer.";
+			echo -e "\nMobility is already this version, or newer.";
 			if askYesOrNo $"List $1 packages?";then
 				zypper pa -ir $1
 				echo
@@ -589,7 +589,7 @@ EOF
 				fi
 			fi
 		else
-			echo -e "Updating Datasync..."
+			echo -e "Updating Mobility..."
 
 			zypper --non-interactive update --force -r $1;
 			getDSVersion;
@@ -597,8 +597,8 @@ EOF
 			rccron stop 2>/dev/null; pkill cron 2>/dev/null
 			$rcScript stop;
 			killall -9 python &>/dev/null;
-			python /opt/novell/datasync/common/lib/upgrade.pyc;
-			printf "\nRestarting Datasync...\n";
+			python $dirOptMobility/common/lib/upgrade.pyc;
+			printf "\nRestarting Mobility...\n";
 			rcpostgresql stop;
 			killall -9 postgres &>/dev/null;
 			getDSVersion;
@@ -606,7 +606,7 @@ EOF
 			rcpostgresql start;
 			$rcScript start;
 			rccron start;
-			echo -e "\nYour DataSync product has been successfully updated to "`cat /opt/novell/datasync/version`"\n";
+			echo -e "\nYour Mobility product has been successfully updated to "`cat $dirOptMobility/version`"\n";
 		fi
 	}
 
@@ -1237,7 +1237,7 @@ rm $dsapptmp/tempFile*.xml
 
 function updateMobilityFTP {
 	clear;
-	if askYesOrNo $"Permission to restart datasync when applying update?"; then
+	if askYesOrNo $"Permission to restart Mobility when applying update?"; then
 		echo -e "\n"
 		echo -e "Connecting to ftp..."
 		netcat -z -w 5 ftp.novell.com 21;
@@ -1265,7 +1265,7 @@ function updateMobilityFTP {
 
 function checkNightlyMaintenance {
 	echo -e "\nNightly Maintenance:"
-	cat /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | grep -i database
+	cat $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | grep -i database
 	echo -e "\nNightly Maintenance History:"
 	history=`cat $mAlog | grep -i  "nightly maintenance" | tail -5`
 	if [ -z "$history" ]; then
@@ -1614,13 +1614,13 @@ cd $cPWD;
 
 	  2) #Set logs to default
 		clear;
-		if askYesOrNo $"Permission to restart datasync?"; then
+		if askYesOrNo $"Permission to restart Mobility?"; then
 			echo -e "\nConfigured logs to defaults...";
 
-		    sed -i "s|<level>.*</level>|<level>info</level>|g" `find /etc/datasync/ -name *.xml`;
-			sed -i "s|<verbose>.*</verbose>|<verbose>off</verbose>|g" `find /etc/datasync/ -name *.xml`;
+		    sed -i "s|<level>.*</level>|<level>info</level>|g" `find $dirEtcMobility/ -name *.xml`;
+			sed -i "s|<verbose>.*</verbose>|<verbose>off</verbose>|g" `find $dirEtcMobility/ -name *.xml`;
 			
-			printf "\nRestarting Datasync.\n";
+			printf "\nRestarting Mobility.\n";
 			progressDot & progressTask=$!; trap "kill $progressTask 2>/dev/null" EXIT;
 			rcDS stop silent; rcDS start silent;
 			kill $progressTask; wait $progressTask 2>/dev/null; printf '\n';
@@ -1632,14 +1632,14 @@ cd $cPWD;
 			
 	  3) #Set logs to diagnostic / debug
 		clear; 
-		if askYesOrNo $"Permission to restart datasync?"; then
+		if askYesOrNo $"Permission to restart Mobility?"; then
 			echo -e "\nConfigured logs to diagnostic/debug...";
 
-			sed -i "s|<level>.*</level>|<level>debug</level>|g" `find /etc/datasync/ -name *.xml`;
-			sed -i "s|<verbose>.*</verbose>|<verbose>diagnostic</verbose>|g" `find /etc/datasync/ -name *.xml`;
-			sed -i "s|<failures>.*</failures>|<failures>on</failures>|g" `find /etc/datasync/ -name *.xml`;	
+			sed -i "s|<level>.*</level>|<level>debug</level>|g" `find $dirEtcMobility/ -name *.xml`;
+			sed -i "s|<verbose>.*</verbose>|<verbose>diagnostic</verbose>|g" `find find $dirEtcMobility/ -name *.xml`;
+			sed -i "s|<failures>.*</failures>|<failures>on</failures>|g" `find find $dirEtcMobility/ -name *.xml`;	
 			
-			printf "\nRestarting Datasync.\n";
+			printf "\nRestarting Mobility.\n";
 			progressDot & progressTask=$!; trap "kill $progressTask 2>/dev/null" EXIT;
 			rcDS stop silent; rcDS start silent;
 			kill $progressTask; wait $progressTask 2>/dev/null; printf '\n';
@@ -1651,7 +1651,7 @@ cd $cPWD;
 
 	  4) # Log capture
 		clear;
-		echo -e "The variable search string is a key word, used to search through the Datasync logs. Enter a string before starting your test."
+		echo -e "The variable search string is a key word, used to search through the Mobility logs. Enter a string before starting your test."
 		read -ep "Variable search string: " sString;
 		rm -f $log/connectors/*.log;
 		rm -f $log/syncengine/engine.log;
@@ -1803,7 +1803,7 @@ EOF
 				echo -e "\n"
 				zService=`zypper ls |grep -iwo nu_novell_com | head -1`;
 				if [ "$zService" = "nu_novell_com" ]; then
-					if askYesOrNo $"Permission to restart datasync when applying update?"; then
+					if askYesOrNo $"Permission to restart Mobility when applying update?"; then
 					#Get the Correct Novell Update Channel
 					echo -e "\n"
 					nuc=`zypper lr | grep nu_novell_com | sed -e "s/.*nu_novell_com://;s/| Mobility.*//"`;
@@ -1817,7 +1817,7 @@ EOF
 
 			3) #Update Datasync using local ISO
 				clear;
-				if askYesOrNo $"Permission to restart datasync when applying update?"; then
+				if askYesOrNo $"Permission to restart Mobility when applying update?"; then
 				#Get Directory
 				while [ ! -d "$path" ]; do
 				read -ep "Enter full path to the directory of ISO file: " path;
@@ -1925,9 +1925,9 @@ EOF
 #
 ##################################################################################################
    3) clear; 
-	echo -e "\nPerforming maintenance will require DataSync services to be unavailable\n"
-	if askYesOrNo $"Permission to stop datasync?"; then
-		echo "Stopping Datasync..."
+	echo -e "\nPerforming maintenance will require Mobility services to be unavailable\n"
+	if askYesOrNo $"Permission to stop Mobility?"; then
+		echo "Stopping Mobility..."
 		rcDS stop;
 		while :
 		do
@@ -1941,7 +1941,7 @@ EOF
 		echo -e "\t4. Restore Databases"
 		echo -e "\t5. Fix targets/membershipCache"
 		echo -e "\n\t6. CUSO Clean-Up Start-Over"
-		echo -e "\n\t0. Back -- Start Datasync"
+		echo -e "\n\t0. Back -- Start Mobility"
 		echo -n -e "\n\tSelection: "
 		read opt
 		a=true;
@@ -2086,7 +2086,7 @@ EOF
 	done
 	;; 
 
-	  /q | q | 0) clear; echo -e "\nStarting Datasync..."; rcDS start; break;;
+	  /q | q | 0) clear; echo -e "\nStarting Mobility..."; rcDS start; break;;
 	  *) ;;
 	esac
 	done
@@ -2176,18 +2176,18 @@ rm -f nopassword.key;
 echo "$(cat server.crt)" >> mobility.pem;
 
 certInstall=false;
-if askYesOrNo $"Copy mobility.pem to /var/lib/datasync/device/mobility.pem";then
-cp mobility.pem /var/lib/datasync/device/;
-echo -e "Copied mobility.pem to /var/lib/datasync/device/mobility.pem";
+if askYesOrNo $"Copy mobility.pem to $dirVarMobility/device/mobility.pem";then
+cp mobility.pem $dirVarMobility/device/;
+echo -e "Copied mobility.pem to $dirVarMobility/device/mobility.pem";
 certInstall=true;
 fi
-if askYesOrNo $"Copy mobility.pem to /var/lib/datasync/webadmin/server.pem";then
-cp mobility.pem /var/lib/datasync/webadmin/server.pem;
-echo -e "Copied mobility.pem to /var/lib/datasync/webadmin/server.pem\n";
+if askYesOrNo $"Copy mobility.pem to $dirVarMobility/webadmin/server.pem";then
+cp mobility.pem $dirVarMobility/webadmin/server.pem;
+echo -e "Copied mobility.pem to $dirVarMobility/webadmin/server.pem\n";
 certInstall=true;
 fi
 if($certInstall);then
-echo "Please restart Datasync."
+echo "Please restart Mobility."
 fi
 
 else
@@ -2252,18 +2252,18 @@ if [ -f ${PWD}"/$certKey" ] && [ -f ${PWD}"/$certCRT" ];then
 
 echo -e "\nCreating mobility.pem at "${PWD##&/}"/mobility.pem";
 certInstall=false;
-if askYesOrNo $"Copy mobility.pem to /var/lib/datasync/device/mobility.pem";then
-cp mobility.pem /var/lib/datasync/device/;
-echo -e "Copied mobility.pem to /var/lib/datasync/device/mobility.pem";
+if askYesOrNo $"Copy mobility.pem to $dirVarMobility/device/mobility.pem";then
+cp mobility.pem $dirVarMobility/device/;
+echo -e "Copied mobility.pem to $dirVarMobility/device/mobility.pem";
 certInstall=true;
 fi
-if askYesOrNo $"Copy mobility.pem to /var/lib/datasync/webadmin/server.pem";then
-cp mobility.pem /var/lib/datasync/webadmin/server.pem;
-echo -e "Copied mobility.pem to /var/lib/datasync/webadmin/server.pem\n";
+if askYesOrNo $"Copy mobility.pem to $dirVarMobility/webadmin/server.pem";then
+cp mobility.pem $dirVarMobility/webadmin/server.pem;
+echo -e "Copied mobility.pem to $dirVarMobility/webadmin/server.pem\n";
 certInstall=true;
 fi
 if($certInstall);then
-echo "Please restart Datasync."
+echo "Please restart Mobility."
 fi
 
 else 
@@ -2341,7 +2341,7 @@ done
 							errDate=`grep -i "$uid" $mAlog | grep -i "Failed to Authenticate user" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
 							if [ $? -eq 0 ]; then
 								echo -e "User $uid has an authentication problem. $errDate\nThe password is incorrect.\n"
-								cMobilityAuth="\n\tTo Change Mobility Connector Authentication Type:\n\t\t1. DataSync WebAdmin (serverIP:8120)\n\t\t2. Mobility Connector\n\t\t3. Authentication Type\n"
+								cMobilityAuth="\n\tTo Change Mobility Connector Authentication Type:\n\t\t1. Mobility WebAdmin (serverIP:8120)\n\t\t2. Mobility Connector\n\t\t3. Authentication Type\n"
 								grep -i "<authentication>ldap</authentication>" $mconf > /dev/null
 									ifReturn $"\tMobility Connector is set to use LDAP Authentication (eDirectory pass)\n\tPassword can be changed in ConsoleOne by the following:\n\t\t1. Properites of the User\n\t\t2. Restrictions Tab | Password Restrictions\n\t\t3. Change Password $cMobilityAuth\n"
 								grep -i "<authentication>groupwise</authentication>" $mconf > /dev/null
@@ -2547,12 +2547,12 @@ EOF
 				echo -e "--------------------------------------------------------------------------------------------------------------\n" > $attachmentLog;
 				echo -e "Server Information\n" >> $attachmentLog;
 				echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
-				cat /opt/novell/datasync/version >> $attachmentLog
+				cat $dirOptMobility/version >> $attachmentLog
 				cat /etc/*release >> $attachmentLog; echo >> $attachmentLog
 				df -h >> $attachmentLog; echo >> $attachmentLog
 				echo -e "Nightly Maintenance:" >> $attachmentLog
-				cat /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | grep -i database >> $attachmentLog; echo >> $attachmentLog;
-				d=`awk '!/<.*>/' RS="<"emailSyncLimitInDays">|</"emailSyncLimitInDays">" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml`
+				cat $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | grep -i database >> $attachmentLog; echo >> $attachmentLog;
+				d=`awk '!/<.*>/' RS="<"emailSyncLimitInDays">|</"emailSyncLimitInDays">" $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml`
 				tolerance=$((d+10))
 				echo -e "emailSyncLimitInDays("$d") + 10-day tolerance = "$tolerance"\n" >> $attachmentLog
 				
@@ -2569,7 +2569,7 @@ EOF
 				if ($find); then
 					echo "Analyzing mobility attachments... This may take a considerable amount of time."
 					echo "filestoreid" > $oldAttachments;
-					find /var/lib/datasync/mobility/attachments -type f -mtime +$tolerance >> $oldAttachments;
+					find $dirVarMobility/mobility/attachments -type f -mtime +$tolerance >> $oldAttachments;
 				fi
 
 				n=`cat $oldAttachments | wc -l`
