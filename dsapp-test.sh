@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='147'
+	dsappversion='148'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -416,7 +416,9 @@ EOF
 				#Dropping Tables
 				dropdb -U $dbUsername datasync;
 				dropdb -U $dbUsername mobility;
-				dropdb -U $dbUsername dsmonitor;
+				if [ $dsVersion -gt $dsVersionCompare ];then
+					dropdb -U $dbUsername dsmonitor;
+				fi
 
 				#Recreating Tables - Code from postgres_setup_1.sh
 				PGPASSWORD="$dbPassword" createdb "datasync" -U "$dbUsername" -h "localhost" -p "5432"
@@ -437,10 +439,12 @@ EOF
 				PGPASSWORD="$dbPassword" psql -d "mobility" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/syncengine/connectors/mobility/mobility_pgsql.sql"
 				echo "extend schema mobility done.."
 				
-				PGPASSWORD="$dbPassword" createdb "dsmonitor" -U $dbUsername
-				echo "create monitor database done.."
-				PGPASSWORD="$dbPassword" psql -d "dsmonitor" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/monitorengine/sql/monitor.sql"
-				echo "extend schema for monitor done.."
+				if [ $dsVersion -gt $dsVersionCompare ];then
+					PGPASSWORD="$dbPassword" createdb "dsmonitor" -U $dbUsername
+					echo "create monitor database done.."
+					PGPASSWORD="$dbPassword" psql -d "dsmonitor" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/monitorengine/sql/monitor.sql"
+					echo "extend schema for monitor done.."
+				fi
 			else
 				#Cleaning up datasync table.
 				psql -U $dbUsername datasync -c "delete from attachments";
@@ -510,11 +514,16 @@ EOF
 
 	function registerDS(){
 		clear;
-		echo -e "\nThe following will register your DataSync product with Novell, allowing you to use the Novell Update Channel to Install a Mobility Pack Update. If you have not already done so, obtain the Mobility Pack activation code from the Novell Customer Center:";
+		echo -e "\nThe following will register your Mobility product with Novell, allowing you to use the Novell Update Channel to Install a Mobility Pack Update. If you have not already done so, obtain the Mobility Pack activation code from the Novell Customer Center:";
 		echo -e "\n\t1. Login to Customer Center at http://www.novell.com/center"
 		echo -e "\n\t2. Click My Products | Products"
-		echo -e '\n\t3. Expand "Novell Data Synchronizer"'
-		echo -e '\n\t4. Look under "Novell Data Synchronizer Connector for Mobility" | "Data Synchronizer Mobility Pack" and check for the "Code". It should be 14 alphanumeric characters.'
+		if [ $dsVersion -gt $dsVersionCompare ];then
+			echo -e '\n\t3. Expand "GroupWise Mobility Server"'
+			echo -e '\n\t4. Look under "Novell GroupWise Mobility Server" and check for the "Code". It should be 14 alphanumeric characters.'
+		else
+			echo -e '\n\t3. Expand "Novell Data Synchronizer"'
+			echo -e '\n\t4. Look under "Novell Data Synchronizer Connector for Mobility" | "Data Synchronizer Mobility Pack" and check for the "Code". It should be 14 alphanumeric characters.'
+		fi
 		echo -e "\n\t5. Note down the registration/activation code.\n\n"
 		
 		#Obtain Registration/Activation Code and Email Address
@@ -527,7 +536,7 @@ EOF
 		    echo -e "\nThe code or email address you provided appear to be invalid or there is trouble contacting Novell."
 			read -p "Press [Enter] to continue."
 		} else
-		echo -e "\nYour DataSync product has been successfully activated.\n"
+		echo -e "\nYour Mobility product has been successfully activated.\n"
 		read -p "Press [Enter] to continue."
 		fi
 	}
@@ -1093,65 +1102,71 @@ if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`
 	fi
 	read -p "Press [Enter] to continue."; continue;
 fi
-if (`echo "$soapLoginResponse" | grep -q "redirect"`); then 
-poaAddress=`echo "$soapLoginResponse" | grep -iwo "<gwt:ipAddress>.*</gwt:ipAddress>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
-port=`echo "$soapLoginResponse" | grep -iwo "<gwt:port>.*</gwt:port>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
-poa=`echo "$poaAddress:$port"`
 
-soapLoginResponse=`netcat $poaAddress $port << EOF
-POST /soap HTTP/1.0
-Accept-Encoding: identity
-Content-Length: 1083
-Soapaction: "loginRequest"
-Host: $poa
-User-Agent: Python-urllib/2.6
-Connection: close
-Content-Type: text/xml
+#Error handle until secure SOAP code figured out.
+if (`echo "$soapLoginResponse" | grep -qi "Location: https:"`);then
+	echo "SOAP $poa secure. Cannot complete."
+else
+	if (`echo "$soapLoginResponse" | grep -q "redirect"`); then 
+	poaAddress=`echo "$soapLoginResponse" | grep -iwo "<gwt:ipAddress>.*</gwt:ipAddress>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	port=`echo "$soapLoginResponse" | grep -iwo "<gwt:port>.*</gwt:port>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	poa=`echo "$poaAddress:$port"`
 
-<SOAP-ENV:Envelope xmlns:ns0="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:ns1="http://schemas.novell.com/2005/01/GroupWise/methods" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tns="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
-   <SOAP-ENV:Header>
-      <tns:gwTrace></tns:gwTrace>
-   </SOAP-ENV:Header>
-   <SOAP-ENV:Body>
-      <ns1:loginRequest>
-         <auth xmlns="http://schemas.novell.com/2005/01/GroupWise/methods" xsi:type="ns0:TrustedApplication">
-            <ns0:username>$vuid</ns0:username>
-            <ns0:name>$trustedName</ns0:name>
-            <ns0:key>$trustedKey</ns0:key>
-         </auth>
-         <language xmlns="http://schemas.novell.com/2005/01/GroupWise/methods"/>
-         <version xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1.02</version>
-         <userid xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1</userid>
-      </ns1:loginRequest>
-   </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>
-EOF`
+	soapLoginResponse=`netcat $poaAddress $port << EOF
+	POST /soap HTTP/1.0
+	Accept-Encoding: identity
+	Content-Length: 1083
+	Soapaction: "loginRequest"
+	Host: $poa
+	User-Agent: Python-urllib/2.6
+	Connection: close
+	Content-Type: text/xml
 
-fi
-if [ $? != 0 ]; then
-	echo -e "Redirection detected.\nFailure to connect to $poa"
-fi
-if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`); then 
-	echo "Invalid key for trusted application."
+	<SOAP-ENV:Envelope xmlns:ns0="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:ns1="http://schemas.novell.com/2005/01/GroupWise/methods" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tns="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
+	   <SOAP-ENV:Header>
+	      <tns:gwTrace></tns:gwTrace>
+	   </SOAP-ENV:Header>
+	   <SOAP-ENV:Body>
+	      <ns1:loginRequest>
+	         <auth xmlns="http://schemas.novell.com/2005/01/GroupWise/methods" xsi:type="ns0:TrustedApplication">
+	            <ns0:username>$vuid</ns0:username>
+	            <ns0:name>$trustedName</ns0:name>
+	            <ns0:key>$trustedKey</ns0:key>
+	         </auth>
+	         <language xmlns="http://schemas.novell.com/2005/01/GroupWise/methods"/>
+	         <version xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1.02</version>
+	         <userid xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1</userid>
+	      </ns1:loginRequest>
+	   </SOAP-ENV:Body>
+	</SOAP-ENV:Envelope>
+	EOF`
 
-	if [ $dsVersion -gt $dsVersionCompare ];then
-		if askYesOrNo $"Use new trusted application file?" ; then
-		read -ep "Enter path to trusted application file: " trustedAppFile;
-			if [ ! -f $trustedAppFile ];then
-				echo -e "No such file."
-				break;
-			fi
-			echo "$(cat $trustedAppFile)" > $dsappDirectory/trustedApp.key;
-			dos2unix $dsappDirectory/trustedApp.key 2>/dev/null
-			trustedKey=`cat $dsappDirectory/trustedApp.key`;
-		fi
 	fi
-	read -p "Press [Enter] to continue."; continue;
-fi
-userPO=`echo $soapLoginResponse | grep -iwo "<gwt:postOffice>.*</gwt:postOffice>" | sed 's/<[^>]*[>]//g' | tr -d ' ' | tr [:upper:] [:lower:]`
-gwVersion=`echo $soapLoginResponse | grep -iwo "<gwm:gwVersion>.*</gwm:gwVersion>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
-soapSession=`echo $soapLoginResponse | grep -iwo "<gwm:session>.*</gwm:session>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
-if [[ -z "$soapSession" || -z "$poa" ]]; then echo -e "\nNull response to soapLogin\nPOA: "$poa"\ntrustedName\Key: "$trustedName":"$trustedKey"\n\nsoapLoginResponse:\n"$soapLoginResponse"\n"$soapSession
+	if [ $? != 0 ]; then
+		echo -e "Redirection detected.\nFailure to connect to $poa"
+	fi
+	if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`); then 
+		echo "Invalid key for trusted application."
+
+		if [ $dsVersion -gt $dsVersionCompare ];then
+			if askYesOrNo $"Use new trusted application file?" ; then
+			read -ep "Enter path to trusted application file: " trustedAppFile;
+				if [ ! -f $trustedAppFile ];then
+					echo -e "No such file."
+					break;
+				fi
+				echo "$(cat $trustedAppFile)" > $dsappDirectory/trustedApp.key;
+				dos2unix $dsappDirectory/trustedApp.key 2>/dev/null
+				trustedKey=`cat $dsappDirectory/trustedApp.key`;
+			fi
+		fi
+		read -p "Press [Enter] to continue."; continue;
+	fi
+	userPO=`echo $soapLoginResponse | grep -iwo "<gwt:postOffice>.*</gwt:postOffice>" | sed 's/<[^>]*[>]//g' | tr -d ' ' | tr [:upper:] [:lower:]`
+	gwVersion=`echo $soapLoginResponse | grep -iwo "<gwm:gwVersion>.*</gwm:gwVersion>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	soapSession=`echo $soapLoginResponse | grep -iwo "<gwm:session>.*</gwm:session>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	if [[ -z "$soapSession" || -z "$poa" ]]; then echo -e "\nNull response to soapLogin\nPOA: "$poa"\ntrustedName\Key: "$trustedName":"$trustedKey"\n\nsoapLoginResponse:\n"$soapLoginResponse"\n"$soapSession
+	fi
 fi
 # soapLoginResponse=`echo $soapLoginResponse | grep -iwo "<gwm:gwVersion>.*</gwm:gwVersion>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
 }
@@ -1159,6 +1174,7 @@ fi
 folderResponse=''
 function checkGroupWise {
 soapLogin
+if [ -n "$soapSession" ];then
 folderResponse=`netcat $poaAddress $port << EOF
 POST /soap HTTP/1.0
 Accept-Encoding: identity
@@ -1233,6 +1249,7 @@ fi
 
 
 rm $dsapptmp/tempFile*.xml
+fi
 }
 
 function updateMobilityFTP {
