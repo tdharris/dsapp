@@ -2430,7 +2430,7 @@ done
 				# verifyUser
 				read -p "userID: " vuid
 				soapLogin
-				if [ $? != 1 ]; then
+				if [ -n "$soapSession" ]; then
 					gwCheck
 				fi
 				read -p "Press [Enter] to continue.";
