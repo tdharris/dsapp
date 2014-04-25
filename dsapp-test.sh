@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='148'
+	dsappversion='149'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -637,7 +637,7 @@ EOF
 				# Check if user exists in GroupWise database as DirectoryID
 				guchk=`psql -U $dbUsername datasync -c "select dn from targets where \"dn\" ilike '%$uid%'" | grep -iwm1 "$uid" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
 				# Check if user exists in GroupWise database as GroupwiseID
-				guchk2=`psql -U $dbUsername datasync -t -c "select dn from targets where \"targetName\" ilike '%$uid%' AND \"connectorID\"='default.pipeline1.groupwise';" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
+				guchk2=`psql -U $dbUsername datasync -t -c "select dn from targets where LOWER(\"targetName\")=LOWER('$uid') AND \"connectorID\"='default.pipeline1.groupwise';" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
 				uidCN="cn="$(echo ${uid}|tr [:upper:] [:lower:])
 				if [ -n "$uchk" ] && [ "$uchk" = "$uidCN" ]; then
 					vuid=$uid
@@ -1343,18 +1343,19 @@ EOF
 }
 
 function whatDeviceDeleted {
-clear; datasyncBanner;
-echo
-read -p "UserID: " userid
-cd $log
+clear;
+verifyUser
+if [ $? = 0 ]; then
+	cd $log
 
-deletions=`cat $mAlog* | grep -i -A 8 "<origSourceName>$userid</origSourceName>" | grep -i -A 2 "<type>delete</type>" | grep -i "<creationEventID>" | cut -d '.' -f4- | sed 's|<\/creationEventID>||g'`
+	deletions=`cat $mAlog* | grep -i -A 8 "<origSourceName>$vuid</origSourceName>" | grep -i -A 2 "<type>delete</type>" | grep -i "<creationEventID>" | cut -d '.' -f4- | sed 's|<\/creationEventID>||g'`
 
-echo "$deletions" | sed 's| |\\n|g' | while read -r line
-do
-	grep -A 20 $line $mAlog* | grep -i subject
-done
-echo
+	echo "$deletions" | sed 's| |\\n|g' | while read -r line
+	do
+		grep -A 20 $line $mAlog* | grep -i subject
+	done
+	echo
+fi
 read -p "Press [Enter] to continue";
 }
 
