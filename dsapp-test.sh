@@ -646,7 +646,7 @@ EOF
 					vuid=$uid
 					errorReturn='0'; return 0;
 				elif [ -n "$guchk2" ];then
-					vuid=$guchk2
+					vuid=`echo $guchk2 | cut -f2 -d '='`
 					errorReturn='0'; return 0;
 				else
 					echo -e "User does not exist in Mobility Database.\n"; 
@@ -1355,8 +1355,8 @@ if [ $? = 0 ]; then
 		grep -A 20 $line $mAlog* | grep -i subject
 	done
 	echo
+	read -p "Press [Enter] to continue";
 fi
-read -p "Press [Enter] to continue";
 }
 
 function vacuumDB {
