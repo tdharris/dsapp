@@ -111,6 +111,7 @@ function updateDsapp {
 	echo -e "\nUpdating dsapp..."
 	# Remove any current versions
 	rm -f dsapp.sh
+	cd /root
 	curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -zx 2>/dev/null;
 	if [ $? -eq 0 ];then
 		echo -e "Update finished: v"`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
