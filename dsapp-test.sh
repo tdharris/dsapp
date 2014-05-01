@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='150'
+	dsappversion='151'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -47,8 +47,6 @@
 	log="/var/log/datasync"
 	dirPGSQL="/var/lib/pgsql"
 	
-
-
 	##################################################################################################
 	#	Version: Eenou+
 	##################################################################################################
@@ -1262,7 +1260,7 @@ function updateMobilityFTP {
 		read -ep "FTP Filename: " ds;
 		dbuild=`echo $ds | cut -f1 -d"."`;
 		cd /root/Downloads;
-		wget -r "ftp://ftp.novell.com/outgoing/$ds"
+		wget -q "ftp://ftp.novell.com/outgoing/$ds"
 		if [ $? -ne 1 ];then
 			tar xvfz --overwrite $ds 2>/dev/null;
 			unzip -o $ds 2>/dev/null;
