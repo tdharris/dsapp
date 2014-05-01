@@ -166,13 +166,15 @@ function autoUpdateDsapp {
 
 function installAlias {
 	# If there is dsapp.sh
-	ls dsapp.sh &>/dev/null
+	ls $dsappDirectory/dsapp.sh &>/dev/null
 	if [ $? -eq 0 ]; then
 		resetEnvironment=false
 		tellUserAboutAlias=false
 
 		# Create /etc/profile.local if not already there
-		if [[ ! -f /etc/profile.local ]]; then touch /etc/profile.local; fi
+		if [[ ! -f /etc/profile.local ]];then 
+			touch /etc/profile.local
+		fi
 
 		# Insert alias shortcut if not already there
 		if [[ -z `grep "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" /etc/profile.local` ]]; then
