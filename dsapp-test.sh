@@ -1389,6 +1389,11 @@ if [ $? = 0 ]; then
 	do
 		grep -A 20 $line $mAlog* | grep -i subject
 	done
+
+	if [ -z "$deletions" ]; then
+		echo "Noting found."
+	fi
+	
 	echo
 	read -p "Press [Enter] to continue";
 fi
