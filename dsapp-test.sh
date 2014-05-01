@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='153'
+	dsappversion='154'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -147,9 +147,17 @@ function installAlias {
 	if [ $? -eq 0 ]; then
 		resetEnvironment=false
 		tellUserAboutAlias=false
+
+		# Create /etc/profile.local if not already there
+		if [[ -z `ls /etc/profile.local` ]]; then touch /etc/profile.local; fi
+
 		# Insert alias shortcut if not already there
-		if [[ -z `grep "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" /etc/profile` ]]; then
-			echo "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" >> /etc/profile
+		if [[ -z `grep "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" /etc/profile.local` ]]; then
+			echo "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" >> /etc/profile.local
+			
+			# Configure sudo to be compatible for alias, allows it to look for aliases after first word
+			echo "alias sudo='sudo '" >> /etc/profile.local
+
 			echo -e "\nConfigured dsapp alias."
 			tellUserAboutAlias=true
 			resetEnvironment=true
