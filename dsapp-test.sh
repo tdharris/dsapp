@@ -139,7 +139,7 @@ function autoUpdateDsapp {
 	fi
 }
 
-function setupDsappAlias {
+function installAlias {
 	# If there is dsapp.sh
 	ls dsapp.sh &>/dev/null
 	if [ $? -eq 0 ]; then
@@ -185,7 +185,7 @@ function setupDsappAlias {
 }
 
 autoUpdateDsapp
-setupDsappAlias
+installAlias
 
 	#Get datasync version.
 	function getDSVersion
