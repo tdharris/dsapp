@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='152'
+	dsappversion='153'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -114,7 +114,8 @@ function updateDsapp {
 	curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -zx 2>/dev/null;
 	if [ $? -eq 0 ];then
 		echo -e "Update finished: v"`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
-		cp dsapp.sh $dsappDirectory
+		mv dsapp.sh $dsappDirectory
+		exit 0
 	else
 		echo -e "Failed update: host (connection) might have problems\n"
 	fi
@@ -184,7 +185,7 @@ function installAlias {
 	fi
 }
 
-autoUpdateDsapp
+autoUpdateDsapp;
 installAlias
 
 	#Get datasync version.
