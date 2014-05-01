@@ -369,12 +369,13 @@ fi
 		mkdir $dsappupload/version
 
 		if askYesOrNo $"Grab log files?"; then
-			echo -e "Copying log files..."
+			echo -e "Grabbing log files..."
 			# Copy log files..
 			# cd $log
 			# cp --parents $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog $dsappupload  2>/dev/null
 
 			# Get version information..
+			echo -e "Grabbing version info..."
 			cat $version > $dsappupload/version/mobility-version
 			cat $serverinfo > $dsappupload/version/os-version
 			rpm -qa | grep -i $rpminfo > $dsappupload/version/rpm-info
@@ -386,7 +387,7 @@ fi
 
 			etc="/etc/datasync"
 
-			echo "sed stuff..."
+			echo "Grabbing logging-levels info..."
 			echo -e "Monitor Engine:" >> $logginglevels;
 			sed -n '/<log>/,$p; /<\/log>/q' $etc/monitorengine/monitorengine.xml 2>/dev/null | egrep 'level|verbose' >> $logginglevels;
 
