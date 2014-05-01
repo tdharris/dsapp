@@ -1148,34 +1148,34 @@ else
 	port=`echo "$soapLoginResponse" | grep -iwo "<gwt:port>.*</gwt:port>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	poa=`echo "$poaAddress:$port"`
 
-	soapLoginResponse=`netcat $poaAddress $port << EOF
-	POST /soap HTTP/1.0
-	Accept-Encoding: identity
-	Content-Length: 1083
-	Soapaction: "loginRequest"
-	Host: $poa
-	User-Agent: Python-urllib/2.6
-	Connection: close
-	Content-Type: text/xml
+soapLoginResponse=`netcat $poaAddress $port << EOF
+POST /soap HTTP/1.0
+Accept-Encoding: identity
+Content-Length: 1083
+Soapaction: "loginRequest"
+Host: $poa
+User-Agent: Python-urllib/2.6
+Connection: close
+Content-Type: text/xml
 
-	<SOAP-ENV:Envelope xmlns:ns0="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:ns1="http://schemas.novell.com/2005/01/GroupWise/methods" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tns="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
-	   <SOAP-ENV:Header>
-	      <tns:gwTrace></tns:gwTrace>
-	   </SOAP-ENV:Header>
-	   <SOAP-ENV:Body>
-	      <ns1:loginRequest>
-	         <auth xmlns="http://schemas.novell.com/2005/01/GroupWise/methods" xsi:type="ns0:TrustedApplication">
-	            <ns0:username>$vuid</ns0:username>
-	            <ns0:name>$trustedName</ns0:name>
-	            <ns0:key>$trustedKey</ns0:key>
-	         </auth>
-	         <language xmlns="http://schemas.novell.com/2005/01/GroupWise/methods"/>
-	         <version xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1.02</version>
-	         <userid xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1</userid>
-	      </ns1:loginRequest>
-	   </SOAP-ENV:Body>
-	</SOAP-ENV:Envelope>
-	EOF`
+<SOAP-ENV:Envelope xmlns:ns0="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:ns1="http://schemas.novell.com/2005/01/GroupWise/methods" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tns="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
+   <SOAP-ENV:Header>
+      <tns:gwTrace></tns:gwTrace>
+   </SOAP-ENV:Header>
+   <SOAP-ENV:Body>
+      <ns1:loginRequest>
+         <auth xmlns="http://schemas.novell.com/2005/01/GroupWise/methods" xsi:type="ns0:TrustedApplication">
+            <ns0:username>$vuid</ns0:username>
+            <ns0:name>$trustedName</ns0:name>
+            <ns0:key>$trustedKey</ns0:key>
+         </auth>
+         <language xmlns="http://schemas.novell.com/2005/01/GroupWise/methods"/>
+         <version xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1.02</version>
+         <userid xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1</userid>
+      </ns1:loginRequest>
+   </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>
+EOF`
 
 	fi
 	if [ $? != 0 ]; then
