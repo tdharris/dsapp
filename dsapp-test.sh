@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='154'
+	dsappversion='155'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -2561,7 +2561,7 @@ EOF
 
 			5) # Mobility attachments
 				clear
-				psql -U $dbUsername mobility -c "select DISTINCT u.userid AS "FDN", SUM(filesize)/1024 AS "kilobytes",  am.userid from attachments a INNER JOIN attachmentmaps am ON a.attachmentid = am.attachmentid INNER JOIN users u ON am.userid = u.guid WHERE a.filestoreid != '0' GROUP BY u.userid, am.userid ORDER BY kilobytes DESC;"
+				psql -U $dbUsername mobility -c "select DISTINCT u.userid AS fdn, ROUND(SUM(filesize)/1024/1024::numeric,4) AS \"MB\",  am.userid from attachments a INNER JOIN attachmentmaps am ON a.attachmentid = am.attachmentid INNER JOIN users u ON am.userid = u.guid WHERE a.filestoreid != '0' GROUP BY u.userid, am.userid ORDER BY \"MB\" DESC;"
 				read -p "Press [Enter] to continue.";
 				;;
 
