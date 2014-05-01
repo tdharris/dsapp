@@ -137,8 +137,6 @@ function updateDsapp {
 }
 
 function autoUpdateDsapp {
-	# Skips auto-update if file is not called dsapp.sh (good for testing purposes when using dsapp-test.sh)
-	if [[ "$0" = *dsapp.sh ]]; then
 
 		# Variable declared above autoUpdate=true
 		if ($autoUpdate); then
@@ -160,8 +158,6 @@ function autoUpdateDsapp {
 			fi
 			
 		fi
-
-	fi
 }
 
 function installAlias {
@@ -202,7 +198,7 @@ function installAlias {
 				fi
 			else 
 				tellUserAboutAlias=true
-				rm dsapp.sh
+				rm dsapp.sh 2>/dev/null
 			fi
 
 			if ($tellUserAboutAlias); then
@@ -219,8 +215,11 @@ function installAlias {
 	fi
 }
 
-autoUpdateDsapp;
-installAlias
+# Skips auto-update if file is not called dsapp.sh (good for testing purposes when using dsapp-test.sh)
+if [[ "$0" = *dsapp.sh ]]; then
+	autoUpdateDsapp;
+	installAlias
+fi
 
 	#Get datasync version.
 	function getDSVersion
