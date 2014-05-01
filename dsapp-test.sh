@@ -149,12 +149,12 @@ function installAlias {
 		tellUserAboutAlias=false
 
 		# Create /etc/profile.local if not already there
-		if [[ -z `ls /etc/profile.local` ]]; then touch /etc/profile.local; fi
+		if [[ -f `ls /etc/profile.local` ]]; then touch /etc/profile.local; fi
 
 		# Insert alias shortcut if not already there
 		if [[ -z `grep "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" /etc/profile.local` ]]; then
 			echo "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" >> /etc/profile.local
-			
+
 			# Configure sudo to be compatible for alias, allows it to look for aliases after first word
 			echo "alias sudo='sudo '" >> /etc/profile.local
 
