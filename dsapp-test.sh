@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='155'
+	dsappversion='156'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -107,37 +107,58 @@
 	fi
 	fi
 
+function checkFTP {
+	# Echo back 0 or 1 into if statement
+	# To call/use: if [ $(checkFTP) -eq 0 ];then
+	netcat -z -w 1 ftp.novell.com 21;
+	if [ $? -eq 0 ]; then
+		echo "0"
+	else echo "1"
+	fi
+}
+
 function updateDsapp {
 	echo -e "\nUpdating dsapp..."
-	# Remove any current versions
-	rm -f dsapp.sh
-	cd /root
+	# Remove running instance/version
+	rm dsapp.sh
+
+	# Remove the stored app
+	cd $dsappDirectory; rm -f dsapp.sh
+
+	# Download new version & extract
 	curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -zx 2>/dev/null;
 	if [ $? -eq 0 ];then
 		echo -e "Update finished: v"`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
-		mv dsapp.sh $dsappDirectory
 		exit 0
-	else
-		echo -e "Failed update: host (connection) might have problems\n"
 	fi
+
 }
 
 function autoUpdateDsapp {
 	# Skips auto-update if file is not called dsapp.sh (good for testing purposes when using dsapp-test.sh)
 	if [[ "$0" = *dsapp.sh ]]; then
+
+		# Variable declared above autoUpdate=true
 		if ($autoUpdate); then
-			publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
-			if [[ -z "$publicVersion" ]]; then
-				echo -e "\nThere appears to be network connectivity issues, skipping autoUpdate..."
-				echo "To disable autoUpdate, set autoUpdate=false in dsapp.sh"
-				# sleep 2
-			elif [ "$dsappversion" -ne "$publicVersion" ];then
-					clear;
-					echo -e "\nChecking for new dsapp..."
-					echo -e "v$dsappversion (v$publicVersion available)"
-					updateDsapp
+
+			# Check FTP connectivity
+			if [ $(checkFTP) -eq 0 ];then
+
+				# Fetch online dsapp and store to memory, check version
+				publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
+
+				# Download if newer version is available
+				if [ "$dsappversion" -ne "$publicVersion" ];then
+						clear;
+						echo -e "\nChecking for new dsapp..."
+						echo -e "v$dsappversion (v$publicVersion available)"
+						updateDsapp
+				fi
+
 			fi
+			
 		fi
+
 	fi
 }
 
