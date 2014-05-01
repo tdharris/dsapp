@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='158'
+	dsappversion='157'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -129,6 +129,8 @@ function updateDsapp {
 	curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -zx 2>/dev/null;
 	if [ $? -eq 0 ];then
 		echo -e "Update finished: v"`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
+		echo
+		read -p "Press [Enter] to Continue"
 		$dsappDirectory/dsapp.sh && exit 0
 	fi
 
