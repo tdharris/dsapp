@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='156'
+	dsappversion='157'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -28,6 +28,13 @@
 	# Configuration Files
 	mconf="/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml"
 
+	# Mobility Directories
+	dirOptMobility="/opt/novell/datasync"
+	dirEtcMobility="/etc/datasync"
+	dirVarMobility="/var/lib/datasync"
+	log="/var/log/datasync"
+	dirPGSQL="/var/lib/pgsql"
+
 	# Mobility logs
 	configenginelog="$log/configengine/configengine.log"
 	connectormanagerlog="$log/syncengine/connectorManager.log"
@@ -39,13 +46,6 @@
 	# System logs
 	messages="/var/log/messages"
 	warn="/var/log/warn"
-
-	# Mobility Directories
-	dirOptMobility="/opt/novell/datasync"
-	dirEtcMobility="/etc/datasync"
-	dirVarMobility="/var/lib/datasync"
-	log="/var/log/datasync"
-	dirPGSQL="/var/lib/pgsql"
 	
 	##################################################################################################
 	#	Version: Eenou+
@@ -371,8 +371,8 @@ fi
 		if askYesOrNo $"Grab log files?"; then
 			echo -e "Copying log files..."
 			# Copy log files..
-			cd $log
-			cp --parents $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog $dsappupload  2>/dev/null
+			# cd $log
+			# cp --parents $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog $dsappupload  2>/dev/null
 
 			# Get version information..
 			cat $version > $dsappupload/version/mobility-version
@@ -381,11 +381,12 @@ fi
 			rpm -qa | grep -i python > $dsappupload/version/rpm-python-info
 
 			# Get Logging Levels
-			logginglevels="$dsappupload/var/log/datasync/mobility-logging-info"
+			logginglevels="$dsappupload/mobility-logging-info"
 			echo -e "\nLogging Levels indicated below:" > $logginglevels;
 
 			etc="/etc/datasync"
 
+			echo "sed stuff..."
 			echo -e "Monitor Engine:" >> $logginglevels;
 			sed -n '/<log>/,$p; /<\/log>/q' $etc/monitorengine/monitorengine.xml 2>/dev/null | egrep 'level|verbose' >> $logginglevels;
 
@@ -413,7 +414,9 @@ fi
 			d=`date +%m-%d-%y_%H%M%S`
 			read -ep "SR#: " srn;
 			echo -e "\nCompressing logs for upload..."
-			tar czfv $srn"_"$d.tgz * 2>/dev/null;
+
+			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info 2>/dev/null;
+
 			if [ $? -eq 0 ]; then
 				echo -e "\n$dsappupload/$srn"_"$d.tgz\n"
 			fi
