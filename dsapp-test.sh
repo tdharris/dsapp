@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='157'
+	dsappversion='156'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -120,7 +120,7 @@ function checkFTP {
 function updateDsapp {
 	echo -e "\nUpdating dsapp..."
 	# Remove running instance/version
-	rm dsapp.sh
+	rm dsapp.sh 2>/dev/null
 
 	# Remove the stored app
 	cd $dsappDirectory; rm -f dsapp.sh
