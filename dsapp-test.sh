@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='158'
+	dsappversion='159'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -602,20 +602,24 @@ EOF
 	function rcDS {
 		if [ "$1" = "start" ] && [ "$2" = "" ]; then
 			$rcScript start;
+			rccron start 2>/dev/null;
 		fi
 
 		if [ "$1" = "start" ] && [ "$2" = "silent" ]; then
 				$rcScript start &>/dev/null;
+				rccron start 2>/dev/null;
 		fi
 
 		if [ "$1" = "stop" ] && [ "$2" = "" ]; then
 			$rcScript stop;
 			killall -9 python &>/dev/null;
+			rccron stop 2>/dev/null; pkill cron 2>/dev/null
 		fi
 
 		if [ "$1" = "stop" ] && [ "$2" = "silent" ]; then
 				$rcScript stop &>/dev/null;
 				killall -9 python &>/dev/null;
+				rccron stop 2>/dev/null; pkill cron 2>/dev/null
 		fi
 	}
 
@@ -639,9 +643,7 @@ EOF
 			zypper --non-interactive update --force -r $1;
 			getDSVersion;
 			setVariables;
-			rccron stop 2>/dev/null; pkill cron 2>/dev/null
-			$rcScript stop;
-			killall -9 python &>/dev/null;
+			$rcDS stop;
 			python $dirOptMobility/common/lib/upgrade.pyc;
 			printf "\nRestarting Mobility...\n";
 			rcpostgresql stop;
@@ -649,8 +651,7 @@ EOF
 			getDSVersion;
 			setVariables;
 			rcpostgresql start;
-			$rcScript start;
-			rccron start;
+			$rcDS start;
 			echo -e "\nYour Mobility product has been successfully updated to "`cat $dirOptMobility/version`"\n";
 		fi
 	}
