@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='159'
+	dsappversion='160'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -185,8 +185,8 @@ function installAlias {
 		fi
 		
 		#Skip if already in dsappDirectory
-        if [[ "$PWD" != "$dsappDirectory" ]];then
-
+        if [[ "$PWD" != "$dsappDirectory" ]] && [[ "$0" != "$dsappDirectory/dsapp.sh" ]];then
+        	
 			# Check if running version is newer than installed version
 			installedVersion=`grep -m1 dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
 			if [[ "$dsappversion" -gt "$installedVersion" ]];then
