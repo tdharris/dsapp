@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='162'
+	dsappversion='163'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -164,57 +164,61 @@ function autoUpdateDsapp {
 }
 
 function installAlias {
+	resetEnvironment=false
+	tellUserAboutAlias=false
+
 	# If there is dsapp.sh
 	ls $dsappDirectory/dsapp.sh &>/dev/null
-	if [ $? -eq 0 ]; then
-		resetEnvironment=false
-		tellUserAboutAlias=false
+	if [ $? -ne 0 ]; then
+		resetEnvironment=true
+		tellUserAboutAlias=true
+		mv -v dsapp.sh $dsappDirectory
+	fi
 
-		# Create /etc/profile.local if not already there
-		if [[ ! -f /etc/profile.local ]];then 
-			touch /etc/profile.local
-		fi
+	# Create /etc/profile.local if not already there
+	if [[ ! -f /etc/profile.local ]];then 
+		touch /etc/profile.local
+	fi
 
-		# Insert alias shortcut if not already there
-		if [[ -z `grep "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" /etc/profile.local` ]]; then
-			echo "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" >> /etc/profile.local
+	# Insert alias shortcut if not already there
+	if [[ -z `grep "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" /etc/profile.local` ]]; then
+		echo "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" >> /etc/profile.local
 
-			# Configure sudo to be compatible for alias, allows it to look for aliases after first word
-			echo "alias sudo='sudo '" >> /etc/profile.local
+		# Configure sudo to be compatible for alias, allows it to look for aliases after first word
+		echo "alias sudo='sudo '" >> /etc/profile.local
 
-			echo -e "\nConfigured dsapp alias."
+		echo -e "\nConfigured dsapp alias."
+		tellUserAboutAlias=true
+		resetEnvironment=true
+	fi
+	
+	#Skip if already in dsappDirectory
+    if [[ "$PWD" != "$dsappDirectory" ]] && [[ "$0" != "$dsappDirectory/dsapp.sh" ]];then
+    	
+		# Check if running version is newer than installed version
+		installedVersion=`grep -m1 dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
+		if [[ "$dsappversion" -gt "$installedVersion" ]];then
 			tellUserAboutAlias=true
-			resetEnvironment=true
-		fi
-		
-		#Skip if already in dsappDirectory
-        if [[ "$PWD" != "$dsappDirectory" ]] && [[ "$0" != "$dsappDirectory/dsapp.sh" ]];then
-        	
-			# Check if running version is newer than installed version
-			installedVersion=`grep -m1 dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
-			if [[ "$dsappversion" -gt "$installedVersion" ]];then
-				tellUserAboutAlias=true
-				echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
-				mv -v dsapp.sh $dsappDirectory
-				if [ $? -ne 0 ]; then
-					echo -e "\nThere was a problem copying dsapp.sh to /opt/novell/datasync/tools/dsapp..."
-				fi
-			else 
-				tellUserAboutAlias=true
-				rm dsapp.sh 2>/dev/null
+			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
+			mv -v dsapp.sh $dsappDirectory
+			if [ $? -ne 0 ]; then
+				echo -e "\nThere was a problem copying dsapp.sh to /opt/novell/datasync/tools/dsapp..."
 			fi
+		else 
+			tellUserAboutAlias=true
+			rm dsapp.sh 2>/dev/null
+		fi
 
-			if ($tellUserAboutAlias); then
-				echo -e "\nPlease use /opt/novell/datasync/tools/dsapp/dsapp.sh"
-				echo -e "To launch, enter the following anywhere: dsapp\n"
-			fi
-			# Reset environment variables (loads /etc/profile for dsapp alias)
-			if ($resetEnvironment); then
-				echo -e "Refreshing environment variables..."
-				su -
-			fi
-			exit 0
+		if ($tellUserAboutAlias); then
+			echo -e "\nPlease use /opt/novell/datasync/tools/dsapp/dsapp.sh"
+			echo -e "To launch, enter the following anywhere: dsapp\n"
 		fi
+		# Reset environment variables (loads /etc/profile for dsapp alias)
+		if ($resetEnvironment); then
+			echo -e "Refreshing environment variables..."
+			su -
+		fi
+		exit 0
 	fi
 }
 
