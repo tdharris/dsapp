@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='161'
+	dsappversion='162'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -27,6 +27,9 @@
 
 	# Configuration Files
 	mconf="/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml"
+	gconf="/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/groupwise/connector.xml"
+	ceconf="/etc/datasync/configengine/configengine.xml"
+	econf="/etc/datasync/configengine/engines/default/engine.xml"
 
 	# Mobility Directories
 	dirOptMobility="/opt/novell/datasync"
@@ -222,40 +225,72 @@ if [[ "$0" = *dsapp.sh ]]; then
 fi
 
 	#Get datasync version.
-	function getDSVersion
-	{
-	dsVersion=`cat $version | cut -c1-7 | tr -d '.'`
-	dsVersionCompare='2000'
+	function getDSVersion {
+		dsVersion=`cat $version | cut -c1-7 | tr -d '.'`
+		dsVersionCompare='2000'
 	}
 	getDSVersion;
 
 	#Get database username (datasync_user by default)
-	dbUsername=`cat $dirEtcMobility/configengine/configengine.xml | grep database -A 7 | grep "<username>" | cut -f2 -d '>' | cut -f1 -d '<'`
+	dbUsername=`cat $ceconf | grep database -A 7 | grep "<username>" | cut -f2 -d '>' | cut -f1 -d '<'`
 
-	function checkDBPass 
-	{
+	function checkDBPass {
+		# Return of 1 indicates a bad file, needs to be recreated
 		if [ -f "/root/.pgpass" ];then
-			dbLogin=`psql -U $dbUsername datasync -c "\d" 2>/dev/null`;
-			if [ $? -eq '0' ];then
-				echo "0";
-			else
-				echo "1";
+			# If the file is there, does it have a password?
+			if [[ -n `cat /root/.pgpass | cut -d ':' -f5` ]]; then
+				dbLogin=`psql -U $dbUsername datasync -c "\d" 2>/dev/null`;
+				if [ $? -eq '0' ];then
+					echo "0";
+				else
+					echo "1";
+				fi
+			else echo "1"
 			fi
 		else
 			echo "1";
 		fi
 	}
 
-	function encodeString 
-	{
-	echo "$1" | openssl enc -aes-256-cbc -a -k `hostname -f` | base64
+	function encodeString {
+		echo "$1" | openssl enc -aes-256-cbc -a -k `hostname -f` | base64
 	}
 
-	function decodeString 
-	{
-	decodeVar1=`echo "$1" | base64 -d`;
-	decodeVar2=`echo "$decodeVar1" | openssl enc -aes-256-cbc -base64 -k \`hostname -f\` -d`;
-	echo $decodeVar2;
+	function decodeString {
+		decodeVar1=`echo "$1" | base64 -d`;
+		decodeVar2=`echo "$decodeVar1" | openssl enc -aes-256-cbc -base64 -k \`hostname -f\` -d`;
+		echo $decodeVar2;
+	}
+
+	function isStringProtected {
+		# $1=tags (i.e. <database> "database"); $2=filename
+		# This will echo 1 if it is protected
+		echo $(sed -n "/<$1>/,/<\/$1>/p" $2 | grep "<protected>" | cut -f2 -d '>' | cut -f1 -d '<')
+	}
+
+	# Get & Decode dbpass
+	function getDBPassword {
+		#Grabbing password from configengine.xml
+		dbPassword=`sed -n "/<database>/,/<\/database>/p" $ceconf | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
+		if [[ $(isStringProtected database $ceconf) -eq 1 ]];then
+			dbPassword=$(decodeString $dbPassword)
+		fi
+	}
+
+	# Get & decode trustedAppKey
+	function getTrustedAppKey {
+		trustedAppKey=`cat $gconf | grep -i trustedAppKey | sed 's/<[^>]*[>]//g' | tr -d ' '`
+		if [[ $(isStringProtected protected $gconf) -eq 1 ]];then
+			trustedAppKey=$(decodeString $trustedAppKey)
+		fi
+	}
+
+	# Get & decode ldapLogin password
+	function getldapLogin {
+		ldapPassword=`sed -n "/<login>/,/<\/login>/p" $ceconf | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
+		if [[ $(isStringProtected login $ceconf) -eq 1 ]];then
+			ldapPassword=$(decodeString $ldapPassword)
+		fi
 	}
 
 if [[ "$forceMode" -ne "1" ]];then
@@ -265,15 +300,7 @@ if [[ "$forceMode" -ne "1" ]];then
 		dbRunning=`rcpostgresql status`;
 		if [ $? -eq '0' ];then
 			if [ $(checkDBPass) -eq 1 ];then
-				#Grabbing password from configengine.xml
-				dbPassword=`sed -n "/<database>/,/<\/database>/p" $dirEtcMobility/configengine/configengine.xml | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
-				isProtected=`sed -n "/<database>/,/<\/database>/p" $dirEtcMobility/configengine/configengine.xml | grep "<protected>" | cut -f2 -d '>' | cut -f1 -d '<'`
-
-				if [[ "$isProtected" -eq "1" ]];then
-					#decoding password
-					dbPassword=$(decodeString $dbPassword)
-				fi
-
+				getDBPassword;
 				#Creating new .pgpass file
 				echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 				chmod 0600 /root/.pgpass;
@@ -283,8 +310,7 @@ if [[ "$forceMode" -ne "1" ]];then
 		fi
 
 	else
-		#Grabbing password from configengine.xml
-		dbPassword=`sed -n "/<database>/,/<\/database>/p" $dirEtcMobility/configengine/configengine.xml | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
+		getDBPassword;
 		#Creating new .pgpass file
 		echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 		chmod 0600 /root/.pgpass;
@@ -294,14 +320,13 @@ fi
 ##################################################################################################
 #	Initialize Variables
 ##################################################################################################
-		function setVariables
-		{
-		# Depends on version 1.0 or 2.0
-		if [ $dsVersion -gt $dsVersionCompare ]; then
-			declareVariables2
-		else
-			declareVariables1
-		fi
+		function setVariables {
+			# Depends on version 1.0 or 2.0
+			if [ $dsVersion -gt $dsVersionCompare ]; then
+				declareVariables2
+			else
+				declareVariables1
+			fi
 		}
 		setVariables;
 
@@ -910,10 +935,7 @@ function addGroup {
 	ldapAddress=`grep -i "<ldapAddress>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	ldapPort=`grep -i "<ldapPort>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	ldapAdmin=`grep -im1 "<dn>" /etc/datasync/configengine/configengine.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	ldapPassword=`grep -im1 "<password>" /etc/datasync/configengine/configengine.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	if [ $dsVersion -gt $dsVersionCompare ];then
-	read -ep "ldap password for $ldapAdmin: " -s ldapPassword
-	fi
+	getldapLogin
 	psql -U $dbUsername datasync -c "select distinct dn from targets where \"targetType\"='group'" | grep -i cn > $ldapGroups;
 	echo -e "\nMobility Group(s):"
 	cat $ldapGroups
@@ -1076,26 +1098,12 @@ soapSession=''
 poa=''
 userPO=''
 function soapLogin {
-gw=''$dirEtcMobility'/configengine/engines/default/pipelines/pipeline1/connectors/groupwise/connector.xml'
-poa=`cat $gw | grep -i soap | sed 's/<[^>]*[>]//g' | tr -d ' ' | sed 's|[a-zA-Z,]||g' | tr -d '//' | sed 's/^.//'`
+
+poa=`cat $gconf| grep -i soap | sed 's/<[^>]*[>]//g' | tr -d ' ' | sed 's|[a-zA-Z,]||g' | tr -d '//' | sed 's/^.//'`
 poaAddress=`echo $poa | sed 's+:.*++g'`
 port=`echo $poa | sed 's+.*:++g'`
-trustedName=`cat $gw | grep -i trustedAppName | sed 's/<[^>]*[>]//g' | tr -d ' '`
-trustedKey=`cat $gw | grep -i trustedAppKey | sed 's/<[^>]*[>]//g' | tr -d ' '`
-if [ $dsVersion -gt $dsVersionCompare ];then
-	if [ -f "$dsappDirectory/trustedApp.key" ]; then
-		trustedKey=`cat $dsappDirectory/trustedApp.key`
-	else
-		read -ep "Enter path to trusted application file: " trustedAppFile;
-		if [ ! -f $trustedAppFile ];then
-			echo -e "No such file."
-			break;
-		fi
-		echo "$(cat $trustedAppFile)" > $dsappDirectory/trustedApp.key;
-		dos2unix $dsappDirectory/trustedApp.key 2>/dev/null
-		trustedKey=`cat $dsappDirectory/trustedApp.key`;
-	fi
-fi
+trustedName=`cat $gconf| grep -i trustedAppName | sed 's/<[^>]*[>]//g' | tr -d ' '`
+getTrustedAppKey
 
 soapLoginResponse=`netcat $poaAddress $port << EOF
 POST /soap HTTP/1.0
@@ -1116,7 +1124,7 @@ Content-Type: text/xml
          <auth xmlns="http://schemas.novell.com/2005/01/GroupWise/methods" xsi:type="ns0:TrustedApplication">
             <ns0:username>$vuid</ns0:username>
             <ns0:name>$trustedName</ns0:name>
-            <ns0:key>$trustedKey</ns0:key>
+            <ns0:key>$trustedAppKey</ns0:key>
          </auth>
          <language xmlns="http://schemas.novell.com/2005/01/GroupWise/methods"/>
          <version xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1.02</version>
@@ -1128,19 +1136,6 @@ EOF`
 
 if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`); then 
 	echo "Invalid key for trusted application."
-
-	if [ $dsVersion -gt $dsVersionCompare ];then
-		if askYesOrNo $"Use new trusted application file?" ; then
-		read -ep "Enter path to trusted application file: " trustedAppFile;
-			if [ ! -f $trustedAppFile ];then
-				echo -e "No such file."
-				break;
-			fi
-			echo "$(cat $trustedAppFile)" > $dsappDirectory/trustedApp.key;
-			dos2unix $dsappDirectory/trustedApp.key 2>/dev/null
-			trustedKey=`cat $dsappDirectory/trustedApp.key`;
-		fi
-	fi
 	read -p "Press [Enter] to continue."; continue;
 fi
 
@@ -1172,7 +1167,7 @@ Content-Type: text/xml
          <auth xmlns="http://schemas.novell.com/2005/01/GroupWise/methods" xsi:type="ns0:TrustedApplication">
             <ns0:username>$vuid</ns0:username>
             <ns0:name>$trustedName</ns0:name>
-            <ns0:key>$trustedKey</ns0:key>
+            <ns0:key>$trustedAppKey</ns0:key>
          </auth>
          <language xmlns="http://schemas.novell.com/2005/01/GroupWise/methods"/>
          <version xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1.02</version>
@@ -1186,27 +1181,10 @@ EOF`
 	if [ $? != 0 ]; then
 		echo -e "Redirection detected.\nFailure to connect to $poa"
 	fi
-	if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`); then 
-		echo "Invalid key for trusted application."
-
-		if [ $dsVersion -gt $dsVersionCompare ];then
-			if askYesOrNo $"Use new trusted application file?" ; then
-			read -ep "Enter path to trusted application file: " trustedAppFile;
-				if [ ! -f $trustedAppFile ];then
-					echo -e "No such file."
-					break;
-				fi
-				echo "$(cat $trustedAppFile)" > $dsappDirectory/trustedApp.key;
-				dos2unix $dsappDirectory/trustedApp.key 2>/dev/null
-				trustedKey=`cat $dsappDirectory/trustedApp.key`;
-			fi
-		fi
-		read -p "Press [Enter] to continue."; continue;
-	fi
 	userPO=`echo $soapLoginResponse | grep -iwo "<gwt:postOffice>.*</gwt:postOffice>" | sed 's/<[^>]*[>]//g' | tr -d ' ' | tr [:upper:] [:lower:]`
 	gwVersion=`echo $soapLoginResponse | grep -iwo "<gwm:gwVersion>.*</gwm:gwVersion>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	soapSession=`echo $soapLoginResponse | grep -iwo "<gwm:session>.*</gwm:session>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	if [[ -z "$soapSession" || -z "$poa" ]]; then echo -e "\nNull response to soapLogin\nPOA: "$poa"\ntrustedName\Key: "$trustedName":"$trustedKey"\n\nsoapLoginResponse:\n"$soapLoginResponse"\n"$soapSession
+	if [[ -z "$soapSession" || -z "$poa" ]]; then echo -e "\nNull response to soapLogin\nPOA: "$poa"\ntrustedName\Key: "$trustedName":"$trustedAppKey"\n\nsoapLoginResponse:\n"$soapLoginResponse"\n"$soapSession
 	fi
 fi
 # soapLoginResponse=`echo $soapLoginResponse | grep -iwo "<gwm:gwVersion>.*</gwm:gwVersion>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
@@ -1420,42 +1398,39 @@ EOF
 }
 
 function changeDBPass {
-clear;
-read -p "Enter new database password: " input
-if [ -z "$input" ];then
-	echo "Invalid input";
-	exit 1
-fi
-#Get Encrypted password from user input
-inputEncrpt=$(encodeString $input)
+	clear;
+	read -p "Enter new database password: " input
+	if [ -z "$input" ];then
+		echo "Invalid input";
+		exit 1
+	fi
+	#Get Encrypted password from user input
+	inputEncrpt=$(encodeString $input)
 
-echo "Changing database password"
-su postgres -c "psql -c \"ALTER USER datasync_user WITH password '"$input"';\"" &>/dev/null
+	echo "Changing database password"
+	su postgres -c "psql -c \"ALTER USER datasync_user WITH password '"$input"';\"" &>/dev/null
+	lineNumber=`grep "database" -A 7 -n $ceconf | grep password | cut -d '-' -f1`
 
-lineNumber=`grep "database" -A 7 -n $dirEtcMobility/configengine/configengine.xml | grep password | cut -d '-' -f1`
-isProtected=`sed -n "/<database>/,/<\/database>/p" $dirEtcMobility/configengine/configengine.xml | grep "<protected>" | cut -f2 -d '>' | cut -f1 -d '<'`
-if [[ "$isProtected" -eq "1" ]];then
-	sed -i ""$lineNumber"s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $dirEtcMobility/configengine/configengine.xml
-else
-	sed -i ""$lineNumber"s|<password>.*</password>|<password>"$input"</password>|g" $dirEtcMobility/configengine/configengine.xml
-fi
+	if [[ $(isStringProtected database $ceconf) -eq 1 ]];then
+		sed -i ""$lineNumber"s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $ceconf
+	else
+		sed -i ""$lineNumber"s|<password>.*</password>|<password>"$input"</password>|g" $ceconf
+	fi
 
-isProtected=`grep "<protected>" $dirEtcMobility/configengine/engines/default/engine.xml | cut -f2 -d '>' | cut -f1 -d '<'`
-if [[ "$isProtected" -eq "1" ]];then
-	sed -i "s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $dirEtcMobility/configengine/engines/default/engine.xml
-else
-	sed -i "s|<password>.*</password>|<password>"$input"</password>|g" $dirEtcMobility/configengine/engines/default/engine.xml
-fi
+	if [[ $(isStringProtected database $econf) -eq 1 ]];then
+		sed -i "s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $econf
+	else
+		sed -i "s|<password>.*</password>|<password>"$input"</password>|g" $econf
+	fi
 
-isProtected=`grep "<protected>" $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | cut -f2 -d '>' | cut -f1 -d '<'`
-if [[ "$isProtected" -eq "1" ]];then
-	sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$inputEncrpt"</dbpass>|g" $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml
-else
-	sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$input"</dbpass>|g" $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml
-fi
+	if [[ $(isStringProtected protected $mconf) -eq 1 ]];then
+		sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$inputEncrpt"</dbpass>|g" $mconf
+	else
+		sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$input"</dbpass>|g" $mconf
+	fi
 
-echo -e "\nDatabase password updated. Please restart mobility."
-read -p "Press [Enter] to continue."
+	echo -e "\nDatabase password updated. Please restart mobility."
+	read -p "Press [Enter] to continue."
 }
 
 function changeAppName
