@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='160'
+	dsappversion='161'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -246,41 +246,45 @@ fi
 		fi
 	}
 
+	function encodeString 
+	{
+	echo "$1" | openssl enc -aes-256-cbc -a -k `hostname -f` | base64
+	}
+
+	function decodeString 
+	{
+	decodeVar1=`echo "$1" | base64 -d`;
+	decodeVar2=`echo "$decodeVar1" | openssl enc -aes-256-cbc -base64 -k \`hostname -f\` -d`;
+	echo $decodeVar2;
+	}
+
 if [[ "$forceMode" -ne "1" ]];then
 	#Database .pgpass file / version check.
 	if [ $dsVersion -gt $dsVersionCompare ];then
 		#Log into database or create .pgpass file to login.
 		dbRunning=`rcpostgresql status`;
 		if [ $? -eq '0' ];then
-			if [ $(checkDBPass) -eq 0 ];then
-				if [ $(checkDBPass) -eq 1 ];then
-					read -sp "Enter database password: " dbPassword;
-					echo -e '\n'
-					#Creating new .pgpass file
-					echo "*:*:*:*:"$dbPassword > /root/.pgpass;
-					chmod 0600 /root/.pgpass;
+			if [ $(checkDBPass) -eq 1 ];then
+				#Grabbing password from configengine.xml
+				dbPassword=`sed -n "/<database>/,/<\/database>/p" $dirEtcMobility/configengine/configengine.xml | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
+				isProtected=`sed -n "/<database>/,/<\/database>/p" $dirEtcMobility/configengine/configengine.xml | grep "<protected>" | cut -f2 -d '>' | cut -f1 -d '<'`
 
-					if [ $(checkDBPass) -eq 1 ];then
-						read -p "Incorrect password.";exit 1;
-					fi
+				if [[ "$isProtected" -eq "1" ]];then
+					#decoding password
+					dbPassword=$(decodeString $dbPassword)
 				fi
-			else
-				read -sp "Enter database password: " dbPassword;
-				echo -e '\n'
+
 				#Creating new .pgpass file
 				echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 				chmod 0600 /root/.pgpass;
-
-				if [ $(checkDBPass) -eq 1 ];then
-					read -p "Incorrect password.";exit 1;
-				fi
 			fi
 		else
 			read -p "Postgresql is not running";exit 1;
 		fi
+
 	else
-		#Grabbing Username and Passwrod from configengine.xml
-		dbPassword=`cat $dirEtcMobility/configengine/configengine.xml | grep database -A 7 | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
+		#Grabbing password from configengine.xml
+		dbPassword=`sed -n "/<database>/,/<\/database>/p" $dirEtcMobility/configengine/configengine.xml | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
 		#Creating new .pgpass file
 		echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 		chmod 0600 /root/.pgpass;
@@ -1422,8 +1426,8 @@ if [ -z "$input" ];then
 	echo "Invalid input";
 	exit 1
 fi
-isHostname=`hostname -f`
-inputEncrpt=`echo "$input" | openssl enc -aes-256-cbc -a -k $isHostname | base64`
+#Get Encrypted password from user input
+inputEncrpt=$(encodeString $input)
 
 echo "Changing database password"
 su postgres -c "psql -c \"ALTER USER datasync_user WITH password '"$input"';\"" &>/dev/null
