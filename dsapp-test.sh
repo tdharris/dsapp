@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='163'
+	dsappversion='164'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -1982,8 +1982,9 @@ EOF
 		echo -e "\t2. Re-Index Databases"
 		echo -e "\n\t3. Back up Databases"
 		echo -e "\t4. Restore Databases"
-		echo -e "\t5. Fix targets/membershipCache"
-		echo -e "\n\t6. CUSO Clean-Up Start-Over"
+		echo -e "\n\t5. Recreate Global Address Book (GAL)"
+		echo -e "\t6. Fix targets/membershipCache"
+		echo -e "\n\t7. CUSO Clean-Up Start-Over"
 		echo -e "\n\t0. Back -- Start Mobility"
 		echo -n -e "\n\tSelection: "
 		read opt
@@ -2077,13 +2078,28 @@ EOF
 			read -p "Press [Enter] to continue";
 		;;
 
+		5) # Fix Global Address Book (GAL)
+			clear; echo
+			if askYesOrNo $"Do you want to remove the Global Address Book (GAL)?"; then
+			echo -e "Removing GAL..."
+			psql -U $dbUsername mobility << EOF
+			delete from gal;
+			delete from galsync;
+EOF
+			echo
+			rcDS start
+			echo; read -p "Press [Enter] to continue";
+			break; break;
+			fi
+			
+			;;
 
-		5) # Fix targets/membershipCache - TID 7012163
+		6) # Fix targets/membershipCache - TID 7012163
 			addGroup
 			;;
 
 
-		6 | cuso+ | CUSO+) #Deletes everything in the database except targets and membershipCache. Removes all attachments
+		7 | cuso+ | CUSO+) #Deletes everything in the database except targets and membershipCache. Removes all attachments
 			   #Cleans everything up except users and starts fresh.
 			   while :
 		do
