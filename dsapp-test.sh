@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='164'
+	dsappversion='165'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -49,6 +49,9 @@
 	# System logs
 	messages="/var/log/messages"
 	warn="/var/log/warn"
+
+	# dsapp Logs
+	generalHealthCheckLog="$dsappLogs/generalHealthCheck.log"
 	
 	##################################################################################################
 	#	Version: Eenou+
@@ -72,11 +75,28 @@
 		rcScript="rcdatasync"
 	}
 
+	##################################################################################################
+	#	Colors
+	##################################################################################################
+	RED='\e[1;31m' #Bold Red
+	red='\e[31m' # Red
+	GREEN='\e[1;32m' #Bold Green
+	YELLOW='\e[33m' #Yellow
+	URED='\e[4;91m' #Underline Red
+	UGREEN='\e[4;92m' #Underline Green
+	BOLD='\e[1m'  #Bold
+	UBOLD=`tput bold; tput smul` #Underline Bold
+	STRIKE='\e[9m' # Strike
+	BLINKON='\e[5m' # Blinking
+	NC='\e[0m' # No Color - default
+
 ##################################################################################################
 #
 #	Initialization
 #
 ##################################################################################################
+	# Set PATH environment for script to include /usr/sbin
+	PATH=$PATH:/usr/sbin/
 
 	#Getting Present Working Directory
 	cPWD=${PWD};
@@ -1437,8 +1457,7 @@ function changeDBPass {
 	read -p "Press [Enter] to continue."
 }
 
-function changeAppName
-{
+function changeAppName {
 	clear;
 	verifyUser
 	if [ $? = 0 ]; then
@@ -1474,6 +1493,167 @@ function changeAppName
 		read -p "Press [Enter] to continue."
 	fi
 }
+
+function reinitAllUsers {
+	echo -e "Note: During the re-initialize, users will not be able to log in. This may take some time."
+	if askYesOrNo $"Are you sure you want to re-initialize all the users?";then
+		mpsql << EOF
+		update users set state = '7';
+		\q
+EOF
+		echo -e "\nAll users have been set to re-initialize"
+		read -p "Press [Enter] to continue";
+		echo -e "Testing123\n" && watch -n1 'psql -U '$dbUsername' mobility -c "select state,userID from users"; echo -e "[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor."'
+		break;
+	fi
+}
+
+function verifyCertificatePair {
+    echo -e "\nPlease provide the private key and the public key/certificate\n"
+    read -ep "Enter the full path for certificate files (ie. /root/certificates): " path;
+    if [ -d $path ];then 
+        cd $path;
+    echo "Listing certificate files..."
+        ls *.key *.crt 2>/dev/null;
+        if [ $? -ne 0 ]; then
+            echo -e "Could not find any certificate files (.key, .crt).";
+        else
+            echo
+            read -ep "Enter the private key (.key): " key;
+            # read -ep "Enter the CSR: " csr;
+            read -ep "Enter the public key (.crt): " crt;
+            if [ -f ${PWD}"/$key" ]  && [ -f ${PWD}"/$crt" ]; then
+                echo
+                crt=`openssl x509 -noout -modulus -in $crt | openssl md5`
+                key=`openssl rsa -noout -modulus -in $key | openssl md5`
+                # csr=`openssl req -noout -modulus -in $csr | openssl md5`
+                echo
+                if [ "$crt" == "$key" ]; then
+                    echo "Certificates have been validated."
+                else echo "Certificate mismatch!"
+                fi
+                echo "key: " $key
+                # echo "csr: " $csr
+                echo "crt: " $crt
+            else
+                echo -e "Invalid file input.";
+            fi
+        fi
+    fi
+}
+
+##################################################################################################
+#	
+#	General Health Check
+#
+##################################################################################################
+function generalHealthCheck {
+	clear; echo -e "##########################################################\n#	\n#  General Health Check\n#\n##########################################################" > $generalHealthCheckLog
+
+	# Begin Checks
+	checkServices
+	# checkXML
+
+	# View Logs?
+	echo
+	if askYesOrNo "Do you want to view the log file?"; then
+		less $generalHealthCheckLog
+	fi
+	read -p "Press [Enter] to continue."
+}
+
+# Utility Functions
+function ghcNewLogHeader {
+	echo -e "\n$1
+==========================================================" >> $generalHealthCheckLog
+}
+
+function passFail {
+	if [ $1 -ne 0 ]; then
+		echo -e "${RED}Failed.${NC}" 
+ 		echo -e "\nFailed." >> $generalHealthCheckLog
+ 	else 
+ 		echo -e "${GREEN}Passed.${NC}"
+		echo -e "\nPassed." >> $generalHealthCheckLog
+ 	fi
+}
+
+# Check Functions/Modules
+function checkServices {
+	echo -e "\nChecking Mobility services..."
+	ghcNewLogHeader "Checking Mobility Services..."
+
+	mstatus=true;
+	gstatus=true;
+
+	failure="";
+	function checkStatus {
+		rcdatasync-$1 status >> $generalHealthCheckLog
+		if [ $? != 0 ] 
+			then status=false;
+			failure+="$1. "
+		fi
+	} 
+
+	function checkMobility {
+		port=`grep -i "<listenPort>" $mconf | sed 's/<[^>]*[>]//g' | tr -d ' '`;
+		netstat -patune | grep -i ":$port" | grep -i listen > /dev/null
+		if [ $? != 0 ] 
+			then mstatus=false;
+			failure+="mobility-connector ($port). "
+		fi
+		echo "Mobility Connector listening on port $port: $mstatus" >> $generalHealthCheckLog
+	} 
+
+	function checkGroupWise {
+		port=`grep -i "<port>" $gconf | sed 's/<[^>]*[>]//g' | tr -d ' '`;
+		netstat -patune | grep -i ":$port" | grep -i listen > /dev/null
+		if [ $? != 0 ] 
+			then gstatus=false;
+			failure+="groupwise-connector ($port). "
+		fi
+		echo "GroupWise Connector listening on port $port: $gstatus" >> $generalHealthCheckLog
+	}
+
+	# Check Mobility Services
+	checkStatus configengine
+	checkStatus webadmin
+	checkStatus connectors
+	checkStatus syncengine
+	checkStatus monitorengine
+	checkMobility
+	checkGroupWise
+
+ 	if (! $mstatus || ! $gstatus) then
+ 		passFail 1
+ 	else passFail 0
+ 	fi
+}
+
+# function checkXML {
+# 	# Display HealthCheck name to user and create section in logs
+# 	echo -e "\nValidating XML configuration files..."
+# 	ghcNewLogHeader "Validating XML configuration files..."
+# 	# Any logging info >> $generalHealthCheckLog
+
+# 	echo -e "Checking any XML files in /etc/datasync..." >> $generalHealthCheckLog
+# 	validateXML=`find /etc/datasync/ -type f -name *.xml -exec xmllint --noout {} \; -exec echo $? 1>/dev/null \;`
+# 	if [ -n "$validateXML" ]; then echo "Failed"; fi
+
+
+# 	# Return either pass/fail, 0 indicates pass.
+# 	passFail 0
+# }
+
+# function exampleHealthCheck {
+# 	# Display HealthCheck name to user and create section in logs
+# 	echo -e "\nexampleHealthCheck..."
+# 	ghcNewLogHeader "exampleHealthCheck"
+# 	# Any logging info >> $generalHealthCheckLog
+
+# 	# Return either pass/fail, 0 indicates pass.
+# 	passFail 0
+# }
 
 ##################################################################################################
 #	
@@ -2086,10 +2266,12 @@ EOF
 			delete from gal;
 			delete from galsync;
 EOF
-			echo
-			rcDS start
-			echo; read -p "Press [Enter] to continue";
-			break; break;
+			echo -e "\nNote: The Global Address Book (GAL) is recreated on startup."
+				if askYesOrNo "Do you want to start Mobility services?"; then
+					rcDS start
+					echo; read -p "Press [Enter] to continue";
+					break; break;
+				fi
 			fi
 			
 			;;
@@ -2166,6 +2348,7 @@ cd $cPWD;
  echo -e "\t1. Generate CSR and Key"
  echo -e "\t2. Generate Self Signed Certifiate"
  echo -e "\t3. Configure Certificate from 3rd party"
+ echo -e "\n\t4. Verify Certificate/Key Pair"
  echo -e "\n\t0. Back"
  echo -n -e "\n\tSelection: "
  read opt
@@ -2340,6 +2523,13 @@ fi
 read -p "Press [Enter] to continue.";
 ;;
 
+4) # Verify certificate pair
+	clear;
+	verifyCertificatePair
+	echo ""
+    read -p "Press [Enter] to continue."; 
+    ;;
+
 /q | q | 0)break;;
   *) ;;
 esac
@@ -2356,24 +2546,126 @@ done
 		do
   		clear;
   		datasyncBanner
-	echo -e "\t1. User Authentication Issues"
- 	echo -e "\t2. Monitor User Sync State (Mobility)"
- 	echo -e "\t3. Monitor User Sync GW/MC Count (Sync-Validate)"
- 	echo -e "\n\t4. Check GroupWise Folder Structure"
- 	echo -e "\t5. Remote GWCheck DELDUPFOLDERS (beta)"
- 	echo -e "\n\t6. Remove user & db references"
- 	echo -e "\t7. Reinitialize user (WebAdmin is recommended)"
- 	echo -e "\t8. Remove user & group db references only (remove from WebAdmin first)"
- 	echo -e "\t9. Change user application name"
- 	echo -e "\n\t10. List subjects of deleted items from device"
- 	echo -e "\t11. List All Devices from db"
- 	echo -e "\n\t12. Reinitialize all users (CAUTION)"
+ 	echo -e "\t1. Monitor user sync options..."
+ 	echo -e "\t2. GroupWise checks options..."
+ 	echo -e "\t3. Remove & reinitialize users options..."
+ 	echo -e "\n\t4. User authentication issues"
+ 	echo -e "\t5. Change user application name"
+ 	echo -e "\t6. List subjects of deleted items from device"
+ 	echo -e "\t7. List all devices from db"
 	echo -e "\n\t0. Back"
  	echo -n -e "\n\tSelection: "
  	read opt;
 	case $opt in
+			
+		1) # Monitor User Sync (submenu)
+			while :
+			do
+				clear;
+				datasyncBanner
+				echo -e "\t1. Monitor User Sync State (Mobility)"
+		 		echo -e "\t2. Monitor User Sync GW/MC Count (Sync-Validate)"
 
-		1) # User Authentication
+		 		echo -e "\n\t0. Back"
+			 	echo -n -e "\n\tSelection: "
+			 	read opt;
+				case $opt in
+
+					1) # Monitor User Sync State
+						monitorUser
+						;;
+
+					2) # Check Sync Count
+						verifyUser
+						if [ $? != 1 ]; then
+							echo -e "\nCat result:"
+								cat $mAlog | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid | tail
+							echo ""
+							if askYesOrNo $"Do you want to continue to watch?"; then
+								tailf $mAlog | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid 
+							fi
+						fi
+						;;
+
+			/q | q | 0)break;;
+			  *) ;;
+			esac
+			done
+			;; 
+
+		2) # GroupWise Checks... (submenu)
+			while :
+			do
+				clear;
+				datasyncBanner
+				echo -e "\t1. Check GroupWise Folder Structure"
+		 		echo -e "\t2. Remote GWCheck DELDUPFOLDERS (beta)"
+
+		 		echo -e "\n\t0. Back"
+			 	echo -n -e "\n\tSelection: "
+			 	read opt;
+				case $opt in
+
+					1) # Check GroupWise Folder Structure
+						clear;
+						verifyUser
+						if [ $? != 1 ]; then
+							checkGroupWise
+						fi
+						read -p "Press [Enter] to continue.";
+						;;
+
+					2) # gwCheck
+						clear;
+						# verifyUser
+						read -p "userID: " vuid
+						soapLogin
+						if [ -n "$soapSession" ]; then
+							gwCheck
+						fi
+						read -p "Press [Enter] to continue.";
+						;;
+
+			/q | q | 0)break;;
+			  *) ;;
+			esac
+			done
+			;; 
+		
+		3) # Remove & Reinit Users... (submenu)
+			while :
+			do
+				clear;
+				datasyncBanner
+				echo -e "\t1. Remove user & db references"
+		 		echo -e "\t2. Remove user & group db references only (remove from WebAdmin first)"
+		 		echo -e "\n\t3. Reinitialize user (WebAdmin is recommended)"
+		 		echo -e "\t4. Reinitialize all users (CAUTION)"
+
+		 		echo -e "\n\t0. Back"
+			 	echo -n -e "\n\tSelection: "
+			 	read opt;
+				case $opt in
+
+					1) # Remove user
+						dremoveUser;;
+
+					2) # Remove User Database References
+	     				removeUser;;
+
+	     			3) # Reinitialze user (set state to 7 Re-Init)
+						setUserState 7;;
+
+					4) clear; #Re-initialize all users
+						reinitAllUsers;;
+
+			/q | q | 0)break;;
+			  *) ;;
+			esac
+			done
+			;; 
+
+		4) # User Authentication
 			clear;
 			function ifReturn {
 				if [ $? -eq 0 ]; then
@@ -2441,83 +2733,21 @@ done
 						read -p "Press [Enter] to continue."
 					fi
 			;;
-			
-		2) # Monitor User Sync State
-			monitorUser
-			;;
 
-		3) # Check Sync Count
-			verifyUser
-			if [ $? != 1 ]; then
-				echo -e "\nCat result:"
-					cat $mAlog | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid | tail
-				echo ""
-				if askYesOrNo $"Do you want to continue to watch?"; then
-					tailf $mAlog | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid 
-				fi
-			fi
-			;;
-
-		4) # Check GroupWise Folder Structure
-		clear;
-				verifyUser
-				if [ $? != 1 ]; then
-					checkGroupWise
-				fi
-				read -p "Press [Enter] to continue.";
-			;;
-
-			5) # gwCheck
-			clear;
-				# verifyUser
-				read -p "userID: " vuid
-				soapLogin
-				if [ -n "$soapSession" ]; then
-					gwCheck
-				fi
-				read -p "Press [Enter] to continue.";
-				;;
-
-		6) # Remove user
-			dremoveUser;;
-		
-
-		7) # Reinitialze user (set state to 7 Re-Init)
-			setUserState 7
-			;;
-
-		ru+ | 8) # Remove User Database References
-	     	removeUser;;
-
-	     9) #Calls changeAppName function to change users app names
+		5) #Calls changeAppName function to change users app names
 			changeAppName
 			;;
 
-		10) whatDeviceDeleted
+		6) whatDeviceDeleted
 			;;
 
-		11) #Device Info
+		7) #Device Info
 			clear; 
 			echo -e "\nBelow is a list of users and devices. For more details about each device (i.e. OS version), look up what is in the description column. For an iOS device, there could be a listing of Apple-iPhone3C1/902.176. Use the following website, http://enterpriseios.com/wiki/UserAgent to convert to an Apple product, iOS Version and Build.\n"
 			mpsql << EOF
 			select u.userid, description, identifierstring, devicetype from devices d INNER JOIN users u ON d.userid = u.guid;
 EOF
 			read -p "Press [Enter] when finished.";
-			;;
-				
-
-		12) clear; #Re-initialize all users
-			echo -e "Note: During the re-initialize, users will not be able to log in. This may take some time."
-			if askYesOrNo $"Are you sure you want to re-initialize all the users?";then
-				mpsql << EOF
-				update users set state = '7';
-				\q
-EOF
-				echo -e "\nAll users have been set to re-initialize"
-					read -p "Press [Enter] to continue";
-					echo -e "Testing123\n" && watch -n1 'psql -U '$dbUsername' mobility -c "select state,userID from users"; echo -e "[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor."'
-					break;
-			fi
 			;;
 
 		/q | q | 0) break;;
@@ -2537,11 +2767,12 @@ EOF
 		clear;
 		datasyncBanner
 		 echo -e "\t1. Nightly Maintenance Check"
-		 echo -e "\t2. Watch psql command (CAUTION)"
+		 echo -e "\t2. General Health Check (beta)"
 		 echo -e "\n\t3. Show Sync Status"
 		 echo -e "\t4. Mobility pending syncevents by User"
 		 echo -e "\t5. View Attachments by User"
 		 echo -e "\n\t6. Check Mobility attachments (CAUTION)"
+		 echo -e "\t7. Watch psql command (CAUTION)"
 		 echo -e "\n\t0. Back"
 		 echo -n -e "\n\tSelection: "
 		 read opt
@@ -2552,33 +2783,8 @@ EOF
 				read -p "Press [Enter] to continue.";
 				;;
 
-			2) # Watch psql command
-				q=false
-				while :
-				do clear
-					echo -e "\n\t1. DataSync"
-					echo -e "\t2. Mobility"
-					echo -e "\n\t0. Back"
-					echo -n -e "\n\tDatabase: "
-					read opt
-					case $opt in
-						1) database='datasync'
-							clear; break;;
-						2) database='mobility' 
-							clear; break;;
-						/q | q | 0) q=true; break;;
-						*) ;;
-					esac
-					done
-				if ($q) 
-					then break
-					else 
-						echo -e "\n$database"
-						read -p "psql command: " com;
-						read -p "seconds: " seconds;
-						var=$(echo $com | sed -e 's/\"/\\"/g')
-						watch -d -n$seconds "psql -U $dbUsername $database -c \"$var\""
-				fi
+			2) # General Health Check
+				generalHealthCheck
 				;;
 
 			3)  clear;
@@ -2715,6 +2921,35 @@ EOF
 				read -p "Press [Enter] to continue.";
 				;;
 
+			7) # Watch psql command
+				q=false
+				while :
+				do clear
+					echo -e "\n\t1. DataSync"
+					echo -e "\t2. Mobility"
+					echo -e "\n\t0. Back"
+					echo -n -e "\n\tDatabase: "
+					read opt
+					case $opt in
+						1) database='datasync'
+							clear; break;;
+						2) database='mobility' 
+							clear; break;;
+						/q | q | 0) q=true; break;;
+						*) ;;
+					esac
+					done
+				if ($q) 
+					then break
+					else 
+						echo -e "\n$database"
+						read -p "psql command: " com;
+						read -p "seconds: " seconds;
+						var=$(echo $com | sed -e 's/\"/\\"/g')
+						watch -d -n$seconds "psql -U $dbUsername $database -c \"$var\""
+				fi
+				;;
+
 			/q | q | 0) break;;
 			*) ;;
 			esac
@@ -2735,3 +2970,35 @@ EOF
 
 	esac
 	done
+
+##############################################
+#	Submenu example
+##############################################
+# 2) # Monitor User Sync (submenu)
+# 	while :
+# 	do
+# 		clear;
+# 		datasyncBanner
+# 		echo -e "\t1. "
+#  		echo -e "\t2. "
+
+#  		echo -e "\n\t0. Back"
+# 	 	echo -n -e "\n\tSelection: "
+# 	 	read opt;
+# 		case $opt in
+
+# 			1) #
+# 				clear;
+
+# 				;;
+
+# 			2) #
+# 				clear;
+
+# 				;;
+
+# 	/q | q | 0)break;;
+# 	  *) ;;
+# 	esac
+# 	done
+# 	;; 
