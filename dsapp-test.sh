@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='165'
+	dsappversion='166'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -673,6 +673,14 @@ EOF
 				$rcScript stop &>/dev/null;
 				killall -9 python &>/dev/null;
 				rccron stop 2>/dev/null; pkill cron 2>/dev/null
+		fi
+
+		if [ "$1" = "restart" ] && [ "$2" = "" ]; then
+			$rcScript stop
+			killall -9 python &>/dev/null;
+			rccron stop &>/dev/null; pkill cron 2>/dev/null
+			$rcScript start
+			rccron start &>/dev/null;
 		fi
 	}
 
@@ -1508,13 +1516,144 @@ EOF
 	fi
 }
 
-function verifyCertificatePair {
+# Certificate functions
+function certPath {
+    while [ true ];do
+        read -ep "Enter path to store certificate files: " certPath;
+        if [ ! -d $certPath ]; then
+            if askYesOrNo $"Path does not exist, would you like to create it now?"; then
+                mkdir -p $certPath;
+                break;
+            fi
+        else break;
+        fi
+    done
+}
+
+function createCSRKey { 
+    #Start of Generate CSR and Key script.
+    certPath
+        cd $certPath;
+        echo -e "\nGenerating a Key and CSR";
+
+        while :
+        do
+            read -p "Enter password to make certificates: " -s -r pass;
+            printf "\n";
+            read -p "Confirm password: " -s -r passCompare;
+            if [ "$pass" = "$passCompare" ]; then
+                break;
+            else
+                    echo -e "\nPasswords do not match.\n";
+            fi
+        done
+    echo ""                                                                                                                                                                                            1,1           Top
+    openssl genrsa -passout pass:${pass} -des3 -out server.key 2048;
+    openssl req -new -key server.key -out server.csr -passin pass:${pass};
+    key=${PWD##&/}"/server.key";
+    csr=${PWD##&/}"/server.csr";
+
+    echo -e "\nserver.key can be found at "$key;
+    echo -e "server.csr can be found at "$csr;
+}
+
+function signCert {
+echo -e "\nSigning certificate."
+if [ -f $key ] && [ -f $csr ];then
+    read -ep "Enter amount of days certificate will be valid for(ie. 730): " certDays;
+    if [[ -z "$certDays" ]]; then
+		certDays=730;
+	fi
+    crt=${PWD##&/}"/server.crt";
+    openssl x509 -req -days $certDays -in $csr -signkey $key -out server.crt 2>/dev/null;
+    echo -e "Server certificate created at $crt\n";
+    else 
+        echo "Could not find server.key or server.csr in "${PWD##&/};
+fi
+}
+# TODO: fix password prompts, error checking...
+function createPEM {
+    echo -e "\nPlease provide the private key, the public key or certificate, and any intermediate CA or bundles.\n"
+    read -ep "Enter the full path for certificate files (ie. /root/certificates): " path;
+    if [ -d $path ];then 
+        cd $path;
+    echo "Listing certificate files..."
+        ls -l *.key *.crt 2>/dev/null;
+            if [ $? -eq 0 ]; then
+            echo ""
+            read -ep "Enter private key filename (key): " certKey;
+            read -ep "Enter public key filename (crt): " certCRT;
+                if [ -f ${PWD}"/$certKey" ] && [ -f ${PWD}"/$certCRT" ];then
+                    echo -e "\nRemoving password from Private Key, if it contains one";
+                    openssl rsa -in $certKey -out nopassword.key 2>/dev/null;
+                    if [ $? -eq 0 ]; then
+                    cat  nopassword.key > server.pem;
+                    rm -f nopassword.key;
+                    cat $certCRT >> server.pem;
+                    
+                    while [ true ];
+                    do
+                    crtName=""
+                    echo ""
+                    if askYesOrNo $"Do you have anymore Intermediate certificates?";then
+                        echo -e "\nList of CRT files:"
+                        ls *.crt; printf "\n";
+                        read -ep "Enter the full name of Intermediate CRT: " crtName;
+                        if [ ! -z "$crtName" ];then
+                            cat $crtName >> server.pem;
+                        fi
+                    else
+                        break;
+                    fi
+                    done
+                    echo -e "Creating server.pem at "${PWD##&/}"/server.pem\n";
+
+                    else echo "Invalid pass phrase.";
+                fi
+
+                else echo "Invalid file input.";
+            fi
+
+            else
+            echo -e "Cannot find any or all certificates files.";
+        fi
+    
+        else echo "Invalid file path.";
+    fi 
+}
+
+function configureMobility {
+    certInstall=false;
+
+    if askYesOrNo "Copy mobility.pem to $dirVarMobility/device/mobility.pem";then
+        cp mobility.pem $dirVarMobility/device
+        echo -e "Done.\n";
+        certInstall=true;
+    fi
+
+    if askYesOrNo "Copy mobility.pem to $dirVarMobility/webadmin/server.pem";then
+        cp mobility.pem $dirVarMobility/webadmin/server.pem;
+        echo -e "Done.\n";
+        certInstall=true;
+    fi
+
+    if($certInstall);then
+        if askYesOrNo "Do you want to restart Mobility servers?"; then
+            rcDS restart
+        else echo -e "Note: Mobility services will need to be restarted for the new certificates to be used."
+        fi
+    fi
+
+    echo -e "\nDone."; read -p "Press [Enter] to continue";
+}
+
+function verify {
     echo -e "\nPlease provide the private key and the public key/certificate\n"
     read -ep "Enter the full path for certificate files (ie. /root/certificates): " path;
     if [ -d $path ];then 
         cd $path;
     echo "Listing certificate files..."
-        ls *.key *.crt 2>/dev/null;
+        ls -l *.key *.crt 2>/dev/null;
         if [ $? -ne 0 ]; then
             echo -e "Could not find any certificate files (.key, .crt).";
         else
@@ -1540,8 +1679,9 @@ function verifyCertificatePair {
             fi
         fi
     fi
+    echo -e "\nDone."
+    read -p "Press [Enter] to continue."
 }
-
 ##################################################################################################
 #	
 #	General Health Check
@@ -1553,6 +1693,7 @@ function generalHealthCheck {
 	# Begin Checks
 	checkServices
 	# checkXML
+	checkPSQLConfig
 
 	# View Logs?
 	echo
@@ -1563,7 +1704,8 @@ function generalHealthCheck {
 }
 
 # Utility Functions
-function ghcNewLogHeader {
+function ghcNewHeader {
+	echo -e "\n$1"
 	echo -e "\n$1
 ==========================================================" >> $generalHealthCheckLog
 }
@@ -1578,10 +1720,21 @@ function passFail {
  	fi
 }
 
+function isStringInFile {
+	# $1=whatString?, $2=filename
+	# echo "$1"
+	# echo -e "isStringInFile: $1:$2\n"
+	grep -i "$1" "$2"
+	if [ $? -eq 0 ]; then
+		echo true
+	else 
+		echo false
+	fi
+}
+
 # Check Functions/Modules
 function checkServices {
-	echo -e "\nChecking Mobility services..."
-	ghcNewLogHeader "Checking Mobility Services..."
+	ghcNewHeader "Checking Mobility Services..."
 
 	mstatus=true;
 	gstatus=true;
@@ -1630,30 +1783,61 @@ function checkServices {
  	fi
 }
 
-# function checkXML {
-# 	# Display HealthCheck name to user and create section in logs
-# 	echo -e "\nValidating XML configuration files..."
-# 	ghcNewLogHeader "Validating XML configuration files..."
-# 	# Any logging info >> $generalHealthCheckLog
+# TODO: How to detect if there were errors from the command to trigger fail?
+function checkXML {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Validating XML configuration files..."
+	# Any logging info >> $generalHealthCheckLog
 
-# 	echo -e "Checking any XML files in /etc/datasync..." >> $generalHealthCheckLog
-# 	validateXML=`find /etc/datasync/ -type f -name *.xml -exec xmllint --noout {} \; -exec echo $? 1>/dev/null \;`
-# 	if [ -n "$validateXML" ]; then echo "Failed"; fi
+	echo -e "Checking any XML files in /etc/datasync..." >> $generalHealthCheckLog
+	validateXML=`find /etc/datasync/ -type f -name *.xml -exec xmllint --noout {} \; -exec echo $?:{} \;`
+	if [ -n "$validateXML" ]; then echo "Failed"; fi
 
 
-# 	# Return either pass/fail, 0 indicates pass.
-# 	passFail 0
-# }
+	# Return either pass/fail, 0 indicates pass.
+	passFail 0
+}
 
-# function exampleHealthCheck {
-# 	# Display HealthCheck name to user and create section in logs
-# 	echo -e "\nexampleHealthCheck..."
-# 	ghcNewLogHeader "exampleHealthCheck"
-# 	# Any logging info >> $generalHealthCheckLog
+function checkPSQLConfig {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking PSQL configuration..."
+	pghba="/var/lib/pgsql/data/pg_hba.conf"
+	pghbaStatus=true
 
-# 	# Return either pass/fail, 0 indicates pass.
-# 	passFail 0
-# }
+	function checkpghba {
+		string="$1"
+		# echo "checkpghba: $1:$pghba"
+		# isStringInFile "$string" "$pghba"
+		if (! $(isStringInFile "$1" "$pghba")); then 
+			pghbaStatus=false
+		fi 
+	}
+
+	# /var/lib/pgsql/data/postgresql.conf
+	checkpghba "local all postgres123 ident sameuser"
+	# checkpghba "host all postgres 127.0.0.1/32 ident sameuser"
+	# checkpghba "host all postgres ::1/128 ident sameuser"
+	# checkpghba "local   datasync         all                       md5"
+	# checkpghba "host    datasync         all       127.0.0.1/32    md5"
+	# checkpghba "host    datasync         all       ::1/128         md5"
+	# checkpghba "local   postgres         datasync_user                    md5"
+	# checkpghba "host    postgres         datasync_user    127.0.0.1/32    md5"
+	# checkpghba "host    postgres         datasync_user    ::1/128         md5"
+	# checkpghba "local   mobility    all                               md5"
+	# checkpghba "host    mobility    all         127.0.0.1/32          md5"
+	# checkpghba "host    mobility    all         ::1/128               md5"
+	echo $pghbaStatus
+}
+
+function exampleHealthCheck {
+	# Display HealthCheck name to user and create section in logs
+	echo -e "\nexampleHealthCheck..."
+	ghcNewHeader "exampleHealthCheck"
+	# Any logging info >> $generalHealthCheckLog
+
+	# Return either pass/fail, 0 indicates pass.
+	passFail 0
+}
 
 ##################################################################################################
 #	
@@ -2340,201 +2524,47 @@ EOF
 #
 ##################################################################################################
    4)
-while :
-do
- clear;
- datasyncBanner
-cd $cPWD;
- echo -e "\t1. Generate CSR and Key"
- echo -e "\t2. Generate Self Signed Certifiate"
- echo -e "\t3. Configure Certificate from 3rd party"
- echo -e "\n\t4. Verify Certificate/Key Pair"
- echo -e "\n\t0. Back"
- echo -n -e "\n\tSelection: "
- read opt
- a=true;
- case $opt in
- 1) clear;
-#Start of Generate CSR and Key script.
-while [ true ];do
-	read -ep "Enter path to store certificate files: " certPath;
-	if [ ! -d $certPath ]; then 
-		if askYesOrNo $"Path does not exist, would you like to create it now?"; then
-			mkdir -p $certPath;
-			break;
-		fi
-	else break;
-	fi
-done
-cd $certPath;
-echo -e "Generating a Key and CSR";
 
 while :
 do
-read -p "Enter password to make certificates: " -s -r pass;
-printf "\n";
-read -p "Confirm password: " -s -r passCompare;
-if [ "$pass" = "$passCompare" ]; then
-break;
-else
-	echo -e "\nPasswords do not match.\n";
-fi
-done
+    clear; datasyncBanner
+    cd $cPWD;
+    echo -e "\t1. Generate self-signed certificate"
+    echo -e "\n\t2. Create CSR + private key"
+    echo -e "\t3. Configure certificate from 3rd party"
+    echo -e "\n\t4. Verify certificate/key pair"
+    echo -e "\n\t0. Back"
+    echo -n -e "\n\tSelection: "
+    read opt
+    a=true;
+    case $opt in
 
-openssl genrsa -passout pass:${pass} -des3 -out server.key 2048;
-openssl req -new -key server.key -out server.csr -passin pass:${pass};
+    1) # Self-Signed Certificate
+        clear; echo -e "\nNote: The following will create a CSR, private key and generate a self-signed certificate.\n"
+        createCSRKey
+        signCert
+        configureMobility;;
 
-echo -e "\nserver.csr can be found at "${PWD##&/}"/server.csr";
-echo -e "server.key can be found at "${PWD##&/}"/server.key";
-read -p "Done - Press [Enter] to continue.";
-#End of Generate CSR and Key script.
-	;;
+    2) # CSR/KEY
+        clear;
+        createCSRKey;
+        echo; read -p "Press [Enter] to continue.";;
 
- 2) clear;
-#Start of Generate Self Signed Certifiate script.
-read -ep "Enter the full path for certificate files (ie. /root/certificates): " path;
-if [ -d $path ];then 
-	cd $path;
-echo "Listing certificate files..."
-ls *.key *.csr 2>/dev/null;
-if [ $? -eq 0 ];then
-read -ep "Enter key certificate name: " certKey;
-read -ep "Enter csr certificate name: " certCSR;
-if [ -f ${PWD}"/$certKey" ] && [ -f ${PWD}"/$certCSR" ];then
-read -ep "Enter amount of days certificate will be valid for(ie. 730): " certDays;
-	if [[ -z "$certDays" ]]; then
-		certDays=730;
-	fi
-echo -e "\nSigning CSR  -- Creating server.crt at ${PWD##&/}/server.crt";
-openssl x509 -req -days $certDays -in $certCSR -signkey $certKey -out server.crt 2>/dev/null;
-if [ $? -ne 1 ];then
-echo -e "\nRemoving password from Private Key";
-openssl rsa -in $certKey -out nopassword.key 2>/dev/null;
-if [ $? -ne 1 ];then
+    3) # Create PEM
+        clear;
+        createPEM;
+        configureMobility;;
 
-echo -e "\nCreating mobility.pem at "${PWD##&/}"/mobility.pem";
-echo "$(cat nopassword.key)" > mobility.pem;
-rm -f nopassword.key;
-echo "$(cat server.crt)" >> mobility.pem;
+    4) # Verify Certificates: Private Key, CSR, Public Certificate
+        clear;
+        verify;;
 
-certInstall=false;
-if askYesOrNo $"Copy mobility.pem to $dirVarMobility/device/mobility.pem";then
-cp mobility.pem $dirVarMobility/device/;
-echo -e "Copied mobility.pem to $dirVarMobility/device/mobility.pem";
-certInstall=true;
-fi
-if askYesOrNo $"Copy mobility.pem to $dirVarMobility/webadmin/server.pem";then
-cp mobility.pem $dirVarMobility/webadmin/server.pem;
-echo -e "Copied mobility.pem to $dirVarMobility/webadmin/server.pem\n";
-certInstall=true;
-fi
-if($certInstall);then
-echo "Please restart Mobility."
-fi
+    /q | q | 0)break;;
+    *) ;;
 
-else
-	echo "Invalid pass phrase."
-fi
-else
-	echo "Invalid pass phrase."
-fi
-else 
-	echo "Invalid file input.";
-fi
-else
-echo -e "Cannot find any or all certificates files.";
-fi
-else
-	echo "Invalid file path.";
-fi
-read -p "Press [Enter] to continue.";
-#End of Generate Self Signed Certifiate script.
-	;;
-
- 3) clear;
-	read -ep "Enter the full path for certificate files (ie. /root/certificates): " path;
-if [ -d $path ];then 
-	cd $path;
-echo "Listing certificate files..."
-ls *.key *.crt 2>/dev/null;
-if [ $? -eq 0 ];then
-read -ep "Enter key certificate name: " certKey;
-read -ep "Enter crt certificate name: " certCRT;
-if [ -f ${PWD}"/$certKey" ] && [ -f ${PWD}"/$certCRT" ];then
-	echo -e "\nRemoving password from Private Key";
-	openssl rsa -in $certKey -out nopassword.key 2>/dev/null;
-	if [ $? -ne 1 ];then
-
-	echo "$(cat  nopassword.key)" > mobility.pem;
-	rm -f nopassword.key;
-	echo "$(cat $certCRT)" >> mobility.pem;
-
-		if askYesOrNo $"Do you have any Intermediate certificates?";then
-		echo -e "\nList of CRT files:"
-		ls *.crt; printf "\n";
-		read -ep "Enter the full name of Intermediate CRT: " crtName;
-		if [ ! -z "$crtName" ];then
-		echo "$(cat $crtName)" >> mobility.pem;
-		fi
-			while [ true ];
-			do
-			crtName=""
-			if askYesOrNo $"Do you have anymore Intermediate certificates?";then
-				echo -e "\nList of CRT files:"
-				ls *.crt; printf "\n";
-				read -ep "Enter the full name of Intermediate CRT: " crtName;
-				if [ ! -z "$crtName" ];then
-					echo "$(cat $crtName)" >> mobility.pem;
-				fi
-			else
-				break;
-			fi
-			done
-		fi
-
-echo -e "\nCreating mobility.pem at "${PWD##&/}"/mobility.pem";
-certInstall=false;
-if askYesOrNo $"Copy mobility.pem to $dirVarMobility/device/mobility.pem";then
-cp mobility.pem $dirVarMobility/device/;
-echo -e "Copied mobility.pem to $dirVarMobility/device/mobility.pem";
-certInstall=true;
-fi
-if askYesOrNo $"Copy mobility.pem to $dirVarMobility/webadmin/server.pem";then
-cp mobility.pem $dirVarMobility/webadmin/server.pem;
-echo -e "Copied mobility.pem to $dirVarMobility/webadmin/server.pem\n";
-certInstall=true;
-fi
-if($certInstall);then
-echo "Please restart Mobility."
-fi
-
-else 
-	echo "Invalid pass phrase.";
-fi
-else 
-	echo "Invalid file input.";
-fi
-else
-echo -e "Cannot find any or all certificates files.";
-fi
-else
-	echo "Invalid file path.";
-fi
-read -p "Press [Enter] to continue.";
-;;
-
-4) # Verify certificate pair
-	clear;
-	verifyCertificatePair
-	echo ""
-    read -p "Press [Enter] to continue."; 
-    ;;
-
-/q | q | 0)break;;
-  *) ;;
 esac
 done
-;; 
+;;
 
 ##################################################################################################
 #	
