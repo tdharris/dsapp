@@ -381,8 +381,8 @@ fi
 			read -ep "$1 $YES_NO_PROMPT" REPLY
 			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
 			case $REPLY in
-				$YES_CAPS ) printf '\n'; return 0 ;;
-				$NO_CAPS ) printf '\n'; return 1 ;;
+				$YES_CAPS ) return 0 ;;
+				$NO_CAPS ) return 1 ;;
 				* ) REPLY=""
 			esac
 		done
@@ -440,7 +440,7 @@ fi
 		mkdir $dsappupload/version
 
 		if askYesOrNo $"Grab log files?"; then
-			echo -e "Grabbing log files..."
+			echo -e "\nGrabbing log files..."
 			# Copy log files..
 			# cd $log
 			# cp --parents $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog $dsappupload  2>/dev/null
@@ -1735,7 +1735,7 @@ function generalHealthCheck {
 	if askYesOrNo "Do you want to view the log file?"; then
 		less $ghcLog
 	fi
-	echo -e "Log created at: $ghcLog"
+	echo -e "Log created at: $ghcLog\n"
 	read -p "Press [Enter] to continue."
 }
 
@@ -2055,7 +2055,7 @@ function ghc_checkReferenceCount {
 	problem=false
 	# Any logging info >> $ghcLog
 
-	psql -U $dbUsername datasync -c "select \"referenceCount\" from targets ORDER BY \"referenceCount\" DESC;" >>$ghcLog 2>&1 
+	 
 	if [[ `psql -U $dbUsername datasync -c "select \"referenceCount\" from targets ORDER BY \"referenceCount\" DESC;" 2>/dev/null | awk '{ print $1 }' | tr -d [:alpha:] | tr -d [:punct:] | sed '/^$/d' | head -n1` -gt 1 ]]; then
 		problem=true
 		echo -e "Detected referenceCount issue in datasync db.\nSOLUTION: See TID 7012163" >>$ghcLog
@@ -2064,7 +2064,9 @@ function ghc_checkReferenceCount {
 
 	if ($problem); then
 		passFail 1
-	else passFail 0
+	else 
+		echo -e "No problems detected with referenceCount in targets table.">>$ghcLog
+		passFail 0
 	fi
 }
 
