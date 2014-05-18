@@ -1717,6 +1717,7 @@ function generalHealthCheck {
 	ghc_verifyNightlyMaintenance
 	ghc_verifyCertificates
 	ghc_checkProxy
+	ghc_checkManualMaintenance
 
 	# View Logs?
 	echo
@@ -1988,6 +1989,26 @@ function ghc_checkProxy {
 
 	# Return either pass/fail, 0 indicates pass.
 	if ($problem); then
+		passFail 1
+	else passFail 0
+	fi
+}
+
+function ghc_checkManualMaintenance {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking manual maintenance..."
+	dbMaintTolerance=180
+	problem=false
+
+	# If last maintenance was >90 days ago
+	if [[ `psql -U $dbUsername mobility -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;" >>$ghcLog | grep -vi "rows" | tr -d [:alpha:] | tr -d [:punct:]| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' | sort -nr | head -n1` -ge $dbMaintTolerance ]]; then
+		problem=true
+	elif [[ `psql -U $dbUsername datasync -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;" >>$ghcLog | grep -vi "rows" | tr -d [:alpha:] | tr -d [:punct:]| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' | sort -nr | head -n1` -ge $dbMaintTolerance ]]; then
+		problem=true
+	fi
+	
+	if ($problem); then
+		echo -e "No manual maintenance in over $dbMaintTolerance days.\nSOLUTION: TID 7009453" >>$ghcLog
 		passFail 1
 	else passFail 0
 	fi
