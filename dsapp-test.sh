@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='166'
+	dsappversion='167'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -51,7 +51,16 @@
 	warn="/var/log/warn"
 
 	# dsapp Logs
-	generalHealthCheckLog="$dsappLogs/generalHealthCheck.log"
+	ghcLog="$dsappLogs/generalHealthCheck.log"
+
+	# Fetch variables from confs
+	ldapAddress=`grep -i "<ldapAddress>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	ldapPort=`grep -i "<ldapPort>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	ldapAdmin=`grep -im1 "<dn>" /etc/datasync/configengine/configengine.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	trustedName=`cat $gconf| grep -i trustedAppName | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	mPort=`grep -i "<listenPort>" $mconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	gPort=`grep -i "<port>" $gconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	mlistenAddress=`grep -i "<listenAddress>" $mconf | sed 's/<[^>]*[>]//g'`
 	
 	##################################################################################################
 	#	Version: Eenou+
@@ -242,12 +251,6 @@ function installAlias {
 	fi
 }
 
-# Skips auto-update if file is not called dsapp.sh (good for testing purposes when using dsapp-test.sh)
-if [[ "$0" = *dsapp.sh ]]; then
-	autoUpdateDsapp;
-	installAlias
-fi
-
 	#Get datasync version.
 	function getDSVersion {
 		dsVersion=`cat $version | cut -c1-7 | tr -d '.'`
@@ -301,22 +304,6 @@ fi
 		fi
 	}
 
-	# Get & decode trustedAppKey
-	function getTrustedAppKey {
-		trustedAppKey=`cat $gconf | grep -i trustedAppKey | sed 's/<[^>]*[>]//g' | tr -d ' '`
-		if [[ $(isStringProtected protected $gconf) -eq 1 ]];then
-			trustedAppKey=$(decodeString $trustedAppKey)
-		fi
-	}
-
-	# Get & decode ldapLogin password
-	function getldapLogin {
-		ldapPassword=`sed -n "/<login>/,/<\/login>/p" $ceconf | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
-		if [[ $(isStringProtected login $ceconf) -eq 1 ]];then
-			ldapPassword=$(decodeString $ldapPassword)
-		fi
-	}
-
 if [[ "$forceMode" -ne "1" ]];then
 	#Database .pgpass file / version check.
 	if [ $dsVersion -gt $dsVersionCompare ];then
@@ -339,6 +326,34 @@ if [[ "$forceMode" -ne "1" ]];then
 		echo "*:*:*:*:"$dbPassword > /root/.pgpass;
 		chmod 0600 /root/.pgpass;
 	fi
+fi
+
+	# Get & decode trustedAppKey
+	function getTrustedAppKey {
+		trustedAppKey=`cat $gconf | grep -i trustedAppKey | sed 's/<[^>]*[>]//g' | tr -d ' '`
+		if [[ $(isStringProtected protected $gconf) -eq 1 ]];then
+			trustedAppKey=$(decodeString $trustedAppKey)
+		fi
+	}
+
+	# Get & decode ldapLogin password
+	function getldapPassword {
+		# Keeping protected for General Health Check Log
+		protectedldapPassword=`sed -n "/<login>/,/<\/login>/p" $ceconf | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
+		ldapPassword="$protectedldapPassword"
+		if [[ $(isStringProtected login $ceconf) -eq 1 ]];then
+			ldapPassword=$(decodeString $ldapPassword)
+		fi
+	}
+
+# Things to run in initialization
+getldapPassword
+getTrustedAppKey
+
+# Skips auto-update if file is not called dsapp.sh (good for testing purposes when using dsapp-test.sh)
+if [[ "$0" = *dsapp.sh ]]; then
+	autoUpdateDsapp;
+	installAlias
 fi
 
 ##################################################################################################
@@ -964,10 +979,6 @@ function addGroup {
 	ldapGroups=$dsapptmp/ldapGroups.txt
 	ldapGroupMembership=$dsapptmp/ldapGroupMembership.txt
 	rm -f $ldapGroups $ldapGroupMembership
-	ldapAddress=`grep -i "<ldapAddress>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	ldapPort=`grep -i "<ldapPort>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	ldapAdmin=`grep -im1 "<dn>" /etc/datasync/configengine/configengine.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	getldapLogin
 	psql -U $dbUsername datasync -c "select distinct dn from targets where \"targetType\"='group'" | grep -i cn > $ldapGroups;
 	echo -e "\nMobility Group(s):"
 	cat $ldapGroups
@@ -1134,8 +1145,6 @@ function soapLogin {
 poa=`cat $gconf| grep -i soap | sed 's/<[^>]*[>]//g' | tr -d ' ' | sed 's|[a-zA-Z,]||g' | tr -d '//' | sed 's/^.//'`
 poaAddress=`echo $poa | sed 's+:.*++g'`
 port=`echo $poa | sed 's+.*:++g'`
-trustedName=`cat $gconf| grep -i trustedAppName | sed 's/<[^>]*[>]//g' | tr -d ' '`
-getTrustedAppKey
 
 soapLoginResponse=`netcat $poaAddress $port << EOF
 POST /soap HTTP/1.0
@@ -1332,8 +1341,13 @@ function updateMobilityFTP {
 }
 
 function checkNightlyMaintenance {
+	problem=false
 	echo -e "\nNightly Maintenance:"
-	cat $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | grep -i database
+	cat $mconf | grep -i database
+	grep -iw "<databaseMaintenance>1</databaseMaintenance>" $mconf
+	if [ $? -ne 0 ]; then
+		problem=true
+	fi
 	echo -e "\nNightly Maintenance History:"
 	history=`cat $mAlog | grep -i  "nightly maintenance" | tail -5`
 	if [ -z "$history" ]; then
@@ -1350,10 +1364,15 @@ function checkNightlyMaintenance {
 		done
 		if [ -z "$history" ]; then
 			echo -e "Nothing found. Nightly Maintenance has not run recently."
+			problem=true
 		fi
 	else echo -e "$mAlog\n""$history"
 	fi
 	echo ""
+	if ($problem); then 
+		return 1 
+	else return 0
+	fi
 }
 
 function showStatus {
@@ -1688,35 +1707,39 @@ function verify {
 #
 ##################################################################################################
 function generalHealthCheck {
-	clear; echo -e "##########################################################\n#	\n#  General Health Check\n#\n##########################################################" > $generalHealthCheckLog
+	clear; echo -e "##########################################################\n#	\n#  General Health Check\n#\n##########################################################\n" > $ghcLog
 
 	# Begin Checks
-	checkServices
-	# checkXML
-	checkPSQLConfig
+	ghc_CheckServices
+	ghc_checkXML
+	ghc_checkPSQLConfig
+	ghc_checkLDAP
+	ghc_verifyNightlyMaintenance
+	ghc_verifyCertificates
 
 	# View Logs?
 	echo
 	if askYesOrNo "Do you want to view the log file?"; then
-		less $generalHealthCheckLog
+		less $ghcLog
 	fi
+	echo -e "Log created at: $ghcLog"
 	read -p "Press [Enter] to continue."
 }
 
 # Utility Functions
 function ghcNewHeader {
 	echo -e "\n$1"
-	echo -e "\n$1
-==========================================================" >> $generalHealthCheckLog
+	echo -e "==========================================================\n$1
+==========================================================" >> $ghcLog
 }
 
 function passFail {
 	if [ $1 -ne 0 ]; then
 		echo -e "${RED}Failed.${NC}" 
- 		echo -e "\nFailed." >> $generalHealthCheckLog
+ 		echo -e "\nFailed.\n" >> $ghcLog
  	else 
  		echo -e "${GREEN}Passed.${NC}"
-		echo -e "\nPassed." >> $generalHealthCheckLog
+		echo -e "\nPassed.\n" >> $ghcLog
  	fi
 }
 
@@ -1724,16 +1747,45 @@ function isStringInFile {
 	# $1=whatString?, $2=filename
 	# echo "$1"
 	# echo -e "isStringInFile: $1:$2\n"
-	grep -i "$1" "$2"
+	grep -iw "$1" "$2" >/dev/null
 	if [ $? -eq 0 ]; then
-		echo true
+		return 0
 	else 
-		echo false
+		return 1
 	fi
 }
 
+function empty {
+    local var="$1"
+
+    # Return true if:
+    # 1.    var is a null string ("" as empty string)
+    # 2.    a non set variable is passed
+    # 3.    a declared variable or array but without a value is passed
+    # 4.    an empty array is passed
+    if test -z "$var"
+    then
+        [[ $( echo "1" ) ]]
+        return
+
+    # Return true if var is zero (0 as an integer or "0" as a string)
+    elif [ "$var" == 0 2> /dev/null ]
+    then
+        [[ $( echo "1" ) ]]
+        return
+
+    # Return true if var is 0.0 (0 as a float)
+    elif [ "$var" == 0.0 2> /dev/null ]
+    then
+        [[ $( echo "1" ) ]]
+        return
+    fi
+
+    [[ $( echo "" ) ]]
+}
+
 # Check Functions/Modules
-function checkServices {
+function ghc_CheckServices {
 	ghcNewHeader "Checking Mobility Services..."
 
 	mstatus=true;
@@ -1741,7 +1793,7 @@ function checkServices {
 
 	failure="";
 	function checkStatus {
-		rcdatasync-$1 status >> $generalHealthCheckLog
+		rcdatasync-$1 status >> $ghcLog
 		if [ $? != 0 ] 
 			then status=false;
 			failure+="$1. "
@@ -1749,26 +1801,34 @@ function checkServices {
 	} 
 
 	function checkMobility {
-		port=`grep -i "<listenPort>" $mconf | sed 's/<[^>]*[>]//g' | tr -d ' '`;
-		netstat -patune | grep -i ":$port" | grep -i listen > /dev/null
+		
+		netstat -patune | grep -i ":$mPort" | grep -i listen > /dev/null
 		if [ $? != 0 ] 
 			then mstatus=false;
-			failure+="mobility-connector ($port). "
+			failure+="mobility-connector ($mPort). "
 		fi
-		echo "Mobility Connector listening on port $port: $mstatus" >> $generalHealthCheckLog
+		echo "Mobility Connector listening on port $mPort: $mstatus" >> $ghcLog
 	} 
 
 	function checkGroupWise {
-		port=`grep -i "<port>" $gconf | sed 's/<[^>]*[>]//g' | tr -d ' '`;
-		netstat -patune | grep -i ":$port" | grep -i listen > /dev/null
+		netstat -patune | grep -i ":$gPort" | grep -i listen > /dev/null
 		if [ $? != 0 ] 
 			then gstatus=false;
-			failure+="groupwise-connector ($port). "
+			failure+="groupwise-connector ($gPort). "
 		fi
-		echo "GroupWise Connector listening on port $port: $gstatus" >> $generalHealthCheckLog
+		echo "GroupWise Connector listening on port $gPort: $gstatus" >> $ghcLog
+	}
+
+	function checkPostgresql {
+		rcpostgresql status >> $ghcLog
+		psqlStatus="$?"
+		if [[ $psqlStatus -ne 0 ]]; then
+			failure+="postgresql"
+		fi
 	}
 
 	# Check Mobility Services
+	checkPostgresql
 	checkStatus configengine
 	checkStatus webadmin
 	checkStatus connectors
@@ -1777,66 +1837,148 @@ function checkServices {
 	checkMobility
 	checkGroupWise
 
- 	if (! $mstatus || ! $gstatus) then
+ 	if [[ ! "$mstatus" || ! "$psqlStatus" || ! "$gstatus" ]]; then
  		passFail 1
  	else passFail 0
  	fi
 }
 
-# TODO: How to detect if there were errors from the command to trigger fail?
-function checkXML {
+function ghc_checkXML {
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Validating XML configuration files..."
-	# Any logging info >> $generalHealthCheckLog
+	# Any logging info >> $ghcLog
 
-	echo -e "Checking any XML files in /etc/datasync..." >> $generalHealthCheckLog
-	validateXML=`find /etc/datasync/ -type f -name *.xml -exec xmllint --noout {} \; -exec echo $?:{} \;`
-	if [ -n "$validateXML" ]; then echo "Failed"; fi
+	echo -e "Checking for XML files in /etc/datasync:" >> $ghcLog
+	problem=false
 
+	# using -print0 to save memory, | to encapsulated while to preserve global variable "problem" when assessing boolean for passFail
+	find /etc/datasync/ -type f -name "*.xml" -print0 | \
+	{ while read -r -d $'\0' file
+		do 
+			xmllint --noout "$file" 2>/dev/null >> $ghcLog
+			status="$?"
+			if [ $status -ne 0 ]; then
+				problem=true;
+			fi
+			echo "$status:$file" >> $ghcLog
+		done
 
-	# Return either pass/fail, 0 indicates pass.
-	passFail 0
+		# Return either pass/fail, 0 indicates pass.
+		if ($problem); then
+			passFail 1
+		else passFail 0
+		fi
+	}
+	
 }
 
-function checkPSQLConfig {
+function ghc_checkPSQLConfig {
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking PSQL configuration..."
 	pghba="/var/lib/pgsql/data/pg_hba.conf"
-	pghbaStatus=true
+	problem=0
+
+	echo "$pghba:" >> $ghcLog
 
 	function checkpghba {
-		string="$1"
-		# echo "checkpghba: $1:$pghba"
-		# isStringInFile "$string" "$pghba"
-		if (! $(isStringInFile "$1" "$pghba")); then 
-			pghbaStatus=false
-		fi 
+		isStringInFile "$1" "$pghba"
+		returned="$?"
+		if [ "$returned" -ne 0 ]; then
+			problem=1
+		fi
+		echo "$returned:$1" >> $ghcLog
 	}
 
 	# /var/lib/pgsql/data/postgresql.conf
-	checkpghba "local all postgres123 ident sameuser"
-	# checkpghba "host all postgres 127.0.0.1/32 ident sameuser"
-	# checkpghba "host all postgres ::1/128 ident sameuser"
-	# checkpghba "local   datasync         all                       md5"
-	# checkpghba "host    datasync         all       127.0.0.1/32    md5"
-	# checkpghba "host    datasync         all       ::1/128         md5"
-	# checkpghba "local   postgres         datasync_user                    md5"
-	# checkpghba "host    postgres         datasync_user    127.0.0.1/32    md5"
-	# checkpghba "host    postgres         datasync_user    ::1/128         md5"
-	# checkpghba "local   mobility    all                               md5"
-	# checkpghba "host    mobility    all         127.0.0.1/32          md5"
-	# checkpghba "host    mobility    all         ::1/128               md5"
-	echo $pghbaStatus
+	checkpghba "local all postgres ident sameuser"
+	checkpghba "host all postgres 127.0.0.1/32 ident sameuser"
+	checkpghba "host all postgres ::1/128 ident sameuser"
+	checkpghba "local   datasync         all                       md5"
+	checkpghba "host    datasync         all       127.0.0.1/32    md5"
+	checkpghba "host    datasync         all       ::1/128         md5"
+	checkpghba "local   postgres         datasync_user                    md5"
+	checkpghba "host    postgres         datasync_user    127.0.0.1/32    md5"
+	checkpghba "host    postgres         datasync_user    ::1/128         md5"
+	checkpghba "local   mobility    all                               md5"
+	checkpghba "host    mobility    all         127.0.0.1/32          md5"
+	checkpghba "host    mobility    all         ::1/128               md5"
+	
+	if [ $problem -ne 0 ]; then
+		passFail 1
+	else passFail 0
+	fi
+}
+
+function ghc_checkLDAP {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Verifying LDAP connectivity..."
+	# Any logging info >> $ghcLog
+
+	problem=false
+
+	# Only test if authentication is ldap in mobility connector.xml
+	if [[ -n `grep -i "<authentication>" $mconf | grep -i ldap` ]]; then
+		echo -e "ldapServer: $ldapAddress\nldapPort: $ldapPort\nldapAdmin: $ldapAdmin\nldapPassword: $protectedldapPassword\n" >> $ghcLog
+		if (empty "${ldapPort}" || empty "${ldapAdmin}" || empty "${ldapPassword}"); then
+			echo -e "Unable to determine ldap variables." >> $ghcLog
+			problem=true
+		fi
+
+		if [[ "$ldapPort" -eq "389" ]]; then
+			ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" >>$ghcLog 2>&1 
+			if [[ "$?" -ne 0 ]]; then
+				problem=true
+			fi
+		elif [[ "$ldapPort" -eq "636" ]]; then
+			ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" >>$ghcLog 2>&1
+			if [[ "$?" -ne 0 ]]; then
+				problem=true
+			fi
+		fi
+	else echo -e "Mobility not configured to use LDAP in $mconf\nSkipping test." >>$ghcLog
+	fi
+	
+	# Return either pass/fail, 0 indicates pass.
+	if ($problem); then
+		passFail 1
+	else passFail 0
+	fi
+}
+
+function ghc_verifyNightlyMaintenance {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking Nightly Maintenance..."
+	# Any logging info >> $ghcLog
+
+	checkNightlyMaintenance  >>$ghcLog
+	if [ $? -ne 0 ]; then
+		passFail 1
+	else passFail 0
+	fi
+}
+
+function ghc_verifyCertificates {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Verifying Certificates..."
+	# Any logging info >> $ghcLog
+
+	echo | openssl s_client -showcerts -connect $mlistenAddress:$mPort >>$ghcLog 2>&1;
+	if [ $? -ne 0 ]; then
+		passFail 1
+	else passFail 0
+	fi
 }
 
 function exampleHealthCheck {
 	# Display HealthCheck name to user and create section in logs
-	echo -e "\nexampleHealthCheck..."
 	ghcNewHeader "exampleHealthCheck"
-	# Any logging info >> $generalHealthCheckLog
+	# Any logging info >> $ghcLog
 
 	# Return either pass/fail, 0 indicates pass.
-	passFail 0
+	if ($problem); then
+		passFail 1
+	else passFail 0
+	fi
 }
 
 ##################################################################################################
@@ -2796,8 +2938,8 @@ EOF
 		do
 		clear;
 		datasyncBanner
-		 echo -e "\t1. Nightly Maintenance Check"
-		 echo -e "\t2. General Health Check (beta)"
+		 echo -e "\t1. General Health Check (beta)"
+		 echo -e "\t2. Nightly Maintenance Check"
 		 echo -e "\n\t3. Show Sync Status"
 		 echo -e "\t4. Mobility pending syncevents by User"
 		 echo -e "\t5. View Attachments by User"
@@ -2807,14 +2949,14 @@ EOF
 		 echo -n -e "\n\tSelection: "
 		 read opt
 		 case $opt in
-		 	1) # Nightly Maintenance Check
+		 	1) # General Health Check
+				generalHealthCheck
+				;;
+
+			2) # Nightly Maintenance Check
 				clear
 				checkNightlyMaintenance
 				read -p "Press [Enter] to continue.";
-				;;
-
-			2) # General Health Check
-				generalHealthCheck
 				;;
 
 			3)  clear;
