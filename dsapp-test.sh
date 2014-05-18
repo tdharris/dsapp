@@ -1707,7 +1707,9 @@ function verify {
 #
 ##################################################################################################
 function generalHealthCheck {
-	clear; echo -e "##########################################################\n#	\n#  General Health Check\n#\n##########################################################\n" > $ghcLog
+	clear; echo -e "##########################################################\n#	\n#  General Health Check\n#\n##########################################################" > $ghcLog
+	echo -e "Gathered by dsapp v$dsappversion on $(date)\n" >> $ghcLog
+	ghc_problem=false
 
 	# Begin Checks
 	ghc_CheckServices
@@ -1719,6 +1721,14 @@ function generalHealthCheck {
 	ghc_checkProxy
 	ghc_checkManualMaintenance
 	ghc_checkReferenceCount
+	ghc_checkDiskSpace
+
+	echo -e "\n-------------------------------------"
+	ghcNewHeader "General Health Check Results:"
+	if ($ghc_problem); then
+		passFail 1
+	else passFail 0
+	fi
 
 	# View Logs?
 	echo
@@ -1740,6 +1750,7 @@ function passFail {
 	if [ $1 -ne 0 ]; then
 		echo -e "${RED}Failed.${NC}" 
  		echo -e "\nFailed.\n" >> $ghcLog
+ 		ghc_problem=true
  	else 
  		echo -e "${GREEN}Passed.${NC}"
 		echo -e "\nPassed.\n" >> $ghcLog
@@ -2017,7 +2028,7 @@ function ghc_checkManualMaintenance {
 	grabDS=`psql -U $dbUsername datasync -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;"`
 	grabMob=`psql -U $dbUsername mobility -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;"`
 	echo -e "$grabDS\n$grabMob" >>$ghcLog
-	
+
 	checkDatasync=`echo "$grabDS" | awk '{ print $6 }' | tr -d [:alpha:] | tr -d [:punct:]| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' | sort -nr | head -n1`
 	checkMobility=`echo "$grabMob" | awk '{ print $6 }' | tr -d [:alpha:] | tr -d [:punct:]| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' | sort -nr | head -n1`
 	
@@ -2048,6 +2059,25 @@ function ghc_checkReferenceCount {
 		echo -e "Detected referenceCount issue in datasync db.\nSOLUTION: See TID 7012163" >>$ghcLog
 	fi
 
+
+	if ($problem); then
+		passFail 1
+	else passFail 0
+	fi
+}
+
+function ghc_checkDiskSpace {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking disk space..."
+	problem=false
+
+	df -H >>$ghcLog 2>&1
+	output=`df -H /var | grep 'dev' | awk '{ print $5 " " $1 " " $6 }'`
+	size=$(echo $output | awk '{ print $1}' | cut -d'%' -f1  )
+	if [ $size -ge 90 ]; then
+		problem=true
+	    echo -e "System is low on disk space.\nSOLUTION: See TID 7010533, 7013456, 7010711" >>$ghcLog 
+	fi
 
 	if ($problem); then
 		passFail 1
