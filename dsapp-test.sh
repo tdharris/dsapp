@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='167'
+	dsappversion='166'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -1716,6 +1716,7 @@ function generalHealthCheck {
 	ghc_checkLDAP
 	ghc_verifyNightlyMaintenance
 	ghc_verifyCertificates
+	ghc_checkProxy
 
 	# View Logs?
 	echo
@@ -1969,9 +1970,33 @@ function ghc_verifyCertificates {
 	fi
 }
 
+function ghc_checkProxy {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking for proxy configuration..."
+	proxyConf="/etc/sysconfig/proxy"
+	problem=false
+
+	# Is proxy configured?
+	if [[ -n `grep -i "PROXY_ENABLED=\"no\"" $proxyConf` ]] || [[ -n `env | grep -i proxy` ]]; then
+		# TODO: Need to also check for hostname.dnsdomainname in NO_PROXY
+		grep -i "NO_PROXY=" $proxyConf | grep -v '^[[:space:]]*#' >>$ghcLog | awk '/localhost/ && /127.0.0.1/'
+		if [ $? -ne 0 ]; then
+			problem=true
+			echo -e "Invalid configuration of proxy detected.\n\nSOLUTION: See TID 7009730 for proper proxy configuration with Mobility" >>$ghcLog
+		fi
+	fi
+
+	# Return either pass/fail, 0 indicates pass.
+	if ($problem); then
+		passFail 1
+	else passFail 0
+	fi
+}
+
 function exampleHealthCheck {
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "exampleHealthCheck"
+	problem=false
 	# Any logging info >> $ghcLog
 
 	# Return either pass/fail, 0 indicates pass.
