@@ -2003,13 +2003,15 @@ function ghc_checkProxy {
 	problem=false
 
 	# Is proxy configured?
-	if [[ -n `grep -i "PROXY_ENABLED=\"no\"" $proxyConf` ]] || [[ -n `env | grep -i proxy` ]]; then
+	if [[ -n `grep -i "PROXY_ENABLED=\"yes\"" $proxyConf` ]] || [[ -n `env | grep -i proxy` ]]; then
+		echo "Proxy detected in configuration or env" >>$ghcLog
 		# TODO: Need to also check for hostname.dnsdomainname in NO_PROXY
 		grep -i "NO_PROXY=" $proxyConf | grep -v '^[[:space:]]*#' >>$ghcLog | awk '/localhost/ && /127.0.0.1/'
 		if [ $? -ne 0 ]; then
 			problem=true
 			echo -e "Invalid configuration of proxy detected.\n\nSOLUTION: See TID 7009730 for proper proxy configuration with Mobility" >>$ghcLog
 		fi
+	else echo "No proxy detected in configuration or env" >>$ghcLog
 	fi
 
 	# Return either pass/fail, 0 indicates pass.
@@ -2040,7 +2042,7 @@ function ghc_checkManualMaintenance {
 	fi
 	
 	if ($problem); then
-		echo -e "No manual maintenance in over $dbMaintTolerance days.\nSOLUTION: TID 7009453" >>$ghcLog
+		echo -e "\nNo manual maintenance in over $dbMaintTolerance days.\nSOLUTION: TID 7009453" >>$ghcLog
 		passFail 1
 	else passFail 0
 	fi
