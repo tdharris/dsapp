@@ -2013,11 +2013,18 @@ function ghc_checkManualMaintenance {
 	ghcNewHeader "Checking manual maintenance..."
 	dbMaintTolerance=180
 	problem=false
-
+	
+	grabDS=`psql -U $dbUsername datasync -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;"`
+	grabMob=`psql -U $dbUsername mobility -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;"`
+	echo -e "$grabDS\n$grabMob" >>$ghcLog
+	
+	checkDatasync=`echo "$grabDS" | awk '{ print $6 }' | tr -d [:alpha:] | tr -d [:punct:]| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' | sort -nr | head -n1`
+	checkMobility=`echo "$grabMob" | awk '{ print $6 }' | tr -d [:alpha:] | tr -d [:punct:]| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' | sort -nr | head -n1`
+	
 	# If last maintenance was >90 days ago
-	if [[ `psql -U $dbUsername mobility -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;" >>$ghcLog | grep -vi "rows" | tr -d [:alpha:] | tr -d [:punct:]| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' | sort -nr | head -n1` -ge $dbMaintTolerance ]]; then
+	if [[ -z "$checkDatasync" ]] || [[ "$checkDatasync" -ge $dbMaintTolerance ]]; then
 		problem=true
-	elif [[ `psql -U $dbUsername datasync -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;" >>$ghcLog | grep -vi "rows" | tr -d [:alpha:] | tr -d [:punct:]| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' | sort -nr | head -n1` -ge $dbMaintTolerance ]]; then
+	elif [[ -z "$checkMobility" ]] || [[ "$checkMobility" -ge $dbMaintTolerance ]]; then
 		problem=true
 	fi
 	
@@ -2026,6 +2033,7 @@ function ghc_checkManualMaintenance {
 		passFail 1
 	else passFail 0
 	fi
+	# psql -U datasync_user datasync -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;" | awk '{ print $6 }' | tr -d [:alpha:] | tr -d [:punct:]| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' | sort -nr | head -n1
 }
 
 function ghc_checkReferenceCount {
