@@ -1000,7 +1000,7 @@ function addGroup {
 		cat $ldapGroupMembership | psql -U datasync_user datasync -c "\copy \"membershipCache\"(memberdn,groupdn) from STDIN WITH DELIMITER ',' CSV HEADER"
 		psql -U $dbUsername datasync -c "delete from targets where disabled='1'" >/dev/null;
 		psql -U $dbUsername datasync -c "update targets set \"referenceCount\"='1' where disabled='0'" >/dev/null;
-		echo -e "Group Membership has been updated.\n"
+		echo -e "referenceCount has been fixed.\nGroup Membership has been updated.\n"
 		read -p "Press [Enter] to continue"
 		else continue;
 	fi
@@ -1348,20 +1348,20 @@ function checkNightlyMaintenance {
 	if [ $? -ne 0 ]; then
 		problem=true
 	fi
+
 	echo -e "\nNightly Maintenance History:"
-	history=`cat $mAlog | grep -i  "nightly maintenance" | tail -5`
+	history=`grep -i  "nightly maintenance" $mAlog | tail -5`
 	if [ -z "$history" ]; then
-		daysOld=0;
-		while [[ $daysOld -le 5 ]]; do
-			daysOld=$(($daysOld+1));
-			appendDate=`date +"%Y%m%d" --date="-$daysOld day"`
-			history=`grep -i "nightly maintenance" "$mAlog-$appendDate.gz" 2>/dev/null | tail -5`
+		for file in `ls -t $mAlog-* | head -5`
+		do
+			history=`zgrep -i "nightly maintenance" "$file" 2>/dev/null | tail -5`
 			if [ -n "$history" ]; then
-				echo "$mAlog-"$appendDate".gz"
+				echo -e "$file"
 				echo -e "$history"
 				break;
 			fi
 		done
+
 		if [ -z "$history" ]; then
 			echo -e "Nothing found. Nightly Maintenance has not run recently."
 			problem=true
@@ -1718,6 +1718,7 @@ function generalHealthCheck {
 	ghc_verifyCertificates
 	ghc_checkProxy
 	ghc_checkManualMaintenance
+	ghc_checkReferenceCount
 
 	# View Logs?
 	echo
@@ -1962,10 +1963,23 @@ function ghc_verifyNightlyMaintenance {
 function ghc_verifyCertificates {
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Verifying Certificates..."
+	devCert="/var/lib/datasync/device/mobility.pem"
+	webCert="/var/lib/datasync/webadmin/server.pem"
+	problem=false
 	# Any logging info >> $ghcLog
 
 	echo | openssl s_client -showcerts -connect $mlistenAddress:$mPort >>$ghcLog 2>&1;
 	if [ $? -ne 0 ]; then
+		problem=true
+	fi
+
+	grep -Pl "\r" $devCert $webCert &>/dev/null
+	if [ $? -eq 0 ]; then
+		problem=true
+		echo -e "\nProblem detected with certificates: ^M dos characters.\nSOLUTION: See TID 7014821." >>$ghcLog
+	fi
+
+	if ($problem); then
 		passFail 1
 	else passFail 0
 	fi
@@ -2009,6 +2023,25 @@ function ghc_checkManualMaintenance {
 	
 	if ($problem); then
 		echo -e "No manual maintenance in over $dbMaintTolerance days.\nSOLUTION: TID 7009453" >>$ghcLog
+		passFail 1
+	else passFail 0
+	fi
+}
+
+function ghc_checkReferenceCount {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking referenceCount..."
+	problem=false
+	# Any logging info >> $ghcLog
+
+	psql -U $dbUsername datasync -c "select \"referenceCount\" from targets ORDER BY \"referenceCount\" DESC;" >>$ghcLog 2>&1 
+	if [[ `psql -U $dbUsername datasync -c "select \"referenceCount\" from targets ORDER BY \"referenceCount\" DESC;" 2>/dev/null | awk '{ print $1 }' | tr -d [:alpha:] | tr -d [:punct:] | sed '/^$/d' | head -n1` -gt 1 ]]; then
+		problem=true
+		echo -e "Detected referenceCount issue in datasync db.\nSOLUTION: See TID 7012163" >>$ghcLog
+	fi
+
+
+	if ($problem); then
 		passFail 1
 	else passFail 0
 	fi
