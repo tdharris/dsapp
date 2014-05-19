@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='167'
+	dsappversion='168'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -2090,7 +2090,7 @@ function ghc_checkProxy {
 
 function ghc_checkManualMaintenance {
 	# Display HealthCheck name to user and create section in logs
-	ghcNewHeader "Checking manual maintenance..."
+	ghcNewHeader "Checking for database maintenance: vacuum..."
 	dbMaintTolerance=180
 	problem=false
 	
@@ -2268,8 +2268,8 @@ function ghc_checkUpdateSH {
 	problem=false
 	# Any logging info >>$ghcLog
 
-	ghc_dbVersion=`grep -i "service_version" $updatelog | tail -n1 | grep -Po "(?<=service_version = ')[^<]*(?=',)"`
-	echo "Schema version according to update.log: $ghc_dbVersion" >>$ghcLog
+	ghc_dbVersion=`psql -U datasync_user datasync -t -c "select service_version from services;" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
+	echo "Service version: $ghc_dbVersion" >>$ghcLog
 	echo -e "RPM version: $mobilityVersion" >>$ghcLog
 	if [[ $ghc_dbVersion != "$mobilityVersion" ]]; then
 		problem=true
