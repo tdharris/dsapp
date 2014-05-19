@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='169'
+	dsappversion='170'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -1772,9 +1772,9 @@ function generalHealthCheck {
 	if (! $silent); then
 		if askYesOrNo "Do you want to view the log file?"; then
 			less $ghcLog
-			echo -e "Log created at: $ghcLog\n"
-		read -p "Press [Enter] to continue."
 		fi
+		echo -e "Log created at: $ghcLog\n"
+		read -p "Press [Enter] to continue."
 	fi
 }
 
@@ -1885,14 +1885,14 @@ function ghc_CheckServices {
 	}
 
 	function checkPortConnectivity {
-		netcat -z $mlistenAddress $mPort >> $ghcLog 2>&1
+		netcat -z -w 2 $mlistenAddress $mPort >> $ghcLog 2>&1
 		if [ $? -ne 0 ]; then
 			mstatus=false
 			echo -e "\nConnection refused on port $mPort" >> $ghcLog
 		else echo -e "\nConnection successful on port $mPort" >> $ghcLog
 		fi
 
-		netcat -z $glistenAddress $gPort >> $ghcLog 2>&1
+		netcat -z -w 2 $glistenAddress $gPort >> $ghcLog 2>&1
 		if [ $? -ne 0 ]; then
 			gstatus=false
 			echo "Connection refused on port $gPort" >> $ghcLog
@@ -2110,8 +2110,8 @@ function ghc_checkManualMaintenance {
 	dbMaintTolerance=180
 	problem=false
 	
-	grabDS=`psql -U $dbUsername datasync -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;"`
-	grabMob=`psql -U $dbUsername mobility -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;"`
+	grabDS=`psql -U $dbUsername datasync -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;" 2>/dev/null`
+	grabMob=`psql -U $dbUsername mobility -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;" 2>/dev/null`
 	echo -e "$grabDS\n$grabMob" >>$ghcLog
 
 	checkDatasync=`echo "$grabDS" | awk '{ print $6 }' | tr -d [:alpha:] | tr -d [:punct:]| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' | sort -nr | head -n1`
@@ -2180,7 +2180,7 @@ function ghc_checkMemory {
 	# Any logging info >> $ghcLog
 
 	# Get number of devices & memory
-	numOfDevices=`psql -U datasync_user mobility -t -c "select count(*) from devices where devicetype!='';" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
+	numOfDevices=`psql -U datasync_user mobility -t -c "select count(*) from devices where devicetype!='';" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
 	totalMemory=`dmesg | grep -i "System RAM:" | cut -d ":" -f2 | grep -o '[0-9]*'`
 	echo -e "Number of devices: "$numOfDevices  >>$ghcLog
 	echo -e "Total Memory: "$totalMemory"MB" >>$ghcLog
@@ -2285,7 +2285,7 @@ function ghc_checkUpdateSH {
 	problem=false
 	# Any logging info >>$ghcLog
 
-	ghc_dbVersion=`psql -U datasync_user datasync -t -c "select service_version from services;" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
+	ghc_dbVersion=`psql -U $dbUsername datasync -t -c "select service_version from services;" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
 	echo "Service version: $ghc_dbVersion" >>$ghcLog
 	echo -e "RPM version: $mobilityVersion" >>$ghcLog
 	if [[ $ghc_dbVersion != "$mobilityVersion" ]]; then
@@ -2327,7 +2327,8 @@ while [ "$1" != "" ]; do
 	--help | '?' | -h) dsappSwitch=1
 		echo -e "dsapp switches:";
 		echo -e "      \t--version\tReport dsapp version"
-		echo -e "  -f  \t--force\t\tForce runs dsapp (Run alone)"
+		echo -e "  -ghc\t--gHealthCheck\tGeneral Health Check"
+		echo -e "  -f  \t--force\t\tForce runs dsapp"
 		echo -e "  -ul \t--uploadLogs\tUpload Mobility logs to Novell FTP"
 		echo -e "  -c  \t--check\t\tCheck Nightly Maintenance"
 		echo -e "  -s  \t--status\tShow Sync status of connectors"
@@ -2341,6 +2342,10 @@ while [ "$1" != "" ]; do
 
 	--version | version) dsappSwitch=1
 		echo -e "\nThis running instance of dsapp is v"$dsappversion"\n"
+	;;
+
+	-ghc | --gHealthCheck) dsappSwitch=1
+		generalHealthCheck
 	;;
 
 	--vacuum | -v) dsappSwitch=1
