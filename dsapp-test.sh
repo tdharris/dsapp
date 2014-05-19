@@ -30,6 +30,7 @@
 	gconf="/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/groupwise/connector.xml"
 	ceconf="/etc/datasync/configengine/configengine.xml"
 	econf="/etc/datasync/configengine/engines/default/engine.xml"
+	wconf="/etc/datasync/webadmin/server.xml"
 
 	# Mobility Directories
 	dirOptMobility="/opt/novell/datasync"
@@ -60,6 +61,7 @@
 	trustedName=`cat $gconf| grep -i trustedAppName | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	mPort=`grep -i "<listenPort>" $mconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	gPort=`grep -i "<port>" $gconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	wPort=`sed -n "/<server>/,/<\/server>/p" $wconf | grep "<port>" | cut -f2 -d '>' | cut -f1 -d '<'`
 	mlistenAddress=`grep -i "<listenAddress>" $mconf | sed 's/<[^>]*[>]//g'`
 	
 	##################################################################################################
@@ -87,10 +89,11 @@
 	##################################################################################################
 	#	Colors
 	##################################################################################################
-	RED='\e[1;31m' #Bold Red
+	bRED='\e[1;31m' #Bold Red
 	red='\e[31m' # Red
-	GREEN='\e[1;32m' #Bold Green
-	YELLOW='\e[33m' #Yellow
+	bGREEN='\e[1;32m' #Bold Green
+	yellow='\e[33m' #Yellow
+	bYELLOW='\e[1;33m'
 	URED='\e[4;91m' #Underline Red
 	UGREEN='\e[4;92m' #Underline Green
 	BOLD='\e[1m'  #Bold
@@ -1549,23 +1552,28 @@ function certPath {
     done
 }
 
-function createCSRKey { 
-    #Start of Generate CSR and Key script.
-    certPath
-        cd $certPath;
-        echo -e "\nGenerating a Key and CSR";
-
-        while :
+function newCertPass {
+	while :
         do
-            read -p "Enter password to make certificates: " -s -r pass;
+            read -p "Enter password for private key: " -s -r pass;
             printf "\n";
             read -p "Confirm password: " -s -r passCompare;
             if [ "$pass" = "$passCompare" ]; then
+            	echo
                 break;
             else
                     echo -e "\nPasswords do not match.\n";
             fi
         done
+}
+
+function createCSRKey { 
+    #Start of Generate CSR and Key script.
+    certPath
+        cd $certPath;
+        echo -e "\nGenerating a Key and CSR";
+        newCertPass
+        
     echo ""                                                                                                                                                                                            1,1           Top
     openssl genrsa -passout pass:${pass} -des3 -out server.key 2048;
     openssl req -new -key server.key -out server.csr -passin pass:${pass};
@@ -1577,81 +1585,96 @@ function createCSRKey {
 }
 
 function signCert {
-echo -e "\nSigning certificate."
-if [ -f $key ] && [ -f $csr ];then
-    read -ep "Enter amount of days certificate will be valid for(ie. 730): " certDays;
-    if [[ -z "$certDays" ]]; then
-		certDays=730;
+	# Presuming we are in the certPath directory
+	isSelfSigned=true
+	crt=${PWD##&/}"server.crt"
+	echo -e "\nSigning certificate."
+	if [ -f $key ] && [ -f $csr ];then
+	    read -ep "Enter amount of days certificate will be valid for(ie. 730): " certDays;
+	    if [[ -z "$certDays" ]]; then
+			certDays=730;
+		fi
+	    openssl x509 -req -days $certDays -in $csr -signkey $key -out $crt -passin pass:${pass} 2>/dev/null;
+	    echo -e "Server certificate created at $crt";
+	    else 
+	        echo "Could not find server.key or server.csr in "${PWD##&/};
 	fi
-    crt=${PWD##&/}"/server.crt";
-    openssl x509 -req -days $certDays -in $csr -signkey $key -out server.crt 2>/dev/null;
-    echo -e "Server certificate created at $crt\n";
-    else 
-        echo "Could not find server.key or server.csr in "${PWD##&/};
-fi
 }
 # TODO: fix password prompts, error checking...
 function createPEM {
-    echo -e "\nPlease provide the private key, the public key or certificate, and any intermediate CA or bundles.\n"
-    read -ep "Enter the full path for certificate files (ie. /root/certificates): " path;
-    if [ -d $path ];then 
-        cd $path;
-    echo "Listing certificate files..."
-        ls -l *.key *.crt 2>/dev/null;
-            if [ $? -eq 0 ]; then
-            echo ""
-            read -ep "Enter private key filename (key): " certKey;
-            read -ep "Enter public key filename (crt): " certCRT;
-                if [ -f ${PWD}"/$certKey" ] && [ -f ${PWD}"/$certCRT" ];then
-                    echo -e "\nRemoving password from Private Key, if it contains one";
-                    openssl rsa -in $certKey -out nopassword.key 2>/dev/null;
-                    if [ $? -eq 0 ]; then
-                    cat  nopassword.key > server.pem;
-                    rm -f nopassword.key;
-                    cat $certCRT >> server.pem;
-                    
-                    while [ true ];
-                    do
-                    crtName=""
-                    echo ""
-                    if askYesOrNo $"Do you have anymore Intermediate certificates?";then
-                        echo -e "\nList of CRT files:"
-                        ls *.crt; printf "\n";
-                        read -ep "Enter the full name of Intermediate CRT: " crtName;
-                        if [ ! -z "$crtName" ];then
-                            cat $crtName >> server.pem;
-                        fi
-                    else
-                        break;
-                    fi
-                    done
-                    echo -e "Creating server.pem at "${PWD##&/}"/server.pem\n";
-
-                    else echo "Invalid pass phrase.";
-                fi
-
-                else echo "Invalid file input.";
-            fi
-
-            else
-            echo -e "Cannot find any or all certificates files.";
-        fi
+    echo -e "\nCreating PEM..."
     
-        else echo "Invalid file path.";
-    fi 
+    # Ask for files/path if not self-signed
+    if (! $isSelfSigned); then
+    	echo -e "Please provide the private key, the public key or certificate, and any intermediate CA or bundles.\n"
+	    read -ep "Enter the full path for certificate files (ie. /root/certificates): " path;
+	    if [ -d $path ];then 
+	        cd $path;
+	        ls --format=single-column | column
+	        if [ $? -eq 0 ]; then
+	            echo ""
+	            while true;
+	            do
+		            read -ep "Enter private key filename (key): " key;
+		            read -ep "Enter public key filename (crt): " crt;
+		            if [ -f "$key" ] && [ -f "$crt" ];then
+		            	break
+		            else echo -e "Invalid filename.\n";
+		            fi
+		        done
+	            newCertPass
+	        else
+	            echo -e "Cannot find any or all certificates files.";
+	        fi
+	    else echo "Invalid file path.";
+	    fi 
+	fi
+
+	# Create PEM
+    if [ -f "$key" ] && [ -f "$crt" ];then
+        # Removing password from Private Key, if it contains one
+        openssl rsa -in $key -out nopassword.key -passin pass:${pass} 2>/dev/null;
+        if [ $? -eq 0 ]; then
+	        cat  nopassword.key > server.pem;
+	        rm -f nopassword.key;
+	        cat $crt >> server.pem;
+	        
+	        if (! $isSelfSigned); then
+		        while [ true ];
+		        do
+		        crtName=""
+		        echo
+		        if askYesOrNo $"Add intermediate certificate?";then
+		            ls --format=single-column | column
+		            read -ep "Intermediate filename: " crtName;
+		            if [ ! -z "$crtName" ];then
+		                cat $crtName >> server.pem;
+		            fi
+		        else
+		            break;
+		        fi
+		        done
+		    fi
+	        echo -e "Creating server.pem at "${PWD##&/}"/server.pem\n";
+        else echo "Invalid pass phrase.";
+    	fi
+    else echo "Invalid file input.";
+	fi
 }
 
 function configureMobility {
     certInstall=false;
 
-    if askYesOrNo "Copy mobility.pem to $dirVarMobility/device/mobility.pem";then
-        cp mobility.pem $dirVarMobility/device
+    if askYesOrNo "Implement certificate with Mobility devices?";then
+        cp server.pem $dirVarMobility/device
+        echo -e "Copied server.pem to $dirVarMobility/device/mobility.pem"
         echo -e "Done.\n";
         certInstall=true;
     fi
 
-    if askYesOrNo "Copy mobility.pem to $dirVarMobility/webadmin/server.pem";then
-        cp mobility.pem $dirVarMobility/webadmin/server.pem;
+    if askYesOrNo "Implement certificate with Mobility WebAdmin?";then
+        cp server.pem $dirVarMobility/webadmin/server.pem;
+        echo -e "Copied server.pem to $dirVarMobility/webadmin/server.pem"
         echo -e "Done.\n";
         certInstall=true;
     fi
@@ -1722,13 +1745,8 @@ function generalHealthCheck {
 	ghc_checkManualMaintenance
 	ghc_checkReferenceCount
 	ghc_checkDiskSpace
-
-	echo -e "\n-------------------------------------"
-	ghcNewHeader "General Health Check Results:"
-	if ($ghc_problem); then
-		passFail 1
-	else passFail 0
-	fi
+	ghc_checkMemory
+	ghc_checkRPMSave
 
 	# View Logs?
 	echo
@@ -1747,12 +1765,14 @@ function ghcNewHeader {
 }
 
 function passFail {
-	if [ $1 -ne 0 ]; then
-		echo -e "${RED}Failed.${NC}" 
+	if [ $1 -eq 1 ]; then
+		echo -e "${bRED}Failed.${NC}" 
  		echo -e "\nFailed.\n" >> $ghcLog
- 		ghc_problem=true
- 	else 
- 		echo -e "${GREEN}Passed.${NC}"
+ 	elif [ $1 -eq 2 ]; then
+ 		echo -e "${bYELLOW}Warning.${NC}" 
+ 		echo -e "\nWarning.\n" >> $ghcLog
+ 	elif [ $1 -eq 0 ]; then
+ 		echo -e "${bGREEN}Passed.${NC}"
 		echo -e "\nPassed.\n" >> $ghcLog
  	fi
 }
@@ -1801,14 +1821,14 @@ function empty {
 # Check Functions/Modules
 function ghc_CheckServices {
 	ghcNewHeader "Checking Mobility Services..."
-
+	status=true
 	mstatus=true;
 	gstatus=true;
 
 	failure="";
 	function checkStatus {
-		rcdatasync-$1 status >> $ghcLog
-		if [ $? != 0 ] 
+		rcdatasync-$1 status >> $ghcLog 2>&1
+		if [ $? -ne 0 ] 
 			then status=false;
 			failure+="$1. "
 		fi
@@ -1817,7 +1837,7 @@ function ghc_CheckServices {
 	function checkMobility {
 		
 		netstat -patune | grep -i ":$mPort" | grep -i listen > /dev/null
-		if [ $? != 0 ] 
+		if [ $? -ne 0 ] 
 			then mstatus=false;
 			failure+="mobility-connector ($mPort). "
 		fi
@@ -1826,7 +1846,7 @@ function ghc_CheckServices {
 
 	function checkGroupWise {
 		netstat -patune | grep -i ":$gPort" | grep -i listen > /dev/null
-		if [ $? != 0 ] 
+		if [ $? -ne 0 ] 
 			then gstatus=false;
 			failure+="groupwise-connector ($gPort). "
 		fi
@@ -1837,7 +1857,9 @@ function ghc_CheckServices {
 		rcpostgresql status >> $ghcLog
 		psqlStatus="$?"
 		if [[ $psqlStatus -ne 0 ]]; then
+			psqlStatus=false
 			failure+="postgresql"
+		else psqlStatus=true
 		fi
 	}
 
@@ -1851,9 +1873,9 @@ function ghc_CheckServices {
 	checkMobility
 	checkGroupWise
 
- 	if [[ ! "$mstatus" || ! "$psqlStatus" || ! "$gstatus" ]]; then
- 		passFail 1
- 	else passFail 0
+ 	if ($status && $mstatus && $gstatus && $psqlStatus); then
+ 		passFail 0
+ 	else passFail 1
  	fi
 }
 
@@ -1979,7 +2001,30 @@ function ghc_verifyCertificates {
 	problem=false
 	# Any logging info >> $ghcLog
 
+	# Device Certificate
+	echo -e "----------------------------\nChecking Device Certificate:\n----------------------------" >>$ghcLog 
+	echo -e "Checking Certificate-Key Pair:\n------------------------------" >>$ghcLog
+	diff -qs <(openssl rsa -in $devCert -pubout >>$ghcLog 2>&1) <(openssl x509 -in $devCert -pubkey -noout >>$ghcLog 2>&1) >>$ghcLog 2>&1;
+	if [ $? -ne 0 ]; then
+		problem=true
+		echo "The certificate-key pair are not a match!" >>$ghcLog
+	fi
+	echo >>$ghcLog
 	echo | openssl s_client -showcerts -connect $mlistenAddress:$mPort >>$ghcLog 2>&1;
+	if [ $? -ne 0 ]; then
+		problem=true
+	fi
+
+	# WebAdmin Certificate
+	echo -e "\n------------------------------\nChecking WebAdmin Certificate:\n------------------------------" >>$ghcLog 
+	echo -e "Checking Certificate-Key Pair:\n------------------------------" >>$ghcLog
+	diff -qs <(openssl rsa -in $webCert -pubout >>$ghcLog 2>&1) <(openssl x509 -in $webCert -pubkey -noout >>$ghcLog 2>&1) >>$ghcLog 2>&1;
+	if [ $? -ne 0 ]; then
+		problem=true
+		echo "The certificate-key pair are not a match!" >>$ghcLog
+	fi
+	echo >>$ghcLog
+	echo | openssl s_client -showcerts -connect $mlistenAddress:$wPort >>$ghcLog 2>&1;
 	if [ $? -ne 0 ]; then
 		problem=true
 	fi
@@ -2089,11 +2134,74 @@ function ghc_checkDiskSpace {
 	fi
 }
 
+function ghc_checkMemory {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking Memory..."
+	problem=false
+	warn=false
+	# Any logging info >> $ghcLog
+
+	# Get number of devices & memory
+	numOfDevices=`psql -U datasync_user mobility -t -c "select count(*) from devices;" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
+	totalMemory=`dmesg | grep -i "System RAM:" | cut -d ":" -f2 | grep -o '[0-9]*'`
+	echo -e "Number of devices: "$numOfDevices  >>$ghcLog
+	echo -e "Total Memory: "$totalMemory"MB" >>$ghcLog
+
+	# Check against baseline recommendations
+	if [[ $totalMemory -lt 4096 ]]; then
+		problem=true
+		warn=true
+		echo -e "\nIt is recommended to have at least 4 GB of Memory for the Mobility server.\nSee Mobility Pack System Requirements in documentation." >>$ghcLog
+	fi
+
+	if [[ $numOfDevices -ge 300 ]] && [[ $totalMemory -lt 4096 ]]; then
+		problem=true
+		echo -e "\nWith more than 300 devices, it is recommended to have at least 4 GB of Memory.\nSee Mobility Pack System Requirements in documentation." >>$ghcLog
+	fi
+
+	if [[ $numOfDevices -ge 750 ]] && [[ $totalMemory -lt 8192 ]]; then
+		problem=true
+		echo -e "\nWith more than 750 devices, it is recommended to have at least 8 GB of Memory.\nA single Mobility server can comfortably support approximately 750 devices.\nSee Mobility Pack System Requirements in documentation." >>$ghcLog
+	fi
+
+
+	# Return either pass/fail, 0 indicates pass.
+	if ($problem); then
+		if ($warn); then
+			passFail 2
+		else passFail 1
+		fi
+	else passFail 0
+	fi
+}
+
+function ghc_checkRPMSave {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking for rpmsave..."
+	problem=false
+	# Any logging info >>$ghcLog
+
+	files=`find /etc/datasync/ -name *.rpmsave*`
+	echo "$files" >>$ghcLog
+	
+	files=`echo "$files" | wc -l`
+	if [[ $files -ne 0 ]]; then
+		problem=true
+		echo -e "\nFound .rpmsave files in /etc/datasync. This could be a problem.\nSOLUTION: See TID 7012365" >>$ghcLog
+	fi
+
+	# Return either pass/fail, 0 indicates pass.
+	if ($problem); then
+		passFail 2
+	else passFail 0
+	fi
+}
+
 function exampleHealthCheck {
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "exampleHealthCheck"
 	problem=false
-	# Any logging info >> $ghcLog
+	# Any logging info >>$ghcLog
 
 	# Return either pass/fail, 0 indicates pass.
 	if ($problem); then
@@ -2791,7 +2899,7 @@ EOF
 while :
 do
     clear; datasyncBanner
-    cd $cPWD;
+    cd $cPWD; isSelfSigned=false
     echo -e "\t1. Generate self-signed certificate"
     echo -e "\n\t2. Create CSR + private key"
     echo -e "\t3. Configure certificate from 3rd party"
@@ -2806,6 +2914,7 @@ do
         clear; echo -e "\nNote: The following will create a CSR, private key and generate a self-signed certificate.\n"
         createCSRKey
         signCert
+        createPEM
         configureMobility;;
 
     2) # CSR/KEY
