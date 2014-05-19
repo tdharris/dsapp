@@ -2164,7 +2164,7 @@ function ghc_checkMemory {
 	# Any logging info >> $ghcLog
 
 	# Get number of devices & memory
-	numOfDevices=`psql -U datasync_user mobility -t -c "select count(*) from devices;" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
+	numOfDevices=`psql -U datasync_user mobility -t -c "select count(*) from devices where devicetype!='';" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
 	totalMemory=`dmesg | grep -i "System RAM:" | cut -d ":" -f2 | grep -o '[0-9]*'`
 	echo -e "Number of devices: "$numOfDevices  >>$ghcLog
 	echo -e "Total Memory: "$totalMemory"MB" >>$ghcLog
