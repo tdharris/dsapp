@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='168'
+	dsappversion='167'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -2206,8 +2206,8 @@ function ghc_checkRPMSave {
 	files=`find /etc/datasync/ -name *.rpmsave*`
 	echo "$files" >>$ghcLog
 	
-	files=`echo "$files" | wc -l`
-	if [[ $files -ne 0 ]]; then
+	files=`find /etc/datasync/ -name *.rpmsave* | wc -l`
+	if [[ "$files" -ne 0 ]]; then
 		problem=true
 		echo -e "\nFound .rpmsave files in /etc/datasync. This could be a problem.\nSOLUTION: See TID 7012365" >>$ghcLog
 	fi
@@ -2216,6 +2216,7 @@ function ghc_checkRPMSave {
 	if ($problem); then
 		passFail 2
 	else passFail 0
+		echo "No rpmsave files found." >>$ghcLog
 	fi
 }
 
