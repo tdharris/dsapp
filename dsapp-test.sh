@@ -22,6 +22,7 @@
 
 	# Version
 	version="/opt/novell/datasync/version"
+	mobilityVersion=`cat $version`
 	serverinfo="/etc/*release"
 	rpminfo="datasync"
 
@@ -63,6 +64,7 @@
 	gPort=`grep -i "<port>" $gconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	wPort=`sed -n "/<server>/,/<\/server>/p" $wconf | grep "<port>" | cut -f2 -d '>' | cut -f1 -d '<'`
 	mlistenAddress=`grep -i "<listenAddress>" $mconf | sed 's/<[^>]*[>]//g'`
+	glistenAddress=`grep -i "<listeningLocation>" $gconf | sed 's/<[^>]*[>]//g'`
 	
 	##################################################################################################
 	#	Version: Eenou+
@@ -1747,6 +1749,9 @@ function generalHealthCheck {
 	ghc_checkDiskSpace
 	ghc_checkMemory
 	ghc_checkRPMSave
+	ghc_checkVMWare
+	ghc_checkConfig
+	ghc_checkUpdateSH
 
 	# View Logs?
 	echo
@@ -1863,6 +1868,22 @@ function ghc_CheckServices {
 		fi
 	}
 
+	function checkPortConnectivity {
+		netcat -z $mlistenAddress $mPort >> $ghcLog 2>&1
+		if [ $? -ne 0 ]; then
+			mstatus=false
+			echo -e "\nConnection refused on port $mPort" >> $ghcLog
+		else echo -e "\nConnection successful on port $mPort" >> $ghcLog
+		fi
+
+		netcat -z $glistenAddress $gPort >> $ghcLog 2>&1
+		if [ $? -ne 0 ]; then
+			gstatus=false
+			echo "Connection refused on port $gPort" >> $ghcLog
+		else echo "Connection successful on port $gPort" >> $ghcLog
+		fi
+	}
+
 	# Check Mobility Services
 	checkPostgresql
 	checkStatus configengine
@@ -1872,6 +1893,7 @@ function ghc_CheckServices {
 	checkStatus monitorengine
 	checkMobility
 	checkGroupWise
+	checkPortConnectivity
 
  	if ($status && $mstatus && $gstatus && $psqlStatus); then
  		passFail 0
@@ -2195,6 +2217,72 @@ function ghc_checkRPMSave {
 		passFail 2
 	else passFail 0
 	fi
+}
+
+function ghc_checkVMWare {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking for vmware..."
+	problem=false
+	# Any logging info >>$ghcLog
+
+	lspci | grep -i vmware &>/dev/null
+	if [ $? -eq 0 ]; then
+		echo "This server is running within a virtualized platform." >>$ghcLog
+		/etc/init.d/vmware-tools status >>$ghcLog 1>/dev/null
+		if [ $? -ne 0 ]; then
+			problem=true
+			echo "/etc/init.d/vmware-tools is not running..." >>$ghcLog
+		fi
+	fi
+
+	# Return either pass/fail, 0 indicates pass.
+	if ($problem); then
+		passFail 1
+	else passFail 0
+	fi
+}
+
+function ghc_checkConfig {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking automatic startup..."
+	problem=false
+	# Any logging info >>$ghcLog
+
+	chkconfig | grep -i datasync | grep -i off >>$ghcLog 2>&1
+	if [ $? -eq 0 ]; then
+		problem=true
+		echo -e "\nNot all services are configured for automatic startup."  >>$ghcLog
+	else chkconfig | grep -i datasync >>$ghcLog 2>&1
+	fi
+
+	# Return either pass/fail, 0 indicates pass.
+	if ($problem); then
+		passFail 1
+	else passFail 0
+	fi
+}
+
+function ghc_checkUpdateSH {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking database schema..."
+	problem=false
+	# Any logging info >>$ghcLog
+
+	ghc_dbVersion=`grep -i "service_version" $updatelog | tail -n1 | grep -Po "(?<=service_version = ')[^<]*(?=',)"`
+	echo "Schema version according to update.log: $ghc_dbVersion" >>$ghcLog
+	echo -e "RPM version: $mobilityVersion" >>$ghcLog
+	if [[ $ghc_dbVersion != "$mobilityVersion" ]]; then
+		problem=true
+		echo -e "Version mismatch between database and rpms.\n\nSOLUTION: Please run $dirOptMobility/update.sh to update the database." >>$ghcLog
+	else echo "Database schema up to date." >>$ghcLog
+	fi
+
+	# Return either pass/fail, 0 indicates pass.
+	if ($problem); then
+		passFail 1
+	else passFail 0
+	fi
+	
 }
 
 function exampleHealthCheck {
