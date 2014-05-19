@@ -2231,8 +2231,9 @@ function ghc_checkRPMSave {
 	# Return either pass/fail, 0 indicates pass.
 	if ($problem); then
 		passFail 2
-	else passFail 0
+	else 
 		echo "No rpmsave files found." >>$ghcLog
+		passFail 0
 	fi
 }
 
