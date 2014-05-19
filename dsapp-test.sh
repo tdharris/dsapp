@@ -123,7 +123,7 @@
 
 	#Create folders to store script files
 	rm -R -f /tmp/novell/ 2>/dev/null;
-	rm -R -f $dsappLogs $dsapptmp 2>/dev/null;
+	rm -R -f $dsapptmp 2>/dev/null;
 	mkdir -p $dsappDirectory 2>/dev/null;
 	mkdir -p $dsappLogs 2>/dev/null;
 	mkdir -p $dsapptmp 2>/dev/null;
@@ -143,6 +143,16 @@
 		exit 1;
 	fi
 	fi
+
+function announceNewFeature {
+	if [ ! -f $ghcLog ]; then
+		clear; datasyncBanner
+		echo -e "\nWe noticed you haven't run dsapp's new General Health Check feature.\nIt's located in the Checks & Queries menu.\n"
+		if askYesOrNo "Would you like to run it now?"; then
+			generalHealthCheck
+		fi
+	fi
+}
 
 function checkFTP {
 	# Echo back 0 or 1 into if statement
@@ -454,8 +464,7 @@ fi
 			echo -e "Grabbing version info..."
 			cat $version > $dsappupload/version/mobility-version
 			cat $serverinfo > $dsappupload/version/os-version
-			rpm -qa | grep -i $rpminfo > $dsappupload/version/rpm-info
-			rpm -qa | grep -i python > $dsappupload/version/rpm-python-info
+			rpm -qa | grep -ie $rpminfo -ie python > $dsappupload/version/rpm-info
 
 			# Get Logging Levels
 			logginglevels="$dsappupload/mobility-logging-info"
@@ -481,10 +490,9 @@ fi
 
 			# Health Check
 			echo -e "Health Check...\n"
-			nightlyMaintenance="$dsappupload/nightlyMaintenance"
 			syncStatus="$dsappupload/syncStatus"
-			checkNightlyMaintenance > $nightlyMaintenance
 			showStatus > $syncStatus
+			generalHealthCheck silent &>/dev/null
 
 			# Compress log files..
 			cd $dsappupload
@@ -492,13 +500,14 @@ fi
 			read -ep "SR#: " srn;
 			echo -e "\nCompressing logs for upload..."
 
-			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info 2>/dev/null;
+			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog 2>/dev/null;
 
 			if [ $? -eq 0 ]; then
 				echo -e "\n$dsappupload/$srn"_"$d.tgz\n"
 			fi
 			
 			# FTP Send..
+			echo
 			if askYesOrNo $"Do you want to upload the logs to Novell?"; then
 				echo -e "Connecting to ftp..."
 				netcat -z -w 5 ftp.novell.com 21;
@@ -1735,6 +1744,11 @@ function generalHealthCheck {
 	clear; echo -e "##########################################################\n#	\n#  General Health Check\n#\n##########################################################" > $ghcLog
 	echo -e "Gathered by dsapp v$dsappversion on $(date)\n" >> $ghcLog
 	ghc_problem=false
+	silent=false
+
+	if [ "$1" == "silent" ]; then
+		silent=true
+	fi
 
 	# Begin Checks
 	ghc_CheckServices
@@ -1755,11 +1769,13 @@ function generalHealthCheck {
 
 	# View Logs?
 	echo
-	if askYesOrNo "Do you want to view the log file?"; then
-		less $ghcLog
+	if (! $silent); then
+		if askYesOrNo "Do you want to view the log file?"; then
+			less $ghcLog
+			echo -e "Log created at: $ghcLog\n"
+		read -p "Press [Enter] to continue."
+		fi
 	fi
-	echo -e "Log created at: $ghcLog\n"
-	read -p "Press [Enter] to continue."
 }
 
 # Utility Functions
@@ -2426,6 +2442,9 @@ if [ `tput lines` -lt '24' ] && [ `tput cols` -lt '85' ];then
 	read -p "Press [Enter] to Continue."
 	exit 1;
 fi
+
+# Announce new Feature
+announceNewFeature
 
 while :
 do
