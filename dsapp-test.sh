@@ -734,6 +734,8 @@ EOF
 			getDSVersion;
 			setVariables;
 			$rcDS stop;
+			export FEEDBACK=""
+			export LOGGER=""
 			python $dirOptMobility/common/lib/upgrade.pyc;
 			printf "\nRestarting Mobility...\n";
 			rcpostgresql stop;
@@ -1585,7 +1587,7 @@ function createCSRKey {
         echo -e "\nGenerating a Key and CSR";
         newCertPass
         
-    echo ""                                                                                                                                                                                            1,1           Top
+    echo ""
     openssl genrsa -passout pass:${pass} -des3 -out server.key 2048;
     openssl req -new -key server.key -out server.csr -passin pass:${pass};
     key=${PWD##&/}"/server.key";
@@ -1598,7 +1600,7 @@ function createCSRKey {
 function signCert {
 	# Presuming we are in the certPath directory
 	isSelfSigned=true
-	crt=${PWD##&/}"server.crt"
+	crt=${PWD##&/}"/server.crt"
 	echo -e "\nSigning certificate."
 	if [ -f $key ] && [ -f $csr ];then
 	    read -ep "Enter amount of days certificate will be valid for(ie. 730): " certDays;
