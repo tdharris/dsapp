@@ -1960,22 +1960,22 @@ function ghc_checkPSQLConfig {
 		if [ "$returned" -ne 0 ]; then
 			problem=1
 		fi
-		echo "$returned:$1" >> $ghcLog
+		echo "$returned:${1//'*.*'/ }" >> $ghcLog
 	}
 
 	# /var/lib/pgsql/data/postgresql.conf
-	checkpghba "local all postgres ident sameuser"
-	checkpghba "host all postgres 127.0.0.1/32 ident sameuser"
-	checkpghba "host all postgres ::1/128 ident sameuser"
-	checkpghba "local   datasync         all                       md5"
-	checkpghba "host    datasync         all       127.0.0.1/32    md5"
-	checkpghba "host    datasync         all       ::1/128         md5"
-	checkpghba "local   postgres         datasync_user                    md5"
-	checkpghba "host    postgres         datasync_user    127.0.0.1/32    md5"
-	checkpghba "host    postgres         datasync_user    ::1/128         md5"
-	checkpghba "local   mobility    all                               md5"
-	checkpghba "host    mobility    all         127.0.0.1/32          md5"
-	checkpghba "host    mobility    all         ::1/128               md5"
+	checkpghba "local*.*all*.*postgres*.*ident*.*sameuser"
+	checkpghba "host*.*all*.*postgres*.*127.0.0.1/32*.*ident*.*sameuser"
+	checkpghba "host*.*all*.*postgres*.*::1/128*.*ident*.*sameuser"
+	checkpghba "local*.*datasync*.*all*.*md5"
+	checkpghba "host*.*datasync*.*all*.*127.0.0.1/32*.*md5"
+	checkpghba "host*.*datasync*.*all*.*::1/128*.*md5"
+	checkpghba "local*.*postgres*.*datasync_user*.*md5"
+	checkpghba "host*.*postgres*.*datasync_user*.*127.0.0.1/32*.*md5"
+	checkpghba "host*.*postgres*.*datasync_user*.*::1/128*.*md5"
+	checkpghba "local*.*mobility*.*all*.*md5"
+	checkpghba "host*.*mobility*.*all*.*127.0.0.1/32*.*md5"
+	checkpghba "host*.*mobility*.*all*.*::1/128*.*md5"
 	
 	if [ $problem -ne 0 ]; then
 		passFail 1
@@ -2266,11 +2266,10 @@ function ghc_checkConfig {
 	problem=false
 	# Any logging info >>$ghcLog
 
-	chkconfig | grep -i datasync | grep -i off >>$ghcLog 2>&1
+	chkconfig | grep -i datasync >>$ghcLog 2>&1 | chkconfig | grep datasync | grep -i off 1>/dev/null;
 	if [ $? -eq 0 ]; then
 		problem=true
 		echo -e "\nNot all services are configured for automatic startup."  >>$ghcLog
-	else chkconfig | grep -i datasync >>$ghcLog 2>&1
 	fi
 
 	# Return either pass/fail, 0 indicates pass.
