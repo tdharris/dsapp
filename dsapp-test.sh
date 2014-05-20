@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='170'
+	dsappversion='171'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -1677,7 +1677,7 @@ function configureMobility {
     certInstall=false;
 
     if askYesOrNo "Implement certificate with Mobility devices?";then
-        cp server.pem $dirVarMobility/device
+        cp server.pem $dirVarMobility/device/mobility.pem
         echo -e "Copied server.pem to $dirVarMobility/device/mobility.pem"
         echo -e "Done.\n";
         certInstall=true;
@@ -2036,45 +2036,77 @@ function ghc_verifyCertificates {
 	ghcNewHeader "Verifying Certificates..."
 	devCert="/var/lib/datasync/device/mobility.pem"
 	webCert="/var/lib/datasync/webadmin/server.pem"
-	problem=false
+	dateTolerance=`date -ud "+90 day" | awk '{print $2, $3, $6}'`
+	problem=false; warn=false
 	# Any logging info >> $ghcLog
 
 	# Device Certificate
-	echo -e "----------------------------\nChecking Device Certificate:\n----------------------------" >>$ghcLog 
-	echo -e "Checking Certificate-Key Pair:\n------------------------------" >>$ghcLog
-	diff -qs <(openssl rsa -in $devCert -pubout >>$ghcLog 2>&1) <(openssl x509 -in $devCert -pubkey -noout >>$ghcLog 2>&1) >>$ghcLog 2>&1;
-	if [ $? -ne 0 ]; then
-		problem=true
-		echo "The certificate-key pair are not a match!" >>$ghcLog
-	fi
-	echo >>$ghcLog
-	echo | openssl s_client -showcerts -connect $mlistenAddress:$mPort >>$ghcLog 2>&1;
-	if [ $? -ne 0 ]; then
-		problem=true
-	fi
+	echo -e "----------------------------------------------------------\nChecking Device Certificate:\n----------------------------------------------------------" >>$ghcLog 
+
+		# Check Expiration Date
+		echo -e "\nChecking Expiration Date:\n----------------------------" >>$ghcLog
+		certExpirationDate=`echo | openssl s_client -connect $mlistenAddress:$mPort 2>/dev/null | openssl x509 -noout -enddate | cut -d "=" -f2 | awk '{print $1, $2, $4}'`
+		if [ $(date -d "$dateTolerance" +%s) -ge $(date -d "$certExpirationDate" +%s) ]; then 
+			echo -e "WARNING: Certificate expires soon!\n$devCert" >>$ghcLog
+			warn=true;
+		fi
+		echo "The Mobility certificate will expire on $certExpirationDate" >>$ghcLog
+
+		# Check Key-Pair
+		echo -e "\nChecking Certificate-Key Pair:\n------------------------------" >>$ghcLog
+		diff -qs <(openssl rsa -in $devCert -pubout >>$ghcLog 2>&1) <(openssl x509 -in $devCert -pubkey -noout >>$ghcLog 2>&1) >>$ghcLog 2>&1;
+		if [ $? -ne 0 ]; then
+			problem=true
+			echo "The certificate-key pair are not a match!" >>$ghcLog
+		fi
+		echo >>$ghcLog
+
+		# Check SSL Handshake
+		echo | openssl s_client -showcerts -connect $mlistenAddress:$mPort >>$ghcLog 2>&1;
+		if [ $? -ne 0 ]; then
+			problem=true
+		fi
 
 	# WebAdmin Certificate
-	echo -e "\n------------------------------\nChecking WebAdmin Certificate:\n------------------------------" >>$ghcLog 
-	echo -e "Checking Certificate-Key Pair:\n------------------------------" >>$ghcLog
-	diff -qs <(openssl rsa -in $webCert -pubout >>$ghcLog 2>&1) <(openssl x509 -in $webCert -pubkey -noout >>$ghcLog 2>&1) >>$ghcLog 2>&1;
-	if [ $? -ne 0 ]; then
-		problem=true
-		echo "The certificate-key pair are not a match!" >>$ghcLog
-	fi
-	echo >>$ghcLog
-	echo | openssl s_client -showcerts -connect $mlistenAddress:$wPort >>$ghcLog 2>&1;
-	if [ $? -ne 0 ]; then
-		problem=true
-	fi
+	echo -e "\n------------------------------------------------------------\nChecking WebAdmin Certificate:\n------------------------------------------------------------" >>$ghcLog 
+	
+		# Check Expiration Date
+		echo -e "\nChecking Expiration Date:\n----------------------------" >>$ghcLog
+		certExpirationDate=`echo | openssl s_client -connect $mlistenAddress:$wPort 2>/dev/null | openssl x509 -noout -enddate | cut -d "=" -f2 | awk '{print $1, $2, $4}'`
+		if [ $(date -d "$dateTolerance" +%s) -ge $(date -d "$certExpirationDate" +%s) ]; then 
+			echo -e "WARNING: Certificate expires soon!\n$webCert" >>$ghcLog
+			warn=true;
+		fi
+		echo "The WebAdmin certificate will expire on $certExpirationDate" >>$ghcLog
 
+		# Check Key-Pair
+		echo -e "\nChecking Certificate-Key Pair:\n------------------------------" >>$ghcLog
+		diff -qs <(openssl rsa -in $webCert -pubout >>$ghcLog 2>&1) <(openssl x509 -in $webCert -pubkey -noout >>$ghcLog 2>&1) >>$ghcLog 2>&1;
+		if [ $? -ne 0 ]; then
+			problem=true
+			echo "The certificate-key pair are not a match!" >>$ghcLog
+		fi
+		echo >>$ghcLog
+
+		# Check SSL Handshake
+		echo | openssl s_client -showcerts -connect $mlistenAddress:$wPort >>$ghcLog 2>&1;
+		if [ $? -ne 0 ]; then
+			problem=true
+		fi
+
+	# Check for dos2unix stuff...
 	grep -Pl "\r" $devCert $webCert &>/dev/null
 	if [ $? -eq 0 ]; then
 		problem=true
 		echo -e "\nProblem detected with certificates: ^M dos characters.\nSOLUTION: See TID 7014821." >>$ghcLog
 	fi
 
-	if ($problem); then
-		passFail 1
+	# Return either pass/fail, 0 indicates pass.
+	if ($warn); then
+		if ($problem); then
+			passFail 1
+		else passFail 2
+		fi
 	else passFail 0
 	fi
 }
