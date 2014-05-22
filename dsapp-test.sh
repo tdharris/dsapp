@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='171'
+	dsappversion='172'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -530,14 +530,16 @@ EOF
 	function  cuso {
 		local tempVar=true
 		if [ $(checkDBPass) -eq 0 ];then
-			if [ $1 == 'true' ];then
 				#Dropping Tables
 				dropdb -U $dbUsername datasync;
 				dropdb -U $dbUsername mobility;
+				
+			#Recreate tables switch
+			if [[ "$1" == 'create' ]];then
+
 				if [ $dsVersion -gt $dsVersionCompare ];then
 					dropdb -U $dbUsername dsmonitor;
 				fi
-
 				#Recreating Tables - Code from postgres_setup_1.sh
 				PGPASSWORD="$dbPassword" createdb "datasync" -U "$dbUsername" -h "localhost" -p "5432"
 				echo "create datasync database done.."
@@ -563,71 +565,45 @@ EOF
 					PGPASSWORD="$dbPassword" psql -d "dsmonitor" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/monitorengine/sql/monitor.sql"
 					echo "extend schema for monitor done.."
 				fi
-			else
-				#Cleaning up datasync table.
-				psql -U $dbUsername datasync -c "delete from attachments";
-				psql -U $dbUsername datasync -c "delete from \"attachments_attachmentID_seq\"";
-				psql -U $dbUsername datasync -c "delete from cache";
-				psql -U $dbUsername datasync -c "delete from \"cache_cacheID_seq\"";
-				psql -U $dbUsername datasync -c "delete from consumerevents";
-				psql -U $dbUsername datasync -c "delete from \"customData\"";
-				psql -U $dbUsername datasync -c "delete from \"fileStore\"";
-				psql -U $dbUsername datasync -c "delete from \"fileStore_fileStoreID_seq\"";
-				psql -U $dbUsername datasync -c "delete from \"folderMappings\"";
-				psql -U $dbUsername datasync -c "delete from \"objectMappings\"";
-				psql -U $dbUsername datasync -c "delete from retention";
-				if [ $1 == 'false' ];then
-					psql -U $dbUsername datasync -c "delete from targets where disabled='1'";
+
+				if [[ "$2" == 'users' ]];then
+				#Repopulating targets and membershipCache
+				psql -U $dbUsername datasync < $dsapptmp/targets.sql 2>/dev/null;
+				psql -U $dbUsername datasync < $dsapptmp/membershipCache.sql 2>/dev/null;
 				fi
-				if [ $dsVersion -gt $dsVersionCompare ];then
-					psql -U $dbUsername datasync -c "delete from softtaskmap";
-					psql -U $dbUsername datasync -c "delete from taskrecurrencemap";
-				fi
-				#Cleaning up mobility table.
-				psql -U $dbUsername mobility -c "delete from attachmentmaps";
-				psql -U $dbUsername mobility -c "delete from attachments";
-				psql -U $dbUsername mobility -c "delete from deviceevents";
-				psql -U $dbUsername mobility -c "delete from devices";
-				psql -U $dbUsername mobility -c "delete from foldermaps";
-				psql -U $dbUsername mobility -c "delete from gal";
-				psql -U $dbUsername mobility -c "delete from galsync";
-				psql -U $dbUsername mobility -c "delete from syncenginedata";
-				psql -U $dbUsername mobility -c "delete from syncevents";
-				psql -U $dbUsername mobility -c "delete from users";
 			fi
 		else
 			if askYesOrNo $"Unable to clean up tables (Database connection). Continue?"; then
 				local tempVar=true; else local tempVar=false;
 			fi
 		fi
-			if($tempVar);then
-				#Remove attachments.
-				rm -fv -R $dirVarMobility/syncengine/attachments/*
-				rm -fv -R $dirVarMobility/mobility/attachments/*
-				#Vacuum database
-				vacuumDB;
-				#Index database
-				indexDB;
+		if($tempVar);then
+			#Remove attachments.
+			rm -fv -R $dirVarMobility/syncengine/attachments/*
+			rm -fv -R $dirVarMobility/mobility/attachments/*
 
-				#Check if uninstall parameter was passed in - Force uninstall
-				if [[ "$2" == 'uninstall' ]];then
-					rcpostgresql stop; killall -9 postgres &>/dev/null; killall -9 python &>/dev/null;
-					rpm -e `rpm -qa | grep "datasync-"`
-					rpm -e `rpm -qa | grep "postgresql"`
-					rm -r $dirPGSQL;
-					rm -r $dirEtcMobility;
-					rm -r $dirVarMobility;
-					rm -r $dirOptMobility;
-					rm -r $log
+			#Vacuum database
+			vacuumDB;
+			#Index database
+			indexDB;
 
-					echo -e "Mobility uninstalled."
-					read -p "Press [Enter] to complete"
-					exit 0;
-				fi
+			#Check if uninstall parameter was passed in - Force uninstall
+			if [[ "$1" == 'uninstall' ]];then
+				rcpostgresql stop; killall -9 postgres &>/dev/null; killall -9 python &>/dev/null;
+				rpm -e `rpm -qa | grep "datasync-"`
+				rpm -e `rpm -qa | grep "postgresql"`
+				rm -r $dirPGSQL;
+				rm -r $dirEtcMobility;
+				rm -r $dirVarMobility;
+				rm -r $dirOptMobility;
+				rm -r $log
 
-				echo -e "\nClean up complete."
+				echo -e "Mobility uninstalled."
+				read -p "Press [Enter] to complete"
+				exit 0;
 			fi
-
+			echo -e "\nClean up complete."
+		fi
 		}
 
 	function registerDS(){
@@ -1737,6 +1713,20 @@ function verify {
     echo -e "\nDone."
     read -p "Press [Enter] to continue."
 }
+
+function dumpTable {
+	 pg_dump -U $dbUsername $1 -D -a -t \"$2\" > $dsapptmp/$2.sql;
+	 vReturn="$?";
+
+	 if [[ "$vReturn" -eq "1" ]];then
+	 	rm $dsapptmp/$2.sql
+	 	return 1;
+	 else
+	 	return 0;
+	 fi
+
+}
+
 ##################################################################################################
 #	
 #	General Health Check
@@ -3000,7 +2990,15 @@ EOF
 			1) 
 			clear;
 			if askYesOrNo $"Clean up and start over (Except Users)?"; then
-				cuso 'false';
+				dumpTable "datasync" "targets";
+				if [ "$?" -eq 0 ]; then
+					dumpTable datasync membershipCache;
+					if [ "$?" -eq 0 ]; then
+						cuso 'create' 'users';
+					else echo "Failed to dump membershipCache table."
+					fi
+				else echo "Failed to dump targets table."
+				fi
 			fi
 			read -p "Press [Enter] to continue";
 		;;
@@ -3009,7 +3007,7 @@ EOF
 			   #Cleans everything up except users and starts fresh.
 			clear;
 			if askYesOrNo $"Clean up and start over (Everything)?"; then
-				cuso 'true';
+				cuso 'create'
 			fi
 			read -p "Press [Enter] to continue";
 		;;
@@ -3018,7 +3016,7 @@ EOF
 			clear;
 			echo -e "Please run the uninstall.sh script first in "$dirOptMobility;
 			if askYesOrNo $"Uninstall Mobility?"; then
-				cuso 'true' 'uninstall';
+				cuso 'uninstall';
 			fi
 			read -p "Press [Enter] to continue";
 		;;
