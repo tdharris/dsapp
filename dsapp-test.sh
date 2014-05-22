@@ -1719,7 +1719,7 @@ function dumpTable {
 	 vReturn="$?";
 
 	 if [[ "$vReturn" -eq "1" ]];then
-	 	rm $dsapptmp/$2.sql
+	 	rm -f $dsapptmp/$2.sql 2>/dev/null;
 	 	return 1;
 	 else
 	 	return 0;
