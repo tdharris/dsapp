@@ -66,9 +66,9 @@
 	mlistenAddress=`grep -i "<listenAddress>" $mconf | sed 's/<[^>]*[>]//g'`
 	glistenAddress=`grep -i "<listeningLocation>" $gconf | sed 's/<[^>]*[>]//g'`
 	
-	##################################################################################################
-	#	Version: Eenou+
-	##################################################################################################
+##################################################################################################
+#	Version: Eenou+
+##################################################################################################
 	function declareVariables2 {
 		mAlog=$log"/connectors/mobility-agent.log"
 		gAlog=$log"/connectors/groupwise-agent.log"
@@ -77,9 +77,9 @@
 		rcScript="rcgms"
 	}
 
-	##################################################################################################
-	#	Version: Pre-Eenou 
-	##################################################################################################
+##################################################################################################
+#	Version: Pre-Eenou 
+##################################################################################################
 	function declareVariables1 {
 		mAlog=$log"/connectors/default.pipeline1.mobility-AppInterface.log"
 		gAlog=$log"/connectors/default.pipeline1.groupwise-AppInterface.log"
@@ -88,9 +88,9 @@
 		rcScript="rcdatasync"
 	}
 
-	##################################################################################################
-	#	Colors
-	##################################################################################################
+##################################################################################################
+#	Colors
+##################################################################################################
 	bRED='\e[1;31m' #Bold Red
 	red='\e[31m' # Red
 	bGREEN='\e[1;32m' #Bold Green
@@ -374,15 +374,15 @@ fi
 ##################################################################################################
 #	Initialize Variables
 ##################################################################################################
-		function setVariables {
-			# Depends on version 1.0 or 2.0
-			if [ $dsVersion -gt $dsVersionCompare ]; then
-				declareVariables2
-			else
-				declareVariables1
-			fi
-		}
-		setVariables;
+	function setVariables {
+		# Depends on version 1.0 or 2.0
+		if [ $dsVersion -gt $dsVersionCompare ]; then
+			declareVariables2
+		else
+			declareVariables1
+		fi
+	}
+	setVariables;
 
 
 ##################################################################################################
@@ -665,7 +665,7 @@ EOF
 
 		if [ "$1" = "start" ] && [ "$2" = "silent" ]; then
 				$rcScript start &>/dev/null;
-				rccron start 2>/dev/null;
+				rccron start &>/dev/null;
 		fi
 
 		if [ "$1" = "stop" ] && [ "$2" = "" ]; then
@@ -2345,6 +2345,7 @@ function exampleHealthCheck {
 #
 ##################################################################################################
 dsappSwitch=0
+dbMaintenace=false
 while [ "$1" != "" ]; do
 	case $1 in #Start of Case
 
@@ -2373,15 +2374,15 @@ while [ "$1" != "" ]; do
 	;;
 
 	--vacuum | -v) dsappSwitch=1
-		rcDS stop silent
+		dbMaintenace=true
+		rcDS stop
 		vacuumDB;
-		rcDS start silent
 	;;
 
 	--index | -i) dsappSwitch=1
-		rcDS stop silent
+		dbMaintenace=true
+		rcDS stop
 		indexDB;
-		rcDS start silent
 	;;
 
 	--force | -f ) dsappSwitch=0
@@ -2452,6 +2453,10 @@ while [ "$1" != "" ]; do
 if [ -f ./db.log ];then
 	less db.log
 	rm db.log
+fi
+
+if ($dbMaintenace);then
+	rcDS start;
 fi
 
 if [ "$dsappSwitch" -eq "1" ];then
