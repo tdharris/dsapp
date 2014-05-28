@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='172'
+	dsappversion='173'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -709,7 +709,7 @@ EOF
 			zypper --non-interactive update --force -r $1;
 			getDSVersion;
 			setVariables;
-			$rcDS stop;
+			rcDS stop;
 			export FEEDBACK=""
 			export LOGGER=""
 			python $dirOptMobility/common/lib/upgrade.pyc;
@@ -719,7 +719,7 @@ EOF
 			getDSVersion;
 			setVariables;
 			rcpostgresql start;
-			$rcDS start;
+			rcDS start;
 			echo -e "\nYour Mobility product has been successfully updated to "`cat $dirOptMobility/version`"\n";
 		fi
 	}
