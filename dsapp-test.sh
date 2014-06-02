@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='173'
+	dsappversion='174'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -1621,12 +1621,15 @@ function createPEM {
 
 	# Create PEM
     if [ -f "$key" ] && [ -f "$crt" ];then
+    	# dos2unix the files to remove problem characters
+        dos2unix $key $crt &>/dev/null
+
         # Removing password from Private Key, if it contains one
         openssl rsa -in $key -out nopassword.key -passin pass:${pass} 2>/dev/null;
         if [ $? -eq 0 ]; then
-	        cat  nopassword.key > server.pem;
+	        echo "$(cat nopassword.key)" > server.pem;
 	        rm -f nopassword.key;
-	        cat $crt >> server.pem;
+	        echo "$(cat $crt)" >> server.pem;
 	        
 	        if (! $isSelfSigned); then
 		        while [ true ];
@@ -1637,7 +1640,8 @@ function createPEM {
 		            ls --format=single-column | column
 		            read -ep "Intermediate filename: " crtName;
 		            if [ ! -z "$crtName" ];then
-		                cat $crtName >> server.pem;
+		            	dos2unix $crtName &>/dev/null
+		                echo "$(cat $crtName)" >> server.pem;
 		            fi
 		        else
 		            break;
