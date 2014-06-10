@@ -13,7 +13,7 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='174'
+	dsappversion='175'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappLogs="$dsappDirectory/logs"
@@ -834,18 +834,31 @@ function removeUser {
 			read -ep "Specify userID: " uid;
 		done
 
-	if askYesOrNo $"Remove "$uid" from database?"; then
-
-		zuid=$uid
-		#disabled+ will remove disabled entries from targets.
+		#disabled+ will remove disabled entries from targets table.
 		if [ "$uid" == "disabled+" ];then
-			echo "Removing disabled entries from targets database."
-			dpsql << EOF
-			delete from targets where disabled='1';
+			if askYesOrNo $"Remove all disabled users/groups from target table?"; then
+				dpsql << EOF
+				delete from targets where disabled='1';
+				\q
 EOF
+			fi
 			read -p "Press [Enter] to continue.";
 			continue;
 		fi
+
+		#refcount+ will fix referenceCount entries on targets table for non disabled users.
+		if [ "$uid" == "refcount+" ];then
+			if askYesOrNo $"Set referenceCount to 1 for all non-disabled users/groups?"; then
+				dpsql << EOF
+				update targets set "referenceCount"='1' where disabled='0';
+				\q
+EOF
+			fi
+			read -p "Press [Enter] to continue.";
+			continue;
+		fi
+
+	if askYesOrNo $"Remove "$uid" from database?"; then
 
 		echo -e "Checking database for user references..."
 		psqlTarget=`psql -U $dbUsername datasync -c "select dn from targets where dn ilike '%$uid%' limit 1" | grep -iw -m 1 "$uid" | tr -d ' '`
@@ -857,7 +870,7 @@ EOF
 
 		userRef=true;
 
-		##Troubleshooting 
+		##Troubleshooting uncomment line below
 		#echo -e "UID: "$uid "\nTarget: "$psqlTarget "\nAppNameG: "$psqlAppNameG "\nAppNameM: "$psqlAppNameM "\nObject: "$psqlObject "\nCache: "$psqlCache "\nFolder: "$psqlFolder; read; exit 0;
 		
 		#Removes user from targets
@@ -1902,7 +1915,9 @@ function ghc_CheckServices {
 	checkStatus webadmin
 	checkStatus connectors
 	checkStatus syncengine
-	checkStatus monitorengine
+	if [ $dsVersion -gt $dsVersionCompare ]; then
+		checkStatus monitorengine
+	fi
 	checkMobility
 	checkGroupWise
 	checkPortConnectivity
