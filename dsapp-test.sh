@@ -13,12 +13,25 @@
 #	Declaration of Variables
 #
 ##################################################################################################
-	dsappversion='175'
+
+	# Assign folder variables
+	dsappversion='176'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
+	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
 	dsappupload="$dsappDirectory/upload"
+
+	#Create folders to store script files
+	rm -R -f /tmp/novell/ 2>/dev/null;
+	rm -R -f $dsapptmp 2>/dev/null;
+	mkdir -p $dsappDirectory 2>/dev/null;
+	mkdir -p $dsappConf 2>/dev/null;
+	mkdir -p $dsappLogs 2>/dev/null;
+	mkdir -p $dsapptmp 2>/dev/null;
+	mkdir -p $dsappupload 2>/dev/null;
+	mkdir -p /root/Downloads 2>/dev/null;
 
 	# Version
 	version="/opt/novell/datasync/version"
@@ -65,7 +78,14 @@
 	wPort=`sed -n "/<server>/,/<\/server>/p" $wconf | grep "<port>" | cut -f2 -d '>' | cut -f1 -d '<'`
 	mlistenAddress=`grep -i "<listenAddress>" $mconf | sed 's/<[^>]*[>]//g'`
 	glistenAddress=`grep -i "<listeningLocation>" $gconf | sed 's/<[^>]*[>]//g'`
+
+	# DSAPP configuration files
+	if [ ! -f "$dsappConf/dsHostname.conf" ];then
+		echo `hostname -f` > $dsappConf/dsHostname.conf
+	fi
+	dsHostname=`cat $dsappConf/dsHostname.conf`
 	
+
 ##################################################################################################
 #	Version: Eenou+
 ##################################################################################################
@@ -120,15 +140,6 @@
 		read -p "Please login as root to run this script."; 
 		exit 1;
 	fi
-
-	#Create folders to store script files
-	rm -R -f /tmp/novell/ 2>/dev/null;
-	rm -R -f $dsapptmp 2>/dev/null;
-	mkdir -p $dsappDirectory 2>/dev/null;
-	mkdir -p $dsappLogs 2>/dev/null;
-	mkdir -p $dsapptmp 2>/dev/null;
-	mkdir -p $dsappupload 2>/dev/null;
-	mkdir -p /root/Downloads 2>/dev/null;
 
 	#Check and set force to true
 	if [ "$1" == "--force" ] || [ "$1" == "-f" ] || [ "$1" == "?" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ] || [ "$1" == "-db" ] || [ "$1" == "--database" ];then
@@ -295,12 +306,12 @@ function installAlias {
 	}
 
 	function encodeString {
-		echo "$1" | openssl enc -aes-256-cbc -a -k `hostname -f` | base64
+		echo "$1" | openssl enc -aes-256-cbc -a -k $dsHostname | base64 | tr -d '\040\011\012\015'
 	}
 
 	function decodeString {
 		decodeVar1=`echo "$1" | base64 -d`;
-		decodeVar2=`echo "$decodeVar1" | openssl enc -aes-256-cbc -base64 -k \`hostname -f\` -d`;
+		decodeVar2=`echo "$decodeVar1" | openssl enc -aes-256-cbc -base64 -k $dsHostname -d`;
 		echo $decodeVar2;
 	}
 
@@ -2482,6 +2493,51 @@ if [ "$dsappSwitch" -eq "1" ];then
 	exit 0;
 fi
 
+
+# Compare dsHostname hostname, with server hostname
+if [[ "$dsHostname" != `hostname -f` ]];then 
+	echo "Hostname differs from last time dsapp ran."
+	if askYesOrNo "Update configuration files";then
+		getDBPassword;
+
+		# Setting dsHostname to new hostname
+		echo `hostname -f` > $dsappConf/dsHostname.conf
+		dsHostname=`cat $dsappConf/dsHostname.conf`
+
+		# Storing passwords with new encode
+		dbPassword=$(encodeString $dbPassword)
+		trustedAppKey=$(encodeString $trustedAppKey)
+		ldapPassword=$(encodeString $ldapPassword)
+
+		# Setting database password in multiple files
+		if [[ $(isStringProtected database $ceconf) -eq 1 ]];then
+			lineNumber=`grep "database" -A 7 -n $ceconf | grep password | cut -d '-' -f1`
+			sed -i ""$lineNumber"s|<password>.*</password>|<password>"$dbPassword"</password>|g" $ceconf
+		fi
+
+		if [[ $(isStringProtected database $econf) -eq 1 ]];then
+			sed -i "s|<password>.*</password>|<password>"$dbPassword"</password>|g" $econf
+		fi
+
+		if [[ $(isStringProtected protected $mconf) -eq 1 ]];then
+			sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$dbPassword"</dbpass>|g" $mconf
+		fi
+
+		# Setting TrustedAppKey with new hostname encoding
+		if [[ $(isStringProtected protected $gconf) -eq 1 ]];then
+			sed -i "s|<trustedAppKey>.*</trustedAppKey>|<trustedAppKey>"$trustedAppKey"</trustedAppKey>|g" $gconf
+		fi
+
+		# Setting ldapPassword with new hostname encoding
+		if [[ $(isStringProtected login $ceconf) -eq 1 ]];then
+			lineNumber=`grep -i "<login>" -A 4 -n $ceconf | grep password | cut -d '-' -f1`
+			sed -i ""$lineNumber"s|<password>.*</password>|<password>"$ldapPassword"</password>|g" $ceconf
+		fi
+
+		echo -e "Configuration files updated.\nPlease restart Mobility."
+		exit 0;
+	fi
+fi
 
 ##################################################################################################
 #	
