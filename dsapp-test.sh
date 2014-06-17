@@ -15,13 +15,14 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='176'
+	dsappversion='177'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
 	dsapptmp="$dsappDirectory/tmp"
 	dsappupload="$dsappDirectory/upload"
+	rootDownloads="/root/Downloads"
 
 	#Create folders to store script files
 	rm -R -f /tmp/novell/ 2>/dev/null;
@@ -31,7 +32,7 @@
 	mkdir -p $dsappLogs 2>/dev/null;
 	mkdir -p $dsapptmp 2>/dev/null;
 	mkdir -p $dsappupload 2>/dev/null;
-	mkdir -p /root/Downloads 2>/dev/null;
+	mkdir -p $rootDownloads 2>/dev/null;
 
 	# Version
 	version="/opt/novell/datasync/version"
@@ -1757,6 +1758,68 @@ function dumpTable {
 
 ##################################################################################################
 #	
+#	Patch / FTF Fixes
+#
+##################################################################################################
+function getExactMobilityVersion {
+	daVersion=`cat /opt/novell/datasync/version | tr -d '.'`
+}
+
+# function emergency () { echo "$(_fmt emergency) ${@}" || true; exit 1; }
+function error ()     { echo -e "\n${@}\n"; read -p "Press [Enter] to continue."; break; }
+function info ()      { echo -e "${@}"; }
+# function debug ()     { [ "${LOG_LEVEL}" -ge 7 ] && echo "$(_fmt debug) @}" || true; }
+
+# Check for specific version
+function checkVersion {
+	if [ "$1" == "$daVersion" ]; then
+		info "\nVersion check ${bGREEN}passed${NC}."
+		return 0;
+	else 
+		error "This patch is intended for version $1, the server is running version $daVersion"
+		return 1;
+	fi
+}
+
+function getFileFromFTP {
+	wget "ftp://ftp.novell.com/outgoing/$1"
+	if [ $? -ne 0 ];
+		then error "There was a problem downloading $1 from ftp://ftp.novell.com/outgoing!";
+		return 1;
+	fi
+}
+
+# Works only with 2.0.1.53
+function fixSlowStartup {
+	ftpFilename="870939.zip"
+	folder="/opt/novell/datasync/syncengine/connectors/groupwise/lib"
+	
+	checkVersion "20153"
+	if [ $? -eq 0 ]; then
+		cd $rootDownloads; rm $ftpFilename gwsoap.pyc 2>/dev/null
+		getFileFromFTP "$ftpFilename"
+		unzip "$ftpFilename"
+
+		# Backup & Deploy
+		$rcScript stop;
+		echo -e "\nDeploying files..."
+		mv -v "$folder/gwsoap.pyc" "$folder/gwsoap.pyc.bak"
+		mv -v "$rootDownloads/gwsoap.pyc" "$folder"
+		chmod -v --reference "$folder/gwsoap.pyc.bak" "$folder/gwsoap.pyc"
+		chown -v --reference "$folder/gwsoap.pyc.bak" "$folder/gwsoap.pyc"
+		echo
+
+		$rcScript start;
+	fi
+	echo
+	read -p "Press [Enter] when Finished.";
+}
+
+# Initialize Patch / FTF Fixes
+getExactMobilityVersion
+
+##################################################################################################
+#	
 #	General Health Check
 #
 ##################################################################################################
@@ -2781,10 +2844,8 @@ EOF
 		 datasyncBanner
 		cd $cPWD;
 		echo -e "\t1. Register Mobility"
-		echo -e "\t2. Update with Novell Update Channel"
-		echo -e "\t3. Update with Local ISO"
-		echo -e "\t4. Update with Novell FTP"
-		# echo -e "\n\t5. Update 1.2.5.299 with patch files\n\t  (fix for garbled - TID 7012819, bug 819843)"
+		echo -e "\t2. Update Mobility"
+		echo -e "\t3. Apply FTF / Patch Files"
 		echo -e "\n\t0. Back"
  		echo -n -e "\n\tSelection: "
  		read opt
@@ -2793,66 +2854,115 @@ EOF
 			1) registerDS
 				;;
 
-			2) # Update DataSync using Novell Update Channel
-				clear;
-				echo -e "\n"
-				zService=`zypper ls |grep -iwo nu_novell_com | head -1`;
-				if [ "$zService" = "nu_novell_com" ]; then
-					if askYesOrNo $"Permission to restart Mobility when applying update?"; then
-					#Get the Correct Novell Update Channel
-					echo -e "\n"
-					nuc=`zypper lr | grep nu_novell_com | sed -e "s/.*nu_novell_com://;s/| Mobility.*//"`;
-					dsUpdate $nuc;
-					fi
-				else
-					echo "Please register Mobility to use this function."
-				fi
-				read -p "Press [Enter] to continue."
-				;;
+			2) # Update Mobility submenu
+				while :
+				do
+					clear;
+					datasyncBanner
+					echo -e "\t1. Update with Novell Update Channel"
+					echo -e "\t2. Update with Local ISO"
+					echo -e "\t3. Update with Novell FTP"
 
-			3) #Update Datasync using local ISO
-				clear;
-				if askYesOrNo $"Permission to restart Mobility when applying update?"; then
-				#Get Directory
-				while [ ! -d "$path" ]; do
-				read -ep "Enter full path to the directory of ISO file: " path;
-				if [ ! -d "$path" ]; then
-				echo "Invalid directory entered. Please try again.";
-				fi
-				echo $path
-				if [ -d "$path" ]; then
-				ls "$path"/novell*mobility*.iso &>/dev/null;
-				if [ $? -ne "0" ]; then
-				echo "No mobility ISO found at this path.";
-				path="";
-				fi
-				fi
+			 		echo -e "\n\t0. Back"
+				 	echo -n -e "\n\tSelection: "
+				 	read opt;
+					case $opt in
+
+						1) # Update DataSync using Novell Update Channel
+							clear;
+							echo -e "\n"
+							zService=`zypper ls |grep -iwo nu_novell_com | head -1`;
+							if [ "$zService" = "nu_novell_com" ]; then
+								if askYesOrNo $"Permission to restart Mobility when applying update?"; then
+								#Get the Correct Novell Update Channel
+								echo -e "\n"
+								nuc=`zypper lr | grep nu_novell_com | sed -e "s/.*nu_novell_com://;s/| Mobility.*//"`;
+								dsUpdate $nuc;
+								fi
+							else
+								echo "Please register Mobility to use this function."
+							fi
+							read -p "Press [Enter] to continue."
+							;;
+
+						2) #Update Datasync using local ISO
+							clear;
+							if askYesOrNo $"Permission to restart Mobility when applying update?"; then
+							#Get Directory
+							while [ ! -d "$path" ]; do
+							read -ep "Enter full path to the directory of ISO file: " path;
+							if [ ! -d "$path" ]; then
+							echo "Invalid directory entered. Please try again.";
+							fi
+							echo $path
+							if [ -d "$path" ]; then
+							ls "$path"/novell*mobility*.iso &>/dev/null;
+							if [ $? -ne "0" ]; then
+							echo "No mobility ISO found at this path.";
+							path="";
+							fi
+							fi
+							done
+							cd "$path";
+
+							#Get File
+							while [ ! -f "${PWD}/$isoName" ]; do
+							echo -e "\n";
+							ls novell*mobility*.iso;
+							read -ep "Enter ISO to use for update: " isoName;
+							if [ ! -f "${PWD}/$isoName" ]; then
+							echo "Invalid file entered. Please try again.";
+							fi
+							done
+
+							#zypper update process
+							zypper rr mobility 2>/dev/null;
+							zypper addrepo 'iso:///?iso='$isoName'&url=file://'"$path"'' mobility;
+							dsUpdate mobility;
+							
+							path="";
+							isoName="";
+							fi
+							read -p "Press [Enter] to continue."
+							;;
+
+						3) #Update Datasync FTP
+							updateMobilityFTP
+							;;
+
+				/q | q | 0)break;;
+				  *) ;;
+				esac
 				done
-				cd "$path";
+				;; 
 
-				#Get File
-				while [ ! -f "${PWD}/$isoName" ]; do
-				echo -e "\n";
-				ls novell*mobility*.iso;
-				read -ep "Enter ISO to use for update: " isoName;
-				if [ ! -f "${PWD}/$isoName" ]; then
-				echo "Invalid file entered. Please try again.";
+			3) # Apply FTF / Patch Files
+				clear
+				if [ $(checkFTP) -ne 0 ];
+					then error "Unable to connect to ftp://ftp.novell.com";
 				fi
+
+				while :
+				do
+					clear;
+					datasyncBanner
+					echo -e "\t1. Fix slow startup (GMS 2.0.1.53 only)\n\t\t[ TID 7014819, Bug 870939 ]"
+
+			 		echo -e "\n\t0. Back"
+				 	echo -n -e "\n\tSelection: "
+				 	read opt;
+					case $opt in
+
+						1) # Fix slow startup (GMS 2.0.1.53 only) - [ TID 7014819, Bug 870939 ]
+							clear;
+							fixSlowStartup
+							;;
+
+				/q | q | 0) break;;
+				*) ;;
+
+				esac
 				done
-
-				#zypper update process
-				zypper rr mobility 2>/dev/null;
-				zypper addrepo 'iso:///?iso='$isoName'&url=file://'"$path"'' mobility;
-				dsUpdate mobility;
-				
-				path="";
-				isoName="";
-				fi
-				read -p "Press [Enter] to continue."
-				;;
-
-			4) #Update Datasync FTP
-				updateMobilityFTP
 				;;
 
 			# 5) # TID 7012819 - Some emails sent, replied or forwarded from some devices are messed up, in plain text format, blank or garbled, HTML
