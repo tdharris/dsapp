@@ -7,10 +7,11 @@ fi
 auth=`cat /root/.gitAuth`
 
 tmp_publishedVersion="/tmp/dsapp-version.info"
+increment=false;
 
 # Functions
 function incrementBuild {
-	clear; echo; increment=false;
+	clear; echo;
 	while true; do
 		read -p "Increment version? [y/n] " ans
 		case $ans in
