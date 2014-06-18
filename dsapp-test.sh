@@ -204,7 +204,8 @@ function autoUpdateDsapp {
 			if [ $(checkFTP) -eq 0 ];then
 
 				# Fetch online dsapp and store to memory, check version
-				publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
+				publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp-version.info | grep -m1 dsappversion= | cut -f2 -d "'"`
+				# publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
 
 				# Download if newer version is available
 				if [ "$dsappversion" -ne "$publicVersion" ];then
