@@ -47,7 +47,7 @@ EOF
 		echo "Problem uploading to ftp://ftp.novell.com..."
 		return 1
 	elif ($increment); then
-		echo "dsappversion='$version'" > $tmp_publishedVersion
+		echo "dsappversion=$version" > $tmp_publishedVersion
 		ftp -u ftp://ftp.novell.com/outgoing/dsapp-version.info $tmp_publishedVersion
 	fi
 	echo -e "\nCopying to root@tharris7:/wrk/outgoing: "
