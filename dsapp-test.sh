@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='178'
+	dsappversion='179'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
@@ -846,30 +846,6 @@ function removeUser {
 			echo -e "Invalid Entry... try again.\n";
 			read -ep "Specify userID: " uid;
 		done
-
-		#disabled+ will remove disabled entries from targets table.
-		if [ "$uid" == "disabled+" ];then
-			if askYesOrNo $"Remove all disabled users/groups from target table?"; then
-				dpsql << EOF
-				delete from targets where disabled='1';
-				\q
-EOF
-			fi
-			read -p "Press [Enter] to continue.";
-			continue;
-		fi
-
-		#refcount+ will fix referenceCount entries on targets table for non disabled users.
-		if [ "$uid" == "refcount+" ];then
-			if askYesOrNo $"Set referenceCount to 1 for all non-disabled users/groups?"; then
-				dpsql << EOF
-				update targets set "referenceCount"='1' where disabled='0';
-				\q
-EOF
-			fi
-			read -p "Press [Enter] to continue.";
-			continue;
-		fi
 
 	if askYesOrNo $"Remove "$uid" from database?"; then
 
@@ -2433,6 +2409,29 @@ function exampleHealthCheck {
 	fi
 }
 
+function removeDisabled_fixReferenceCount {
+	clear; echo
+	#disabled+ will remove disabled entries from targets table.
+	if askYesOrNo $"Remove all disabled users/groups from target table?"; then
+		dpsql << EOF
+		delete from targets where disabled != '0';
+		\q
+EOF
+	fi
+
+	echo
+	#refcount+ will fix referenceCount entries on targets table for non disabled users.
+	if askYesOrNo $"Set referenceCount to 1 for all non-disabled users/groups?"; then
+		dpsql << EOF
+		update targets set "referenceCount"='1' where disabled='0' AND "referenceCount" != '1';
+		\q
+EOF
+	fi
+	echo
+	read -p "Press [Enter] to continue.";
+}
+
+
 ##################################################################################################
 #	
 #	Switches / Command-line parameters
@@ -3375,26 +3374,31 @@ done
 			do
 				clear;
 				datasyncBanner
-				echo -e "\t1. Remove user & db references"
-		 		echo -e "\t2. Remove user & group db references only (remove from WebAdmin first)"
-		 		echo -e "\n\t3. Reinitialize user (WebAdmin is recommended)"
-		 		echo -e "\t4. Reinitialize all users (CAUTION)"
+				echo -e "\t1. Force remove user/group db references"
+				echo -e "\t2. Remove user/group (restarts configengine)"
+				echo -e "\t3. Remove disabled users & fix referenceCount"
+		 		echo -e "\n\t4. Reinitialize user (WebAdmin is recommended)"
+		 		echo -e "\t5. Reinitialize all users (CAUTION)"
 
 		 		echo -e "\n\t0. Back"
 			 	echo -n -e "\n\tSelection: "
 			 	read opt;
 				case $opt in
 
-					1) # Remove user
-						dremoveUser;;
+					1) # Force remove user/group db references
+						removeUser;;
 
-					2) # Remove User Database References
-	     				removeUser;;
+					2) # Remove user/group (restarts configengine)
+	     				dremoveUser;;
 
-	     			3) # Reinitialze user (set state to 7 Re-Init)
+	     			3) # Remove disabled users and fix referenceCount issue
+						removeDisabled_fixReferenceCount
+						;;
+
+	     			4) # Reinitialze user (set state to 7 Re-Init)
 						setUserState 7;;
 
-					4) clear; #Re-initialize all users
+					5) clear; #Re-initialize all users
 						reinitAllUsers;;
 
 			/q | q | 0)break;;
