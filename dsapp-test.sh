@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='181'
+	dsappversion='182'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
@@ -3036,7 +3036,7 @@ EOF
 						3) # Fix Sony Xperia Z unable to see mails in Inbox (GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698
 							ftfPatchlevelCheck 861830-868698.zip
 							if [ $? -eq 0 ];then
-								patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/sync.pyc" )
+								patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/sync.pyc" )
 								patchEm "861830-868698.zip" "20153"
 							fi
 							;;

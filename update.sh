@@ -47,10 +47,9 @@ EOF
 	if [ $? -ne 0 ]; then
 		echo "Problem uploading to ftp://ftp.novell.com..."
 		return 1
-	elif ($increment); then
-		echo "dsappversion=$version" > $tmp_publishedVersion
-		ftp -u ftp://ftp.novell.com/outgoing/dsapp-version.info $tmp_publishedVersion
 	fi
+	echo "dsappversion='$version'" > $tmp_publishedVersion
+	ftp -u ftp://ftp.novell.com/outgoing/dsapp-version.info $tmp_publishedVersion
 	echo -e "\nCopying to root@tharris7:/wrk/outgoing: "
 	scp dsapp.tgz root@tharris7.lab.novell.com:/wrk/outgoing
 	if [ $? -ne 0 ]; then
