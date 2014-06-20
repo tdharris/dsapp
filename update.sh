@@ -27,9 +27,8 @@ function incrementBuild {
 	if ($increment); then
 		# Release to FTP
 		version=$((version+1))
-		version=`printf "'$version'"`
 		lineNumber=`grep dsappversion= -n -m1 dsapp-test.sh | cut -f1 -d ':'`
-		sed -i ""$lineNumber"s|dsappversion=.*|dsappversion=$version|g" dsapp-test.sh;
+		sed -i ""$lineNumber"s|dsappversion='[0-9]*'|dsappversion='$version'|g" dsapp-test.sh
 	fi
 
 	echo -e $version"\n"
