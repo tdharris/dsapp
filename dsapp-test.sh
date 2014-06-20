@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='179'
+	dsappversion='180'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
@@ -1750,10 +1750,10 @@ function info ()      { echo -e "${@}"; }
 # Check for specific version
 function checkVersion {
 	if [ "$1" == "$daVersion" ]; then
-		info "\nVersion check ${bGREEN}passed${NC}."
+		info "\nVersion check ${bGREEN}passed${NC}.\n"
 		return 0;
 	else 
-		error "This patch is intended for version $1, the server is running version $daVersion"
+		error "This patch is intended for version $1, the server is running version $daVersion\n"
 		return 1;
 	fi
 }
@@ -1766,28 +1766,47 @@ function getFileFromFTP {
 	fi
 }
 
-# Works only with 2.0.1.53
-function fixSlowStartup {
-	ftpFilename="870939.zip"
-	folder="/opt/novell/datasync/syncengine/connectors/groupwise/lib"
+function uncompressIt {
+	local file="$1"
+	local ext=${file##*.}
+
+	case "$ext" in
+	    'tar' ) tar xfv "$file" ;;
+	    'tgz' ) tar xzfv "$file" ;;
+	    'zip' ) unzip "$file" ;;
+	esac
+}
+
+function patchEm {
 	
-	checkVersion "20153"
+	clear
+	local ftpFile="$1"
+	local version="$2"
+
+	checkVersion "$version"
 	if [ $? -eq 0 ]; then
-		cd $rootDownloads; rm $ftpFilename gwsoap.pyc 2>/dev/null
-		getFileFromFTP "$ftpFilename"
-		unzip "$ftpFilename"
 
-		# Backup & Deploy
-		$rcScript stop;
-		echo -e "\nDeploying files..."
-		mv -v "$folder/gwsoap.pyc" "$folder/gwsoap.pyc.bak"
-		mv -v "$rootDownloads/gwsoap.pyc" "$folder"
-		chmod -v --reference "$folder/gwsoap.pyc.bak" "$folder/gwsoap.pyc"
-		chown -v --reference "$folder/gwsoap.pyc.bak" "$folder/gwsoap.pyc"
+		cd $rootDownloads; rm $ftpFilename* 2>/dev/null
+		getFileFromFTP "$ftpFile"
+		uncompressIt "$ftpFile"
 		echo
+		$rcScript stop;
 
+		echo -e "\nDeploying files..."
+	    for file in "${patchFiles[@]}"; do
+			filename="${file##*/}"
+			echo -e "\nPatching ${yellow}$file${NC}"
+			chmod -v --reference "$file" "$rootDownloads/$filename"
+			chown -v --reference "$file" "$rootDownloads/$filename"
+			mv -v "$file" "$file.bak"
+			mv -v "$rootDownloads/$filename" "$file"
+		done
+
+		echo
 		$rcScript start;
+
 	fi
+
 	echo
 	read -p "Press [Enter] when Finished.";
 }
@@ -2937,6 +2956,7 @@ EOF
 				;; 
 
 			3) # Apply FTF / Patch Files
+			   # Menu-requirements: ftp connection to Novell
 				clear
 				if [ $(checkFTP) -ne 0 ];
 					then error "Unable to connect to ftp://ftp.novell.com";
@@ -2946,16 +2966,38 @@ EOF
 				do
 					clear;
 					datasyncBanner
-					echo -e "\t1. Fix slow startup (GMS 2.0.1.53 only)\n\t\t[ TID 7014819, Bug 870939 ]"
+					echo -e "\t1. Fix slow startup\n\t\t(GMS 2.0.1.53 only) - TID 7014819, Bug 870939"
+					echo -e "\n\t2. Fix LG Optimus fwd attachment encoded\n\t\t (GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
+					echo -e "\n\t3. Fix Sony Xperia Z unable to see mails in Inbox\n\t\t(GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698"
 
 			 		echo -e "\n\t0. Back"
 				 	echo -n -e "\n\tSelection: "
 				 	read opt;
 					case $opt in
+						
+						#	patchEm will only work given the following conditions are met: 
+						#   	-Global variable patchFiles is defined prior to calling patchEm and that variable is an array of strings 
+						#			 that contain the full-path and filename of the file to be patched (ie /path/to/file1.pyc)
+						# 		-The patchEm function must receive two parameters: 1) the ftpfilename (ie bugX.zip), 2) the required version 
+						#			 of Mobility for the patch (removing all periods from the string, ie 20153 would be for GMS 2.0.1.53)
+						#		-The ftpFilename must be a compressed file of type: .tgz, .tar, .zip and nothing else.
+						# 		-The patch files must be at the root level of the compressed file, not underneath any subfolders
+						#	
+						#		Note: Please make sure these ftpFiles are available on Novell's FTP by placing them in //tharris7.lab.novell.com/outgoing
 
-						1) # Fix slow startup (GMS 2.0.1.53 only) - [ TID 7014819, Bug 870939 ]
-							clear;
-							fixSlowStartup
+						1) # Fix slow startup (GMS 2.0.1.53 only) - TID 7014819, Bug 870939
+							patchFiles=( "/opt/novell/datasync/syncengine/connectors/groupwise/lib/gwsoap.pyc" )
+							patchEm "870939.zip" "20153"
+							;;
+
+						2) # fixLGOptimusFwdAttachmentEncoded (GMS 2.0.1.53 only) - TID 7015238, Bug 882909
+							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/mobility_util.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/smartForward.pyc" )
+							patchEm "882909.zip" "20153"
+							;;
+
+						3) # Fix Sony Xperia Z unable to see mails in Inbox (GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698
+							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/sync.pyc" )
+							patchEm "861830-868698.zip" "20153"
 							;;
 
 				/q | q | 0) break;;
@@ -2964,58 +3006,6 @@ EOF
 				esac
 				done
 				;;
-
-			# 5) # TID 7012819 - Some emails sent, replied or forwarded from some devices are messed up, in plain text format, blank or garbled, HTML
-			#    # Apply the 3 patch files from bug 819843.
-			#    clear;
-			#    cat /opt/novell/datasync/version | grep 1.2.5.299 >/dev/null;
-			#    if [ $? -ne 0 ]; then
-			#    		echo -e "\nDataSync is not version 1.2.5.299.\n"
-			#    		read -p "Press [Enter] to continue";
-			#    		break;
-			#    fi
-			#    if askYesOrNo $"Permission to restart datasync when applying patch files?"; then
-			#    	echo -e "\n"
-			# 	echo -e "Connecting to ftp..."
-			# 	netcat -z -w 5 ftp.novell.com 21;
-			# 	if [ $? -eq 0 ];then
-			# 	cd /root/Downloads;
-			# 	rm 819843.tgz* 2>/dev/null
-			# 	wget "ftp://ftp.novell.com/outgoing/819843.tgz"
-			# 		if [ $? -eq 0 ];then
-			# 			echo
-			# 			$rcScript stop; killall -9 python;
-			# 			echo
-			# 			tar xvfz 819843.tgz 2>/dev/null;
-			# 			lib='/opt/novell/datasync/syncengine/connectors/mobility/lib'
-			# 			# Backup files
-			# 			mv $lib/mobility_util.pyc $lib/mobility_util.orig
-			# 			mv $lib/device/smartForward.pyc $lib/device/smartForward.orig
-			# 			mv $lib/device/sendMail.pyc $lib/device/sendMail.orig
-			# 			echo -e "Files backed up."
-			# 			echo -e "\nMoving patch files into place."
-			# 			mv -v mobility_util.pyc $lib
-			# 			mv -v smartForward.pyc $lib/device
-			# 			mv -v sendMail.pyc $lib/device
-			# 			echo
-			# 			$rcScript start;
-			# 			if [ $? -eq 0 ]; then
-			# 				echo ""; cd $lib
-			# 				ls -l mobility_util.pyc
-			# 				cd device
-			# 				ls -l smartForward.pyc
-			# 				ls -l sendMail.pyc
-			# 				echo -e "\nPatch files have been applied successfully.\n"
-
-			# 			else echo -e "\nThere was a problem restarting datasync.\n"; $rcScript status; netstat -ltpn | grep -i python
-			# 			fi
-			# 		else echo -e "Unable to download ftp://ftp.novell.com/outgoing/819843.tgz\n"
-			# 		fi
-			# 	else echo -e "Failed FTP: host (connection) might have problems\n"
-			# 	fi
-			# 	read -p "Press [Enter] to continue";
-			# fi
-			# ;;
 
 			  /q | q | 0) break;;
 			  *) ;;
