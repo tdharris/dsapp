@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='180'
+	dsappversion='181'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
@@ -1742,6 +1742,35 @@ function getExactMobilityVersion {
 	daVersion=`cat /opt/novell/datasync/version | tr -d '.'`
 }
 
+function ftfPatchlevel {
+	if [ ! -f "$dsappConf/patchlevel" ];then
+		touch $dsappConf/patchlevel
+	else sed -i '/./,$!d' $dsappConf/patchlevel
+	fi
+	dsPatchlevel=`cat "$dsappConf/patchlevel"`
+
+	if ( ! `echo "$dsPatchlevel" | grep -qi "Applied fix $1 to Mobility"`);then
+		echo -e "\nApplied fix $1 to Mobility version $3" >> $dsappConf/patchlevel
+	fi
+
+	if ( ! `echo "$dsPatchlevel" | grep -qi "$2"`);then
+		echo -e "$2" >> $dsappConf/patchlevel
+	fi
+}
+
+function ftfPatchlevelCheck {
+	if [ ! -f "$dsappConf/patchlevel" ];then
+		return 0;
+	else 
+		if (`cat "$dsappConf/patchlevel" | grep -qi "$1"`);then
+			clear;
+			echo -e "Patch $1 has already been applied.\n"
+			read -p "Press [Enter] to continue."
+			return 1;
+		fi
+	fi
+}
+
 # function emergency () { echo "$(_fmt emergency) ${@}" || true; exit 1; }
 function error ()     { echo -e "\n${@}\n"; read -p "Press [Enter] to continue."; break; }
 function info ()      { echo -e "${@}"; }
@@ -1782,6 +1811,7 @@ function patchEm {
 	clear
 	local ftpFile="$1"
 	local version="$2"
+	local now=$(date +"%s")
 
 	checkVersion "$version"
 	if [ $? -eq 0 ]; then
@@ -1789,6 +1819,7 @@ function patchEm {
 		cd $rootDownloads; rm $ftpFilename* 2>/dev/null
 		getFileFromFTP "$ftpFile"
 		uncompressIt "$ftpFile"
+
 		echo
 		$rcScript stop;
 
@@ -1798,8 +1829,9 @@ function patchEm {
 			echo -e "\nPatching ${yellow}$file${NC}"
 			chmod -v --reference "$file" "$rootDownloads/$filename"
 			chown -v --reference "$file" "$rootDownloads/$filename"
-			mv -v "$file" "$file.bak"
+			mv -v "$file" "$file.bak_$now"
 			mv -v "$rootDownloads/$filename" "$file"
+			ftfPatchlevel $ftpFile $file $version;
 		done
 
 		echo
@@ -2967,7 +2999,7 @@ EOF
 					clear;
 					datasyncBanner
 					echo -e "\t1. Fix slow startup\n\t\t(GMS 2.0.1.53 only) - TID 7014819, Bug 870939"
-					echo -e "\n\t2. Fix LG Optimus fwd attachment encoded\n\t\t (GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
+					echo -e "\n\t2. Fix LG Optimus fwd attachment encoded\n\t\t(GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
 					echo -e "\n\t3. Fix Sony Xperia Z unable to see mails in Inbox\n\t\t(GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698"
 
 			 		echo -e "\n\t0. Back"
@@ -2986,18 +3018,27 @@ EOF
 						#		Note: Please make sure these ftpFiles are available on Novell's FTP by placing them in //tharris7.lab.novell.com/outgoing
 
 						1) # Fix slow startup (GMS 2.0.1.53 only) - TID 7014819, Bug 870939
-							patchFiles=( "/opt/novell/datasync/syncengine/connectors/groupwise/lib/gwsoap.pyc" )
-							patchEm "870939.zip" "20153"
+							ftfPatchlevelCheck 870939.zip
+							if [ $? -eq 0 ];then
+								patchFiles=( "/opt/novell/datasync/syncengine/connectors/groupwise/lib/gwsoap.pyc" )
+								patchEm "870939.zip" "20153"
+							fi
 							;;
 
 						2) # fixLGOptimusFwdAttachmentEncoded (GMS 2.0.1.53 only) - TID 7015238, Bug 882909
-							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/mobility_util.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/smartForward.pyc" )
-							patchEm "882909.zip" "20153"
+							ftfPatchlevelCheck 882909.zip
+							if [ $? -eq 0 ];then
+								patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/mobility_util.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/smartForward.pyc" )
+								patchEm "882909.zip" "20153"
+							fi
 							;;
 
 						3) # Fix Sony Xperia Z unable to see mails in Inbox (GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698
-							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/sync.pyc" )
-							patchEm "861830-868698.zip" "20153"
+							ftfPatchlevelCheck 861830-868698.zip
+							if [ $? -eq 0 ];then
+								patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/sync.pyc" )
+								patchEm "861830-868698.zip" "20153"
+							fi
 							;;
 
 				/q | q | 0) break;;
