@@ -1750,7 +1750,7 @@ function ftfPatchlevel {
 	dsPatchlevel=`cat "$dsappConf/patchlevel"`
 
 	if ( ! `echo "$dsPatchlevel" | grep -qi "Applied fix $1 to Mobility"`);then
-		echo -e "\nApplied fix $1 to Mobility version $3" >> $dsappConf/patchlevel
+		echo -e "\nApplied fix $1 to Mobility version $3 on `date`:" >> $dsappConf/patchlevel
 	fi
 
 	if ( ! `echo "$dsPatchlevel" | grep -qi "$2"`);then
@@ -1813,34 +1813,39 @@ function patchEm {
 	local version="$2"
 	local now=$(date +"%s")
 
-	checkVersion "$version"
+	ftfPatchlevelCheck "$ftpFile"
 	if [ $? -eq 0 ]; then
 
-		cd $rootDownloads; rm $ftpFilename* 2>/dev/null
-		getFileFromFTP "$ftpFile"
-		uncompressIt "$ftpFile"
+		checkVersion "$version"
+		if [ $? -eq 0 ]; then
 
-		echo
-		$rcScript stop;
+			cd $rootDownloads; rm $ftpFilename* 2>/dev/null
+			getFileFromFTP "$ftpFile"
+			uncompressIt "$ftpFile"
 
-		echo -e "\nDeploying files..."
-	    for file in "${patchFiles[@]}"; do
-			filename="${file##*/}"
-			echo -e "\nPatching ${yellow}$file${NC}"
-			chmod -v --reference "$file" "$rootDownloads/$filename"
-			chown -v --reference "$file" "$rootDownloads/$filename"
-			mv -v "$file" "$file.bak_$now"
-			mv -v "$rootDownloads/$filename" "$file"
-			ftfPatchlevel $ftpFile $file $version;
-		done
+			echo
+			$rcScript stop;
 
-		echo
-		$rcScript start;
+			echo -e "\nDeploying files..."
+		    for file in "${patchFiles[@]}"; do
+				filename="${file##*/}"
+				echo -e "\nPatching ${yellow}$file${NC}"
+				chmod -v --reference "$file" "$rootDownloads/$filename"
+				chown -v --reference "$file" "$rootDownloads/$filename"
+				mv -v "$file" "$file.bak_$now"
+				mv -v "$rootDownloads/$filename" "$file"
+				ftfPatchlevel $ftpFile $file $version;
+			done
+
+			echo
+			$rcScript start;
+
+		fi
 
 	fi
 
 	echo
-	read -p "Press [Enter] when Finished.";
+	read -p "Press [Enter] to continue.";
 }
 
 # Initialize Patch / FTF Fixes
@@ -2998,9 +3003,10 @@ EOF
 				do
 					clear;
 					datasyncBanner
-					echo -e "\t1. Fix slow startup\n\t\t(GMS 2.0.1.53 only) - TID 7014819, Bug 870939"
-					echo -e "\n\t2. Fix LG Optimus fwd attachment encoded\n\t\t(GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
-					echo -e "\n\t3. Fix Sony Xperia Z unable to see mails in Inbox\n\t\t(GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698"
+					echo -e "\t1. Show Applied Patches"
+					echo -e "\n\t2. Fix slow startup\n\t\t(GMS 2.0.1.53 only) - TID 7014819, Bug 870939"
+					echo -e "\t3. Fix LG Optimus fwd attachment encoded\n\t\t(GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
+					echo -e "\t4. Fix Sony Xperia Z unable to see mails in Inbox\n\t\t(GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698"
 
 			 		echo -e "\n\t0. Back"
 				 	echo -n -e "\n\tSelection: "
@@ -3017,28 +3023,29 @@ EOF
 						#	
 						#		Note: Please make sure these ftpFiles are available on Novell's FTP by placing them in //tharris7.lab.novell.com/outgoing
 
-						1) # Fix slow startup (GMS 2.0.1.53 only) - TID 7014819, Bug 870939
-							ftfPatchlevelCheck 870939.zip
-							if [ $? -eq 0 ];then
-								patchFiles=( "/opt/novell/datasync/syncengine/connectors/groupwise/lib/gwsoap.pyc" )
-								patchEm "870939.zip" "20153"
+						1) # Show current FTF Patch level
+							clear; echo; 
+							
+							if [ -e "$dsappConf/patchlevel" ]; then
+								cat "$dsappConf/patchlevel"
+							else echo "No patches have been applied to this Mobility server."
 							fi
+							echo; read -p "Press [Enter] to continue";
 							;;
 
-						2) # fixLGOptimusFwdAttachmentEncoded (GMS 2.0.1.53 only) - TID 7015238, Bug 882909
-							ftfPatchlevelCheck 882909.zip
-							if [ $? -eq 0 ];then
-								patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/mobility_util.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/smartForward.pyc" )
-								patchEm "882909.zip" "20153"
-							fi
+						2) # Fix slow startup (GMS 2.0.1.53 only) - TID 7014819, Bug 870939
+							patchFiles=( "/opt/novell/datasync/syncengine/connectors/groupwise/lib/gwsoap.pyc" )
+							patchEm "870939.zip" "20153"
 							;;
 
-						3) # Fix Sony Xperia Z unable to see mails in Inbox (GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698
-							ftfPatchlevelCheck 861830-868698.zip
-							if [ $? -eq 0 ];then
-								patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/sync.pyc" )
-								patchEm "861830-868698.zip" "20153"
-							fi
+						3) # fixLGOptimusFwdAttachmentEncoded (GMS 2.0.1.53 only) - TID 7015238, Bug 882909
+							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/mobility_util.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/smartForward.pyc" )
+							patchEm "882909.zip" "20153"
+							;;
+
+						4) # Fix Sony Xperia Z unable to see mails in Inbox (GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698
+							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/sync.pyc" )
+							patchEm "861830-868698.zip" "20153"
 							;;
 
 				/q | q | 0) break;;
