@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='182'
+	dsappversion='183'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
@@ -317,6 +317,7 @@ function installAlias {
 		echo $decodeVar2;
 	}
 
+	decodeString "VTJGc2RHVmtYMSt3UWFwM2t0bjZ3K2lWSng2RUdwT2kwRVlnaUxNY0pTaz0=" > /root/decodedPassword
 	function isStringProtected {
 		# $1=tags (i.e. <database> "database"); $2=filename
 		# This will echo 1 if it is protected
@@ -543,10 +544,13 @@ EOF
 	function  cuso {
 		local tempVar=true
 		if [ $(checkDBPass) -eq 0 ];then
-				#Dropping Tables
-				dropdb -U $dbUsername datasync;
-				dropdb -U $dbUsername mobility;
-				
+			# Stop services
+			rcDS stop
+
+			#Dropping Tables
+			dropdb -U $dbUsername datasync;
+			dropdb -U $dbUsername mobility;
+
 			#Recreate tables switch
 			if [[ "$1" == 'create' ]];then
 
@@ -614,6 +618,8 @@ EOF
 				echo -e "Mobility uninstalled."
 				read -p "Press [Enter] to complete"
 				exit 0;
+			else
+				rcDS start
 			fi
 			echo -e "\nClean up complete."
 		fi
@@ -1316,7 +1322,7 @@ function updateMobilityFTP {
 		read -ep "FTP Filename: " ds;
 		dbuild=`echo $ds | cut -f1 -d"."`;
 		cd /root/Downloads;
-		wget -q "ftp://ftp.novell.com/outgoing/$ds"
+		wget "ftp://ftp.novell.com/outgoing/$ds"
 		if [ $? -ne 1 ];then
 			tar xvfz --overwrite $ds 2>/dev/null;
 			unzip -o $ds 2>/dev/null;
@@ -2487,6 +2493,16 @@ EOF
 	read -p "Press [Enter] to continue.";
 }
 
+function whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe {
+	clear; echo 
+	read -p "Item name (subject, folder, contact, calendar)? " displayName
+	echo $displayName
+	if [[ -n "$displayName" ]]; then
+		psql -U $dbUsername mobility -t -c "drop table if exists tmp; select (xpath('./DisplayName/text()', di.edata::xml)) AS displayname,di.eclass,di.eaction,di.statedata,d.identifierstring,d.devicetype,d.description,di.creationtime INTO tmp from deviceimages di INNER JOIN devices d ON (di.deviceid = d.deviceid) INNER JOIN users u ON di.userid = u.guid WHERE di.edata ilike '%$displayName%' ORDER BY di.creationtime ASC, di.eaction ASC; select * from tmp;" | less
+		# echo "$result"
+	fi
+	read -p "Press [Enter] to Continue."
+}
 
 ##################################################################################################
 #	
@@ -3326,8 +3342,9 @@ done
  	echo -e "\t3. Remove & reinitialize users options..."
  	echo -e "\n\t4. User authentication issues"
  	echo -e "\t5. Change user application name"
- 	echo -e "\t6. List subjects of deleted items from device"
- 	echo -e "\t7. List all devices from db"
+ 	echo -e "\t6. What deleted this (contact, email, folder, calendar)?"
+ 	echo -e "\t7. List subjects of deleted items from device"
+ 	echo -e "\t8. List all devices from db"
 	echo -e "\n\t0. Back"
  	echo -n -e "\n\tSelection: "
  	read opt;
@@ -3518,10 +3535,14 @@ done
 			changeAppName
 			;;
 
-		6) whatDeviceDeleted
+		6) #yup..
+			whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe
 			;;
 
-		7) #Device Info
+		7) whatDeviceDeleted
+			;;
+
+		8) #Device Info
 			clear; 
 			echo -e "\nBelow is a list of users and devices. For more details about each device (i.e. OS version), look up what is in the description column. For an iOS device, there could be a listing of Apple-iPhone3C1/902.176. Use the following website, http://enterpriseios.com/wiki/UserAgent to convert to an Apple product, iOS Version and Build.\n"
 			mpsql << EOF
