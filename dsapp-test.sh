@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='183'
+	dsappversion='184'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
@@ -1899,6 +1899,7 @@ function generalHealthCheck {
 	ghc_CheckServices
 	ghc_checkXML
 	ghc_checkPSQLConfig
+	ghc_checkRPMs
 	ghc_checkLDAP
 	ghc_verifyNightlyMaintenance
 	ghc_verifyCertificates
@@ -1906,6 +1907,7 @@ function generalHealthCheck {
 	ghc_checkManualMaintenance
 	ghc_checkReferenceCount
 	ghc_checkDiskSpace
+	ghc_checkDiskIO
 	ghc_checkMemory
 	ghc_checkRPMSave
 	ghc_checkVMWare
@@ -2130,6 +2132,29 @@ function ghc_checkPSQLConfig {
 	fi
 }
 
+function ghc_checkRPMs {
+	ghcNewHeader "Checking RPMs..."
+	problem=false
+
+	declare -a needIt=('pyxml')
+	rpms=$(rpm -qa)
+
+	for i in "${needIt[@]}"; do
+	  res=`echo "$rpms" | grep -iq "$i"; echo $?`
+	  if [[ "$res" -ne 0 ]]; then
+	    echo "Missing rpm: $i" >> $ghcLog
+	    problem=true
+	  fi
+	done
+
+	# Return either pass/fail, 0 indicates pass.
+	if ($problem); then
+		echo -e "\nInstall rpm(s) from YaST or with the following command:\nzypper in <packageName>" >> $ghcLog
+		passFail 1
+	else passFail 0
+	fi
+}
+
 function ghc_checkLDAP {
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Verifying LDAP connectivity..."
@@ -2346,6 +2371,24 @@ function ghc_checkDiskSpace {
 	fi
 
 	if ($problem); then
+		passFail 1
+	else passFail 0
+	fi
+}
+
+function ghc_checkDiskIO {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking disk IO..."
+	warn=false
+
+	diskIO=$(hdparm -t `df -P /var | tail -1 | cut -d ' ' -f1`)
+	resultMBs=$(echo $diskIO | rev | awk '{ print $2 }' | rev)
+	if [ $(echo "$resultMBs>=13.33" | bc) -ne 1 ]; then 
+		warn=true
+	fi
+
+	if ($warn); then
+		echo "Disk IO appears to be slow. \n\nSee TID 7009812 - Slow Performance of Mobility during peak hours." >>$ghcLog
 		passFail 1
 	else passFail 0
 	fi
