@@ -544,19 +544,27 @@ EOF
 	function  cuso {
 		local tempVar=true
 		if [ $(checkDBPass) -eq 0 ];then
-			# Stop services
-			rcDS stop
 
 			#Dropping Tables
 			dropdb -U $dbUsername datasync;
 			dropdb -U $dbUsername mobility;
+			if [ $dsVersion -gt $dsVersionCompare ];then
+				dropdb -U $dbUsername dsmonitor;
+			fi
+
+			#Check if databases properly dropped.
+			dbNames=`psql -l -U $dbUsername -t | cut -d \| -f 1 | grep -i -e datasync -e dsmonitor -e mobility`
 
 			#Recreate tables switch
 			if [[ "$1" == 'create' ]];then
 
-				if [ $dsVersion -gt $dsVersionCompare ];then
-					dropdb -U $dbUsername dsmonitor;
+				#If databases are not properly dropped. Abort.
+				if [ -n "$dbNames" ];then
+					echo -e "\nUnable to drop the following databases:\n$dbNames\n\nAborting...\nPlease try again, or manually drop the databases.";
+					read -p "Press [Enter] to continue."
+					break;
 				fi
+
 				#Recreating Tables - Code from postgres_setup_1.sh
 				PGPASSWORD="$dbPassword" createdb "datasync" -U "$dbUsername" -h "localhost" -p "5432"
 				echo "create datasync database done.."
@@ -585,8 +593,8 @@ EOF
 
 				if [[ "$2" == 'users' ]];then
 				#Repopulating targets and membershipCache
-				psql -U $dbUsername datasync < $dsapptmp/targets.sql 2>/dev/null;
-				psql -U $dbUsername datasync < $dsapptmp/membershipCache.sql 2>/dev/null;
+				psql -U $dbUsername datasync < $dsappConf/targets.sql 2>/dev/null;
+				psql -U $dbUsername datasync < $dsappConf/membershipCache.sql 2>/dev/null;
 				fi
 			fi
 		else
@@ -598,11 +606,6 @@ EOF
 			#Remove attachments.
 			rm -fv -R $dirVarMobility/syncengine/attachments/*
 			rm -fv -R $dirVarMobility/mobility/attachments/*
-
-			#Vacuum database
-			vacuumDB;
-			#Index database
-			indexDB;
 
 			#Check if uninstall parameter was passed in - Force uninstall
 			if [[ "$1" == 'uninstall' ]];then
@@ -618,9 +621,12 @@ EOF
 				echo -e "Mobility uninstalled."
 				read -p "Press [Enter] to complete"
 				exit 0;
-			else
-				rcDS start
 			fi
+			
+			#Vacuum database
+			vacuumDB;
+			#Index database
+			indexDB;
 			echo -e "\nClean up complete."
 		fi
 		}
@@ -1727,15 +1733,32 @@ function verify {
 }
 
 function dumpTable {
-	 pg_dump -U $dbUsername $1 -D -a -t \"$2\" > $dsapptmp/$2.sql;
-	 vReturn="$?";
+	if [ -f "$dsappConf/$2.sql" ];then
+		echo -e "\n$2.sql dump already exists. Created" `date -r $dsappConf/$2.sql`
+		if askYesOrNo "Overwrite ../conf/$2.sql dump?"; then
+			echo "Moving ../conf/$2.sql to ../tmp/$2.sql"
+			mv $dsappConf/$2.sql $dsapptmp/$2.sql
+			 pg_dump -U $dbUsername $1 -D -a -t \"$2\" > $dsappConf/$2.sql;
+			 vReturn="$?";
 
-	 if [[ "$vReturn" -eq "1" ]];then
-	 	rm -f $dsapptmp/$2.sql 2>/dev/null;
-	 	return 1;
-	 else
-	 	return 0;
-	 fi
+			 if [[ "$vReturn" -eq "1" ]];then
+			 	rm -f $dsappConf/$2.sql 2>/dev/null;
+			 	return 1;
+			 else
+			 	return 0;
+			 fi
+		fi
+	else
+		pg_dump -U $dbUsername $1 -D -a -t \"$2\" > $dsappConf/$2.sql;
+			 vReturn="$?";
+
+			 if [[ "$vReturn" -eq "1" ]];then
+			 	rm -f $dsappConf/$2.sql 2>/dev/null;
+			 	return 1;
+			 else
+			 	return 0;
+			 fi
+	fi
 
 }
 
