@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='184'
+	dsappversion='185'
 	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
@@ -317,7 +317,6 @@ function installAlias {
 		echo $decodeVar2;
 	}
 
-	decodeString "VTJGc2RHVmtYMSt3UWFwM2t0bjZ3K2lWSng2RUdwT2kwRVlnaUxNY0pTaz0=" > /root/decodedPassword
 	function isStringProtected {
 		# $1=tags (i.e. <database> "database"); $2=filename
 		# This will echo 1 if it is protected
