@@ -2669,6 +2669,8 @@ while [ "$1" != "" ]; do
 	--help | '?' | -h) dsappSwitch=1
 		echo -e "dsapp switches:";
 		echo -e "      \t--version\tReport dsapp version"
+		echo -e "      \t--debug\t\tToggles dsapp log debug level [$debug]"
+		echo -e "  -au \t--autoUpdate\tToggles dsapp autoUpdate [$autoUpdate]"
 		echo -e "  -ghc\t--gHealthCheck\tGeneral Health Check"
 		echo -e "  -f  \t--force\t\tForce runs dsapp"
 		echo -e "  -ul \t--uploadLogs\tUpload Mobility logs to Novell FTP"
@@ -2680,8 +2682,6 @@ while [ "$1" != "" ]; do
 		echo -e "  -u \t--users\t\tPrint a list of all users with count"
 		echo -e "  -d  \t--devices\tPrint a list of all devices with count"
 		echo -e "  -db \t--database\tChange database password"
-		echo -e "  -au \t--autoUpdate\tToggles dsapp autoUpdate [$autoUpdate]"
-		echo -e "  -dl \t--dsappLog\tToggles dsapp log level [$debug]"
 	;;
 
 	--version | version) dsappSwitch=1
@@ -2762,16 +2762,20 @@ while [ "$1" != "" ]; do
 	--autoUpdate | -au ) dsappSwitch=1
 		if [ "$autoUpdate" = "true" ];then
 			sed -i "s|autoUpdate=true|autoUpdate=false|g" $dsappconfFile;
+			echo "Setting dsapp autoUpdate: false"
 		else
 			sed -i "s|autoUpdate=false|autoUpdate=true|g" $dsappconfFile;
+			echo "Setting dsapp autoUpdate: true"
 		fi
 		;;
 
-	--dsappLog | -dl ) dsappSwitch=1
+	--debug ) dsappSwitch=1
 		if [ "$debug" = "true" ];then
 			sed -i "s|debug=true|debug=false|g" $dsappconfFile;
+			echo "Setting dsapp log debug: false"
 		else
 			sed -i "s|debug=false|debug=true|g" $dsappconfFile;
+			echo "Setting dsapp log debug: true"
 		fi
 		;;
 
