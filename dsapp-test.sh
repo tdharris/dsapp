@@ -16,7 +16,6 @@
 
 	# Assign folder variables
 	dsappversion='185'
-	autoUpdate=true
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -47,6 +46,16 @@
 	econf="/etc/datasync/configengine/engines/default/engine.xml"
 	wconf="/etc/datasync/webadmin/server.xml"
 
+	# Configure / Set dsapp.conf
+	if [ ! -f "$dsappConf/dsapp.conf" ];then
+		echo -e "#Configuration for dsapp\n\n#Auto update dsapp [true | false]\nautoUpdate=true" > $dsappConf/dsapp.conf
+		echo -e "\n#Log level for dsapp [true | false]\ndebug=true" >> $dsappConf/dsapp.conf
+	fi
+	dsappconfFile="$dsappConf/dsapp.conf"
+
+	# Sets dsapp autoUpdate function [true | false]
+	autoUpdate=`grep "autoUpdate" $dsappconfFile | cut -f2 -d '='`
+
 	# Mobility Directories
 	dirOptMobility="/opt/novell/datasync"
 	dirEtcMobility="/etc/datasync"
@@ -67,7 +76,7 @@
 	warn="/var/log/warn"
 
 	# dsapp Logs
-	debug=true
+	debug=`grep "debug" $dsappconfFile | cut -f2 -d '='`
 	dsappLog="$dsappLogs/dsapp.log"
 	ghcLog="$dsappLogs/generalHealthCheck.log"
 	
@@ -2671,6 +2680,8 @@ while [ "$1" != "" ]; do
 		echo -e "  -u \t--users\t\tPrint a list of all users with count"
 		echo -e "  -d  \t--devices\tPrint a list of all devices with count"
 		echo -e "  -db \t--database\tChange database password"
+		echo -e "  -au \t--autoUpdate\tToggles dsapp autoUpdate [$autoUpdate]"
+		echo -e "  -dl \t--dsappLog\tToggles dsapp log level [$debug]"
 	;;
 
 	--version | version) dsappSwitch=1
@@ -2747,6 +2758,22 @@ while [ "$1" != "" ]; do
 	--database | -db) dsappSwitch=1
 		changeDBPass;
 	;;
+
+	--autoUpdate | -au ) dsappSwitch=1
+		if [ "$autoUpdate" = "true" ];then
+			sed -i "s|autoUpdate=true|autoUpdate=false|g" $dsappconfFile;
+		else
+			sed -i "s|autoUpdate=false|autoUpdate=true|g" $dsappconfFile;
+		fi
+		;;
+
+	--dsappLog | -dl ) dsappSwitch=1
+		if [ "$debug" = "true" ];then
+			sed -i "s|debug=true|debug=false|g" $dsappconfFile;
+		else
+			sed -i "s|debug=false|debug=true|g" $dsappconfFile;
+		fi
+		;;
 
 
 	#Not valid switch case
