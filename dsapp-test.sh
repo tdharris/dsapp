@@ -67,8 +67,10 @@
 	warn="/var/log/warn"
 
 	# dsapp Logs
+	debug=true
+	dsappLog="$dsappLogs/dsapp.log"
 	ghcLog="$dsappLogs/generalHealthCheck.log"
-
+	
 	# Fetch variables from confs
 	ldapAddress=`grep -i "<ldapAddress>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	ldapPort=`grep -i "<ldapPort>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
@@ -77,8 +79,8 @@
 	mPort=`grep -i "<listenPort>" $mconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	gPort=`grep -i "<port>" $gconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	wPort=`sed -n "/<server>/,/<\/server>/p" $wconf | grep "<port>" | cut -f2 -d '>' | cut -f1 -d '<'`
-	mlistenAddress=`grep -i "<listenAddress>" $mconf | sed 's/<[^>]*[>]//g'`
-	glistenAddress=`grep -i "<listeningLocation>" $gconf | sed 's/<[^>]*[>]//g'`
+	mlistenAddress=`grep -i "<listenAddress>" $mconf | sed 's/<[^>]*[>]//g' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
+	glistenAddress=`grep -i "<listeningLocation>" $gconf | sed 's/<[^>]*[>]//g' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
 
 	# DSAPP configuration files
 	if [ ! -f "$dsappConf/dsHostname.conf" ];then
@@ -86,11 +88,59 @@
 	fi
 	dsHostname=`cat $dsappConf/dsHostname.conf`
 	
+##################################################################################################
+# Begin Logging Section
+##################################################################################################
+if [[ "${INTERACTIVE_MODE}" == "off" ]]
+then
+    # Then we don't care about log colors
+    declare -r LOG_DEFAULT_COLOR=""
+    declare -r LOG_ERROR_COLOR=""
+    declare -r LOG_INFO_COLOR=""
+    declare -r LOG_SUCCESS_COLOR=""
+    declare -r LOG_WARN_COLOR=""
+    declare -r LOG_DEBUG_COLOR=""
+else
+    declare -r LOG_DEFAULT_COLOR="\e[0m"
+    declare -r LOG_ERROR_COLOR="\e[31m"
+    declare -r LOG_INFO_COLOR="\e[0m"
+    declare -r LOG_SUCCESS_COLOR="\e[32m"
+    declare -r LOG_WARN_COLOR="\e[33m"
+    declare -r LOG_DEBUG_COLOR="\e[34m"
+fi
+
+# This function scrubs the output of any control characters used in colorized output
+# It's designed to be piped through with text that needs scrubbing.  The scrubbed
+# text will come out the other side!
+prepare_log_for_nonterminal() {
+    # Essentially this strips all the control characters for log colors
+    sed "s/[[:cntrl:]]\[[0-9;]*m//g"
+}
+
+log() {
+    local log_text="$1"
+    local log_level="$2"
+    local log_color="$3"
+
+    # Default level to "info"
+    [[ -z ${log_level} ]] && log_level="INFO";
+    [[ -z ${log_color} ]] && log_color="${LOG_INFO_COLOR}";
+
+    echo -e "${log_color}[$(date +"%Y-%m-%d %H:%M:%S %Z")] [${log_level}] ${log_text} ${LOG_DEFAULT_COLOR}" >> "$dsappLog";
+    return 0;
+}
+
+log_info()      { log "$@"; }
+log_success()   { log "$1" "SUCCESS" "${LOG_SUCCESS_COLOR}"; }
+log_error()     { log "$1" "ERROR" "${LOG_ERROR_COLOR}"; }
+log_warning()   { log "$1" "WARNING" "${LOG_WARN_COLOR}"; }
+log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 
 ##################################################################################################
 #	Version: Eenou+
 ##################################################################################################
 	function declareVariables2 {
+		log_debug "[Init] [declareVariables2] Declaring variables for 2.x"
 		mAlog=$log"/connectors/mobility-agent.log"
 		gAlog=$log"/connectors/groupwise-agent.log"
 		mlog=$log"/connectors/mobility.log"
@@ -102,6 +152,7 @@
 #	Version: Pre-Eenou 
 ##################################################################################################
 	function declareVariables1 {
+		log_debug "[Init] [declareVariables1] Declaring variables for 1.x"
 		mAlog=$log"/connectors/default.pipeline1.mobility-AppInterface.log"
 		gAlog=$log"/connectors/default.pipeline1.groupwise-AppInterface.log"
 		mlog=$log"/connectors/default.pipeline1.mobility.log"
@@ -142,19 +193,47 @@
 		exit 1;
 	fi
 
-	#Check and set force to true
-	if [ "$1" == "--force" ] || [ "$1" == "-f" ] || [ "$1" == "?" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ] || [ "$1" == "-db" ] || [ "$1" == "--database" ];then
-		forceMode=1;
+	# Check dsapp logging file
+	if [ ! -f "$dsappLog" ]; then
+		touch "$dsappLog"
 	fi
 
 	#Check for Mobility installed.
 	if [[ "$forceMode" -ne "1" ]];then
-	dsInstalled=`chkconfig |grep -iom 1 datasync`;
-	if [ "$dsInstalled" != "datasync" ];then
-		read -p "Mobility is not installed on this server."
-		exit 1;
+		dsInstalled=`chkconfig |grep -iom 1 datasync`;
+		if [ "$dsInstalled" != "datasync" ];then
+			log_error "[Initialization] Failed Mobility Product check!"
+			read -p "Mobility is not installed on this server."
+			exit 1;
+		fi
 	fi
+
+	#Check and set force to true
+	if [ "$1" == "--force" ] || [ "$1" == "-f" ] || [ "$1" == "?" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ] || [ "$1" == "-db" ] || [ "$1" == "--database" ];then
+		log_debug "[Initialization] Launching dsapp with --force..."
+		forceMode=1;
 	fi
+
+function dsappLogRotate {
+logRotate="$(cat <<EOF                                                        
+/opt/novell/datasync/tools/dsapp/logs/*.log {
+    compress
+    compresscmd /usr/bin/gzip
+    dateext
+    maxage 14
+    rotate 99
+    missingok
+    notifempty
+    size +4096k
+    create 640 root root
+}                                     
+EOF
+)"
+if [ ! -f "/etc/logrotate.d/dsapp" ];then
+	log_debug "[Init] [logRotate] Creating /etc/logrotate.d/dsapp"
+	echo -e "$logRotate" > /etc/logrotate.d/dsapp
+fi
+}
 
 function announceNewFeature {
 	if [ ! -f $ghcLog ]; then
@@ -171,13 +250,17 @@ function checkFTP {
 	# To call/use: if [ $(checkFTP) -eq 0 ];then
 	netcat -z -w 1 ftp.novell.com 21;
 	if [ $? -eq 0 ]; then
+		log_success "Passed checkFTP: ftp.novell.com:21"
 		echo "0"
-	else echo "1"
+	else 
+		log_error "Failed checkFTP: ftp.novell.com:21"
+		echo "1"
 	fi
 }
 
 function updateDsapp {
 	echo -e "\nUpdating dsapp..."
+	log_info "Updating dsapp..."
 	# Remove running instance/version
 	rm dsapp.sh 2>/dev/null
 
@@ -187,10 +270,13 @@ function updateDsapp {
 	# Download new version & extract
 	curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -zx 2>/dev/null;
 	if [ $? -eq 0 ];then
-		echo -e "Update finished: v"`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
+		tmpVersion=`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
+		echo -e "Update finished: v$tmpVersion"
+		log_success "Update finished: v$tmpVersion"
 		echo
 		read -p "Press [Enter] to Continue"
 		$dsappDirectory/dsapp.sh && exit 0
+	else log_error "Failed to download and extract ftp://ftp.novell.com/outgoing/dsapp.tgz"
 	fi
 
 }
@@ -200,11 +286,13 @@ function autoUpdateDsapp {
 		# Variable declared above autoUpdate=true
 		if ($autoUpdate); then
 
+			log_debug "[Init] autoUpdateDsapp ($autoUpdate)..."
 			# Check FTP connectivity
 			if [ $(checkFTP) -eq 0 ];then
 
 				# Fetch online dsapp and store to memory, check version
 				publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp-version.info | grep -m1 dsappversion= | cut -f2 -d "'"`
+				log_debug "[Init] [autoUpdateDsapp] publicVersion: $publicVersion, currentVersion: $dsappversion"
 				# publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
 
 				# Download if newer version is available
@@ -234,6 +322,7 @@ function installAlias {
 
 	# Create /etc/profile.local if not already there
 	if [[ ! -f /etc/profile.local ]];then 
+		log_debug "[Init] [installAlias] Creating /etc/profile.local for dsapp alias..."
 		touch /etc/profile.local
 	fi
 
@@ -244,6 +333,7 @@ function installAlias {
 		# Configure sudo to be compatible for alias, allows it to look for aliases after first word
 		echo "alias sudo='sudo '" >> /etc/profile.local
 
+		log_debug "[Init] [installAlias] Configured dsapp alias in /etc/profile.local"
 		echo -e "\nConfigured dsapp alias."
 		tellUserAboutAlias=true
 		resetEnvironment=true
@@ -267,11 +357,13 @@ function installAlias {
 		fi
 
 		if ($tellUserAboutAlias); then
+			log_debug "[Init] [installAlias] Informing user of installAlias..."
 			echo -e "\nPlease use /opt/novell/datasync/tools/dsapp/dsapp.sh"
 			echo -e "To launch, enter the following anywhere: dsapp\n"
 		fi
 		# Reset environment variables (loads /etc/profile for dsapp alias)
 		if ($resetEnvironment); then
+			log_debug "[Init] [installAlias] Resetting environment variables..."
 			echo -e "Refreshing environment variables..."
 			su -
 		fi
@@ -374,10 +466,6 @@ fi
 		fi
 	}
 
-# Things to run in initialization
-getldapPassword
-getTrustedAppKey
-
 # Skips auto-update if file is not called dsapp.sh (good for testing purposes when using dsapp-test.sh)
 if [[ "$0" = *dsapp.sh ]]; then
 	autoUpdateDsapp;
@@ -397,6 +485,20 @@ fi
 	}
 	setVariables;
 
+# Things to run in initialization
+dsappLogRotate
+getldapPassword
+getTrustedAppKey
+getDBPassword
+
+log "[Init] dsapp v$dsappversion | Mobility version: $mobilityVersion"
+log_debug "[Init] dsHostname: $dsHostname"
+log_debug "[Init] ldapAddress: $ldapAddress:$ldapPort"
+log_debug "[Init] GroupWise-Agent: $glistenAddress:$gPort | Mobility-Agent: $mlistenAddress:$mPort"
+
+log_debug "[Init] [checkDBPass] $dbUsername:$dbPassword"
+log_debug "[Init] [getTrustedAppKey] $trustedName:$trustedAppKey"
+log_debug "[Init] [getldapPassword] $ldapAdmin:$ldapPassword"
 
 ##################################################################################################
 #
@@ -408,22 +510,10 @@ fi
 		while [ -z "$REPLY" ] ; do
 			read -ep "$1 $YES_NO_PROMPT" REPLY
 			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+			log "[askYesOrNo] $1 $REPLY"
 			case $REPLY in
 				$YES_CAPS ) return 0 ;;
 				$NO_CAPS ) return 1 ;;
-				* ) REPLY=""
-			esac
-		done
-	}
-
-	function askYesOrNoPromptContinue {
-		REPLY=""
-		while [ -z "$REPLY" ] ; do
-			read -ep "$1 $YES_NO_PROMPT" REPLY
-			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
-			case $REPLY in
-				$YES_CAPS ) return 0 ;;
-				$NO_CAPS ) return 1 `read -p "Press [Enter] when completed..."` ;;
 				* ) REPLY=""
 			esac
 		done
@@ -434,6 +524,7 @@ fi
 		while [ -z "$REPLY" ] ; do
 			read -ep "$1 $YES_NO_PROMPT" REPLY
 			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+			log "[ask] $1 $REPLY"
 			case $REPLY in
 				$YES_CAPS ) $2; return 0 ;;
 				$NO_CAPS ) return 1 ;;
@@ -448,19 +539,6 @@ fi
 	YES_NO_PROMPT=$"[y/n]: "
 	YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
 	NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
-
-	function askRegister {
-		REPLY=""
-		while [ -z "$REPLY" ] ; do
-			read -ep "$1 $YES_NO_PROMPT" REPLY
-			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
-			case $REPLY in
-				$YES_CAPS ) return 0 ;;
-				$NO_CAPS ) registerDS ;;
-				* ) REPLY=""
-			esac
-		done
-	}
 
 	function getLogs {
 		clear; 
