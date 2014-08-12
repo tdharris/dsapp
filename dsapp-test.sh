@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='185'
+	dsappversion='186'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -145,7 +145,7 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 ##################################################################################################
 # Any errors are displayed to console and written to $dsappLog
 ##################################################################################################
-	exec 2>> >(while read data; do echo "$data"; log_error "$data"; done)
+	# exec -a 2>> >(while read data; do echo "$data"; log_error "$data"; done)
 
 ##################################################################################################
 #	Version: Eenou+
