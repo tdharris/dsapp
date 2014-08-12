@@ -48,13 +48,9 @@
 
 	# Configure / Set dsapp.conf
 	if [ ! -f "$dsappConf/dsapp.conf" ];then
-		echo -e "#Configuration for dsapp\n\n#Auto update dsapp [true | false]\nautoUpdate=true" > $dsappConf/dsapp.conf
-		echo -e "\n#Log level for dsapp [true | false]\ndebug=true" >> $dsappConf/dsapp.conf
+		echo -e "#Configuration for dsapp\n\n#Auto update dsapp [boolean: true | false]\nautoUpdate=true" > $dsappConf/dsapp.conf
+		echo -e "\n#Log level for dsapp [boolean: true | false]\ndebug=false" >> $dsappConf/dsapp.conf
 	fi
-	dsappconfFile="$dsappConf/dsapp.conf"
-
-	# Sets dsapp autoUpdate function [true | false]
-	autoUpdate=`grep "autoUpdate" $dsappconfFile | cut -f2 -d '='`
 
 	# Mobility Directories
 	dirOptMobility="/opt/novell/datasync"
@@ -75,11 +71,12 @@
 	messages="/var/log/messages"
 	warn="/var/log/warn"
 
-	# dsapp Logs
-	debug=`grep "debug" $dsappconfFile | cut -f2 -d '='`
+	# dsapp Conf / Logs
+	dsappconfFile="$dsappConf/dsapp.conf"
+	source "$dsappconfFile"
 	dsappLog="$dsappLogs/dsapp.log"
 	ghcLog="$dsappLogs/generalHealthCheck.log"
-	
+
 	# Fetch variables from confs
 	ldapAddress=`grep -i "<ldapAddress>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	ldapPort=`grep -i "<ldapPort>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
@@ -144,6 +141,11 @@ log_success()   { log "$1" "SUCCESS" "${LOG_SUCCESS_COLOR}"; }
 log_error()     { log "$1" "ERROR" "${LOG_ERROR_COLOR}"; }
 log_warning()   { log "$1" "WARNING" "${LOG_WARN_COLOR}"; }
 log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
+
+##################################################################################################
+# Any errors are displayed to console and written to $dsappLog
+##################################################################################################
+	exec 2>> >(while read data; do echo "$data"; log_error "$data"; done)
 
 ##################################################################################################
 #	Version: Eenou+
@@ -262,7 +264,7 @@ function checkFTP {
 		log_success "Passed checkFTP: ftp.novell.com:21"
 		echo "0"
 	else 
-		log_error "Failed checkFTP: ftp.novell.com:21"
+		log_warning "Failed checkFTP: ftp.novell.com:21"
 		echo "1"
 	fi
 }
@@ -600,7 +602,7 @@ log_debug "[Init] [getldapPassword] $ldapAdmin:$ldapPassword"
 			read -ep "SR#: " srn;
 			echo -e "\nCompressing logs for upload..."
 
-			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog 2>/dev/null;
+			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog $dsappLog 2>/dev/null;
 
 			if [ $? -eq 0 ]; then
 				echo -e "\n$dsappupload/$srn"_"$d.tgz\n"
@@ -701,8 +703,12 @@ EOF
 				rm -r $dirPGSQL;
 				rm -r $dirEtcMobility;
 				rm -r $dirVarMobility;
-				rm -r $dirOptMobility;
 				rm -r $log
+
+				# Copy Log directory to /tmp before deleting /opt/novell/datasync/ directory
+				cp -vr "$dsappLogs" 
+
+				rm -r $dirOptMobility;
 
 				echo -e "Mobility uninstalled."
 				read -p "Press [Enter] to complete"
@@ -2667,7 +2673,7 @@ while [ "$1" != "" ]; do
 	case $1 in #Start of Case
 
 	--help | '?' | -h) dsappSwitch=1
-		echo -e "dsapp switches:";
+		echo -e "dsapp options:";
 		echo -e "      \t--version\tReport dsapp version"
 		echo -e "      \t--debug\t\tToggles dsapp log debug level [$debug]"
 		echo -e "  -au \t--autoUpdate\tToggles dsapp autoUpdate [$autoUpdate]"
@@ -2751,7 +2757,7 @@ while [ "$1" != "" ]; do
 			echo "Count of devices:" > db.log; 
 			psql -U $dbUsername mobility -t -c "select count(*) from devices where devicetype!='';" >> db.log; 
 			echo "Devices:" >> db.log; 
-			psql -U $dbUsername mobility -c "select devicetype,description from devices where devicetype!='';" >> db.log;
+			psql -U $dbUsername mobility -c "select devicetype,description,tstamp from devices where devicetype!='' order by tstamp ASC;" >> db.log;
 		fi
 	;;
 
