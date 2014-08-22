@@ -2679,7 +2679,7 @@ def checkMe(data):
 
 			print keys, "Status:", status, "| Connection:", connection, "| Latency:", latency
 			
-			if any(x in [status, connection, latency] for x in ("20_Normal")):
+			if all(x != "20_Normal" for x in (status, connection, latency)):
 				problem = 1;
 
 	return problem;
