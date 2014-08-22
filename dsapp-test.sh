@@ -80,13 +80,16 @@
 	# Fetch variables from confs
 	ldapAddress=`grep -i "<ldapAddress>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	ldapPort=`grep -i "<ldapPort>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	ldapAdmin=`grep -im1 "<dn>" /etc/datasync/configengine/configengine.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	ldapAdmin=`grep -im1 "<dn>" $ceconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	trustedName=`cat $gconf| grep -i trustedAppName | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	mPort=`grep -i "<listenPort>" $mconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	gPort=`grep -i "<port>" $gconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	wPort=`sed -n "/<server>/,/<\/server>/p" $wconf | grep "<port>" | cut -f2 -d '>' | cut -f1 -d '<'`
 	mlistenAddress=`grep -i "<listenAddress>" $mconf | sed 's/<[^>]*[>]//g' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
 	glistenAddress=`grep -i "<listeningLocation>" $gconf | sed 's/<[^>]*[>]//g' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
+	authentication=`grep -i "<authentication>" $ceconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	provisioning=`grep -i "<provisioning>" $ceconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
+
 
 	# DSAPP configuration files
 	if [ ! -f "$dsappConf/dsHostname.conf" ];then
@@ -145,7 +148,7 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 ##################################################################################################
 # Any errors are displayed to console and written to $dsappLog
 ##################################################################################################
-	# exec -a 2>> >(while read data; do echo "$data"; log_error "$data"; done)
+	# exec 2>> >(while read data; do echo "$data"; log_error "$data"; done)
 
 ##################################################################################################
 #	Version: Eenou+
@@ -1988,23 +1991,26 @@ function generalHealthCheck {
 	fi
 
 	# Begin Checks
-	ghc_CheckServices
+	ghc_checkServices
+	ghc_checkPOA
+	ghc_verifyCertificates
+	ghc_checkLDAP
 	ghc_checkXML
 	ghc_checkPSQLConfig
-	ghc_checkRPMs
-	ghc_checkLDAP
-	ghc_verifyNightlyMaintenance
-	ghc_verifyCertificates
+	ghc_checkRPMSave
 	ghc_checkProxy
 	ghc_checkManualMaintenance
 	ghc_checkReferenceCount
 	ghc_checkDiskSpace
-	ghc_checkDiskIO
 	ghc_checkMemory
-	ghc_checkRPMSave
 	ghc_checkVMWare
 	ghc_checkConfig
 	ghc_checkUpdateSH
+
+	# Slow checks...
+	# ghc_checkRPMs
+	# ghc_checkDiskIO
+	# ghc_verifyNightlyMaintenance
 
 	# View Logs?
 	echo
@@ -2079,7 +2085,7 @@ function empty {
 }
 
 # Check Functions/Modules
-function ghc_CheckServices {
+function ghc_checkServices {
 	ghcNewHeader "Checking Mobility Services..."
 	status=true
 	mstatus=true;
@@ -2304,60 +2310,65 @@ function ghc_verifyCertificates {
 	problem=false; warn=false
 	# Any logging info >> $ghcLog
 
-	# Device Certificate
-	echo -e "----------------------------------------------------------\nChecking Device Certificate:\n----------------------------------------------------------" >>$ghcLog 
+	if (! $mstatus); then
+		warn=true;
+		echo "Mobility agent is not running - skipping certificate check" >>$ghcLog 
+	else
+		# Device Certificate
+		echo -e "----------------------------------------------------------\nChecking Device Certificate:\n----------------------------------------------------------" >>$ghcLog 
 
-		# Check Expiration Date
-		echo -e "\nChecking Expiration Date:\n----------------------------" >>$ghcLog
-		certExpirationDate=`echo | openssl s_client -connect $mlistenAddress:$mPort 2>/dev/null | openssl x509 -noout -enddate | cut -d "=" -f2 | awk '{print $1, $2, $4}'`
-		if [ $(date -d "$dateTolerance" +%s) -ge $(date -d "$certExpirationDate" +%s) ]; then 
-			echo -e "WARNING: Certificate expires soon!\n$devCert" >>$ghcLog
-			warn=true;
-		fi
-		echo "The Mobility certificate will expire on $certExpirationDate" >>$ghcLog
+			# Check Expiration Date
+			echo -e "\nChecking Expiration Date:\n----------------------------" >>$ghcLog
+			certExpirationDate=`echo | openssl s_client -connect $mlistenAddress:$mPort 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d "=" -f2 | awk '{print $1, $2, $4}'`
+			if [ $(date -d "$dateTolerance" +%s) -ge $(date -d "$certExpirationDate" +%s) ]; then 
+				echo -e "WARNING: Certificate expires soon!\n$devCert" >>$ghcLog
+				warn=true;
+			fi
+			echo "The Mobility certificate will expire on $certExpirationDate" >>$ghcLog
 
-		# Check Key-Pair
-		echo -e "\nChecking Certificate-Key Pair:\n------------------------------" >>$ghcLog
-		diff -qs <(openssl rsa -in $devCert -pubout >>$ghcLog 2>&1) <(openssl x509 -in $devCert -pubkey -noout >>$ghcLog 2>&1) >>$ghcLog 2>&1;
-		if [ $? -ne 0 ]; then
-			problem=true
-			echo "The certificate-key pair are not a match!" >>$ghcLog
-		fi
-		echo >>$ghcLog
+			# Check Key-Pair
+			echo -e "\nChecking Certificate-Key Pair:\n------------------------------" >>$ghcLog
+			diff -qs <(openssl rsa -in $devCert -pubout >>$ghcLog 2>&1) <(openssl x509 -in $devCert -pubkey -noout >>$ghcLog 2>&1) >>$ghcLog 2>&1;
+			if [ $? -ne 0 ]; then
+				problem=true
+				echo "The certificate-key pair are not a match!" >>$ghcLog
+			fi
+			echo >>$ghcLog
 
-		# Check SSL Handshake
-		echo | openssl s_client -showcerts -connect $mlistenAddress:$mPort >>$ghcLog 2>&1;
-		if [ $? -ne 0 ]; then
-			problem=true
-		fi
+			# Check SSL Handshake
+			echo | openssl s_client -showcerts -connect $mlistenAddress:$mPort >>$ghcLog 2>&1;
+			if [ $? -ne 0 ]; then
+				problem=true
+			fi
 
-	# WebAdmin Certificate
-	echo -e "\n------------------------------------------------------------\nChecking WebAdmin Certificate:\n------------------------------------------------------------" >>$ghcLog 
+		# WebAdmin Certificate
+		echo -e "\n------------------------------------------------------------\nChecking WebAdmin Certificate:\n------------------------------------------------------------" >>$ghcLog 
+		
+			# Check Expiration Date
+			echo -e "\nChecking Expiration Date:\n----------------------------" >>$ghcLog
+			certExpirationDate=`echo | openssl s_client -connect $mlistenAddress:$wPort 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d "=" -f2 | awk '{print $1, $2, $4}'`
+			if [ $(date -d "$dateTolerance" +%s) -ge $(date -d "$certExpirationDate" +%s) ]; then 
+				echo -e "WARNING: Certificate expires soon!\n$webCert" >>$ghcLog
+				warn=true;
+			fi
+			echo "The WebAdmin certificate will expire on $certExpirationDate" >>$ghcLog
+
+			# Check Key-Pair
+			echo -e "\nChecking Certificate-Key Pair:\n------------------------------" >>$ghcLog
+			diff -qs <(openssl rsa -in $webCert -pubout >>$ghcLog 2>&1) <(openssl x509 -in $webCert -pubkey -noout >>$ghcLog 2>&1) >>$ghcLog 2>&1;
+			if [ $? -ne 0 ]; then
+				problem=true
+				echo "The certificate-key pair are not a match!" >>$ghcLog
+			fi
+			echo >>$ghcLog
+
+			# Check SSL Handshake
+			echo | openssl s_client -showcerts -connect $mlistenAddress:$wPort >>$ghcLog 2>&1;
+			if [ $? -ne 0 ]; then
+				problem=true
+			fi
+	fi
 	
-		# Check Expiration Date
-		echo -e "\nChecking Expiration Date:\n----------------------------" >>$ghcLog
-		certExpirationDate=`echo | openssl s_client -connect $mlistenAddress:$wPort 2>/dev/null | openssl x509 -noout -enddate | cut -d "=" -f2 | awk '{print $1, $2, $4}'`
-		if [ $(date -d "$dateTolerance" +%s) -ge $(date -d "$certExpirationDate" +%s) ]; then 
-			echo -e "WARNING: Certificate expires soon!\n$webCert" >>$ghcLog
-			warn=true;
-		fi
-		echo "The WebAdmin certificate will expire on $certExpirationDate" >>$ghcLog
-
-		# Check Key-Pair
-		echo -e "\nChecking Certificate-Key Pair:\n------------------------------" >>$ghcLog
-		diff -qs <(openssl rsa -in $webCert -pubout >>$ghcLog 2>&1) <(openssl x509 -in $webCert -pubkey -noout >>$ghcLog 2>&1) >>$ghcLog 2>&1;
-		if [ $? -ne 0 ]; then
-			problem=true
-			echo "The certificate-key pair are not a match!" >>$ghcLog
-		fi
-		echo >>$ghcLog
-
-		# Check SSL Handshake
-		echo | openssl s_client -showcerts -connect $mlistenAddress:$wPort >>$ghcLog 2>&1;
-		if [ $? -ne 0 ]; then
-			problem=true
-		fi
-
 	# Check for dos2unix stuff...
 	grep -Pl "\r" $devCert $webCert &>/dev/null
 	if [ $? -eq 0 ]; then
@@ -2614,6 +2625,85 @@ function ghc_checkUpdateSH {
 	else passFail 0
 	fi
 	
+}
+
+function ghc_checkPOA {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking POA status..."
+	problem=false; warn=false;
+	local header="[ghc_checkPOA]"
+
+	if [[ ! "$provisioning" == "ldap" ]]; then
+		warn=true;
+		echo "Skipping check - provisioning not set to ldap" >>$ghcLog
+	else
+		local auth="$dsapptmp/getStatusData.auth"
+		local cookie="$dsapptmp/getStatusData.cookie"
+		local res="$dsapptmp/getStatusData.response"
+		local admin=`echo "$ldapAdmin" | grep -Po '(?<=(=)).*(?=,)'`
+
+		rm "$auth" "$res" "$cookie" 2>/dev/null
+
+		# Authenticate, obtain session-id returned in cookie
+		log_debug "$header wget --no-check-certificate --save-cookies \"$cookie\" --post-data \"func=authenticate&username=$admin&password=$ldapPassword\" https://localhost:8120/post/auth -O \"$auth\""
+		wget --no-check-certificate --save-cookies "$cookie" --post-data "func=authenticate&username=$admin&password=$ldapPassword" https://localhost:8120/post/auth -O "$auth" &>/dev/null
+
+		# Request getStatusData using session-id from cookie
+		log_debug "$header wget --no-check-certificate --load-cookies \"$cookie\" https://localhost:8120/admin/dashboard/getStatusData -O \"$res\"" 
+		wget --no-check-certificate --load-cookies "$cookie" https://localhost:8120/admin/dashboard/getStatusData -O "$res" &>/dev/null
+
+		# cat "$res" | python -mjson.tool | less
+		local checkPOA=`python <<EOF
+import json
+from pprint import pprint
+
+def checkMe(data):
+	problem = 0;
+	json_data=open(data)
+
+	data = json.load(json_data)
+	myList = data["data"]["statuses"]["GroupWiseConnectorStatus"]["statgroups"]
+	json_data.close()
+
+	# If any PO(s) are returned (first object is GWCHealth, all other objects in array are Post Offices)
+	if len(myList) > 1:
+		# else return some error "no PO(s) found/reported"
+		
+		# skip first item in array (GWCHealth object instead of PO)
+
+		myList.pop('GWCHealth')
+		for keys, values in myList.items():
+			status=values["level"]
+			connection=values["stats"]["POAConnection"]["level"]
+			latency=values["stats"]["POALatency"]["level"]
+
+			print keys, "Status:", status, "| Connection:", connection, "| Latency:", latency
+			
+			if "20_Normal" not in [status, connection, latency]:
+				problem = 1;
+
+	return problem;
+
+print checkMe("$res")
+
+EOF`
+
+	if [ $(echo "$checkPOA" | tail -n1) -ne 0 ]; then
+		problem=true;
+	fi
+
+	fi
+	
+
+	# Return either pass/fail, 0 indicates pass.
+	echo "$checkPOA" >>$ghcLog
+	if ($problem); then
+		if ($warn); then
+			passFail 2
+		else passFail 1
+		fi
+	else passFail 0
+	fi
 }
 
 function exampleHealthCheck {
