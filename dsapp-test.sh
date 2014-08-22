@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='186'
+	dsappversion='185'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -2008,9 +2008,9 @@ function generalHealthCheck {
 	ghc_checkUpdateSH
 
 	# Slow checks...
-	# ghc_checkRPMs
-	# ghc_checkDiskIO
-	# ghc_verifyNightlyMaintenance
+	ghc_checkRPMs
+	ghc_checkDiskIO
+	ghc_verifyNightlyMaintenance
 
 	# View Logs?
 	echo
@@ -2679,7 +2679,7 @@ def checkMe(data):
 
 			print keys, "Status:", status, "| Connection:", connection, "| Latency:", latency
 			
-			if "20_Normal" not in [status, connection, latency]:
+			if any(x in [status, connection, latency] for x in ("20_Normal")):
 				problem = 1;
 
 	return problem;
