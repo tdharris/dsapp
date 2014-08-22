@@ -2658,7 +2658,7 @@ import json
 from pprint import pprint
 
 def checkMe(data):
-	problem = 0;
+	problem = 1;
 	json_data=open(data)
 
 	data = json.load(json_data)
@@ -2679,8 +2679,8 @@ def checkMe(data):
 
 			print keys, "Status:", status, "| Connection:", connection, "| Latency:", latency
 			
-			if any(x not in [status, connection, latency] for x in ["20_Normal"]):
-				problem = 1;
+			if all(x in [status, connection, latency] for x in ["20_Normal"]):
+				problem = 0;
 
 	return problem;
 
