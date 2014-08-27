@@ -1896,27 +1896,36 @@ function updateFDN {
 	if (checkLDAP);then
 		verifyUser;
 		if [ $? -eq 0 ];then
+			echo -e "\nSearching LDAP..."
 			if [ $ldapPort -eq 389 ];then
-				defaultuserDN=`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" cn=$vuid dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
+				defaultuserDN=`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" cn=$vuid dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' ' | head -n1`
 			else
-				defaultuserDN=`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" cn=$vuid dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
+				defaultuserDN=`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" cn=$vuid dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' ' | head -n1`
 			fi
 		fi
-		echo -e "\nPress [Enter] to take LDAP defaults."
-		read -p "Enter users new full FDN [$defaultuserDN] : " userDN
+		echo -e "$defaultuserDN\n\nPress [Enter] to take LDAP defaults."
+		read -p "Enter users new full FDN [$defaultuserDN]: " userDN
 		userDN="${userDN:-$defaultuserDN}"
-		origUserDN=`psql -U datasync_user datasync -t -c "select dn from targets where dn ilike '%$vuid%';" | head -n1 | cut -f2 -d ' '`
+		origUserDN=`psql -U datasync_user datasync -t -c "select dn from targets where dn ilike '%$vuid%' and disabled='0';" | head -n1 | cut -f2 -d ' '`
 		echo
 		if [ "$origUserDN" = "$userDN" ];then
 			echo "User FDN match database [$origUserDN]. No changes entered."
 		else
 			if askYesOrNo $"Update [$origUserDN] to [$userDN]";then
-				psql -U $dbUsername datasync -c "update targets set dn='$userDN' where dn='$origUserDN';" 1>/dev/null
-				psql -U $dbUsername datasync -c "update cache set \"sourceDN\"='$userDN' where \"sourceDN\"='$origUserDN';" 1>/dev/null
-				psql -U $dbUsername datasync -c "update \"folderMappings\" set \"targetDN\"='$userDN' where \"targetDN\"='$origUserDN';" 1>/dev/null
-				psql -U $dbUsername datasync -c "update \"membershipCache\" set memberdn='$userDN' where memberdn='$origUserDN';" 1>/dev/null
-				psql -U $dbUsername mobility -c "update users set userid='$userDN' where userid='$origUserDN';" 1>/dev/null
-				echo -e "\nUser FDN update complete\nRestart mobility to clear old cache."
+				psql -U $dbUsername datasync 1>/dev/null <<EOF
+update targets set dn='$userDN' where dn='$origUserDN';
+update cache set "sourceDN"='$userDN' where "sourceDN"='$origUserDN';
+update "folderMappings" set "targetDN"='$userDN' where "targetDN"='$origUserDN';
+update "membershipCache" set memberdn='$userDN' where memberdn='$origUserDN';
+\c mobility
+update users set userid='$userDN' where userid='$origUserDN';
+EOF
+				# psql -U $dbUsername datasync -c "update targets set dn='$userDN' where dn='$origUserDN';" 1>/dev/null
+				# psql -U $dbUsername datasync -c "update cache set \"sourceDN\"='$userDN' where \"sourceDN\"='$origUserDN';" 1>/dev/null
+				# psql -U $dbUsername datasync -c "update \"folderMappings\" set \"targetDN\"='$userDN' where \"targetDN\"='$origUserDN';" 1>/dev/null
+				# psql -U $dbUsername datasync -c "update \"membershipCache\" set memberdn='$userDN' where memberdn='$origUserDN';" 1>/dev/null
+				# psql -U $dbUsername mobility -c "update users set userid='$userDN' where userid='$origUserDN';" 1>/dev/null
+				echo -e "User FDN update complete\n\nRestart mobility to clear old cache."
 			fi
 		fi
 	fi
