@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='187'
+	dsappversion='188'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -249,6 +249,10 @@ if [ ! -f "/etc/logrotate.d/dsapp" ];then
 fi
 }
 
+function eContinue {
+	read -p "Press [Enter] to continue"
+}
+
 function announceNewFeature {
 	if [ ! -f $ghcLog ]; then
 		clear; datasyncBanner
@@ -288,7 +292,7 @@ function updateDsapp {
 		echo -e "Update finished: v$tmpVersion"
 		log_success "Update finished: v$tmpVersion"
 		echo
-		read -p "Press [Enter] to Continue"
+		eContinue;
 		$dsappDirectory/dsapp.sh && exit 0
 	else log_error "Failed to download and extract ftp://ftp.novell.com/outgoing/dsapp.tgz"
 	fi
@@ -629,7 +633,7 @@ EOF
 			fi
 		fi;
 
-		read -p "Press [Enter] to continue."
+		eContinue;
 	}
 
 	function  cuso {
@@ -652,7 +656,7 @@ EOF
 				#If databases are not properly dropped. Abort.
 				if [ -n "$dbNames" ];then
 					echo -e "\nUnable to drop the following databases:\n$dbNames\n\nAborting...\nPlease try again, or manually drop the databases.";
-					read -p "Press [Enter] to continue."
+					eContinue;
 					break;
 				fi
 
@@ -714,7 +718,7 @@ EOF
 				rm -r $dirOptMobility;
 
 				echo -e "Mobility uninstalled."
-				read -p "Press [Enter] to complete"
+				eContinue;
 				exit 0;
 			fi
 			
@@ -748,10 +752,10 @@ EOF
 		if [ $? != 0 ]; then
 		{
 		    echo -e "\nThe code or email address you provided appear to be invalid or there is trouble contacting Novell."
-			read -p "Press [Enter] to continue."
+			eContinue;
 		} else
 		echo -e "\nYour Mobility product has been successfully activated.\n"
-		read -p "Press [Enter] to continue."
+		eContinue;
 		fi
 	}
 
@@ -876,7 +880,7 @@ EOF
 				else
 					echo -e "User does not exist in Mobility Database.\n"; 
 					vuid='userDoesNotExist'; 
-					read -p "Press [Enter] to continue";
+					eContinue;
 					errorReturn='1'; 
 					return 1;
 				fi
@@ -909,7 +913,7 @@ EOF
 			update users set state = '$1' where userid ilike '%$vuid%';
 			\q
 EOF
-		read -p "Press [Enter] to continue."
+		eContinue;
 		sMonitorUser
 		fi
 		
@@ -936,7 +940,7 @@ EOF
 			removeUserSilently
 			echo -e "\n$vuid has been successfully deleted."
 			fi
-			read -p "Press [Enter] to continue."
+			eContinue;
 		fi
 		
 		
@@ -1020,7 +1024,7 @@ EOF
 			echo -e "\nNo user references found.\n"
 		fi
 	fi
-	read -p "Press [Enter] to continue.";
+	eContinue;
 }
 
 function removeUserSilently {
@@ -1102,7 +1106,7 @@ function addGroup {
 		psql -U $dbUsername datasync -c "delete from targets where disabled='1'" >/dev/null;
 		psql -U $dbUsername datasync -c "update targets set \"referenceCount\"='1' where disabled='0'" >/dev/null;
 		echo -e "referenceCount has been fixed.\nGroup Membership has been updated.\n"
-		read -p "Press [Enter] to continue"
+		eContinue;
 		else continue;
 	fi
 }
@@ -1278,7 +1282,7 @@ EOF`
 
 if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`); then 
 	echo "Invalid key for trusted application."
-	read -p "Press [Enter] to continue."; continue;
+	eContinue; continue;
 fi
 
 #Error handle until secure SOAP code figured out.
@@ -1438,7 +1442,7 @@ function updateMobilityFTP {
 		else
 			echo -e "\nInvalid file name... Returning to Main Menu.";		
 		fi
-	read -p "Press [Enter] to continue";
+	eContinue;
 }
 
 function checkNightlyMaintenance {
@@ -1531,7 +1535,7 @@ if [ $? = 0 ]; then
 	fi
 	
 	echo
-	read -p "Press [Enter] to continue";
+	eContinue;
 fi
 }
 
@@ -1582,7 +1586,7 @@ function changeDBPass {
 	fi
 
 	echo -e "\nDatabase password updated. Please restart mobility."
-	read -p "Press [Enter] to continue."
+	eContinue;
 }
 
 function changeAppName {
@@ -1618,7 +1622,7 @@ function changeAppName {
 		else
 			echo -e "No application names found for user [$vuid]\n"
 		fi
-		read -p "Press [Enter] to continue."
+		eContinue;
 	fi
 }
 
@@ -1630,7 +1634,7 @@ function reinitAllUsers {
 		\q
 EOF
 		echo -e "\nAll users have been set to re-initialize"
-		read -p "Press [Enter] to continue";
+		eContinue;
 		echo -e "Testing123\n" && watch -n1 'psql -U '$dbUsername' mobility -c "select state,userID from users"; echo -e "[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor."'
 		break;
 	fi
@@ -1788,7 +1792,7 @@ function configureMobility {
         fi
     fi
 
-    echo -e "\nDone."; read -p "Press [Enter] to continue";
+    echo -e "\nDone."; eContinue;
 }
 
 function verify {
@@ -1824,7 +1828,7 @@ function verify {
         fi
     fi
     echo -e "\nDone."
-    read -p "Press [Enter] to continue."
+    eContinue;
 }
 
 function dumpTable {
@@ -1854,7 +1858,69 @@ function dumpTable {
 			 	return 0;
 			 fi
 	fi
+}
 
+function checkLDAP {
+
+	# Only test if authentication is ldap in mobility connector.xml
+	if [[ -n `grep -i "<authentication>" $mconf | grep -i ldap` ]]; then
+		if (empty "${ldapPort}" || empty "${ldapAdmin}" || empty "${ldapPassword}"); then
+			echo -e "Unable to determine ldap variables."
+			return 1
+		fi
+
+		if [[ "$ldapPort" -eq "389" ]]; then
+			/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" 1>/dev/null
+			if [[ "$?" -eq 0 ]]; then
+				return 0
+			else
+				return 1
+			fi
+
+		elif [[ "$ldapPort" -eq "636" ]]; then
+			/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" 1>/dev/null
+			if [[ "$?" -eq 0 ]]; then
+				return 0
+			else
+				return 1
+			fi
+		fi
+	else 
+		echo -e "Mobility not configured to use LDAP in $mconf"
+		return 1
+	fi
+}
+
+function updateFDN {
+	clear;
+	if (checkLDAP);then
+		verifyUser;
+		if [ $? -eq 0 ];then
+			if [ $ldapPort -eq 389 ];then
+				defaultuserDN=`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" cn=$vuid dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
+			else
+				defaultuserDN=`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" cn=$vuid dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
+			fi
+		fi
+		echo -e "\nPress [Enter] to take LDAP defaults."
+		read -p "Enter users new full FDN [$defaultuserDN] : " userDN
+		userDN="${userDN:-$defaultuserDN}"
+		origUserDN=`psql -U datasync_user datasync -t -c "select dn from targets where dn ilike '%$vuid%';" | head -n1 | cut -f2 -d ' '`
+		echo
+		if [ "$origUserDN" = "$userDN" ];then
+			echo "User FDN match database [$origUserDN]. No changes entered."
+		else
+			if askYesOrNo $"Update [$origUserDN] to [$userDN]";then
+				psql -U $dbUsername datasync -c "update targets set dn='$userDN' where dn='$origUserDN';" 1>/dev/null
+				psql -U $dbUsername datasync -c "update cache set \"sourceDN\"='$userDN' where \"sourceDN\"='$origUserDN';" 1>/dev/null
+				psql -U $dbUsername datasync -c "update \"folderMappings\" set \"targetDN\"='$userDN' where \"targetDN\"='$origUserDN';" 1>/dev/null
+				psql -U $dbUsername datasync -c "update \"membershipCache\" set memberdn='$userDN' where memberdn='$origUserDN';" 1>/dev/null
+				psql -U $dbUsername mobility -c "update users set userid='$userDN' where userid='$origUserDN';" 1>/dev/null
+				echo -e "\nUser FDN update complete\nRestart mobility to clear old cache."
+			fi
+		fi
+	fi
+	eContinue;
 }
 
 ##################################################################################################
@@ -1889,14 +1955,14 @@ function ftfPatchlevelCheck {
 		if (`cat "$dsappConf/patchlevel" | grep -qi "$1"`);then
 			clear;
 			echo -e "Patch $1 has already been applied.\n"
-			read -p "Press [Enter] to continue."
+			eContinue;
 			return 1;
 		fi
 	fi
 }
 
 # function emergency () { echo "$(_fmt emergency) ${@}" || true; exit 1; }
-function error ()     { echo -e "\n${@}\n"; read -p "Press [Enter] to continue."; break; }
+function error ()     { echo -e "\n${@}\n"; eContinue; break; }
 function info ()      { echo -e "${@}"; }
 # function debug ()     { [ "${LOG_LEVEL}" -ge 7 ] && echo "$(_fmt debug) @}" || true; }
 
@@ -1969,7 +2035,7 @@ function patchEm {
 	fi
 
 	echo
-	read -p "Press [Enter] to continue.";
+	eContinue;
 }
 
 # Initialize Patch / FTF Fixes
@@ -1995,6 +2061,7 @@ function generalHealthCheck {
 	ghc_checkPOA
 	ghc_verifyCertificates
 	ghc_checkLDAP
+	ghc_checkUserFDN
 	ghc_checkXML
 	ghc_checkPSQLConfig
 	ghc_checkRPMSave
@@ -2019,7 +2086,7 @@ function generalHealthCheck {
 			less $ghcLog
 		fi
 		echo -e "Log created at: $ghcLog\n"
-		read -p "Press [Enter] to continue."
+		eContinue;
 	fi
 }
 
@@ -2269,12 +2336,12 @@ function ghc_checkLDAP {
 		fi
 
 		if [[ "$ldapPort" -eq "389" ]]; then
-			ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" >>$ghcLog 2>&1 
+			/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" >>$ghcLog 2>&1 
 			if [[ "$?" -ne 0 ]]; then
 				problem=true
 			fi
 		elif [[ "$ldapPort" -eq "636" ]]; then
-			ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" >>$ghcLog 2>&1
+			/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" >>$ghcLog 2>&1
 			if [[ "$?" -ne 0 ]]; then
 				problem=true
 			fi
@@ -2706,6 +2773,69 @@ EOF`
 	fi
 }
 
+function ghc_checkUserFDN {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking users FDN"
+	problem=false
+	warn=false
+	# Any logging info >>$ghcLog
+
+	# Run loop on all users $userList
+	declare -a userInDB
+	psql -U $dbUsername datasync -t -c "select distinct dn from targets where disabled='0';" > userlist
+	local count=0
+
+	while read line
+	do
+		if [[ $line == cn=* ]];then
+			userInDB[$count]=$line
+			count=$(($count + 1));
+		fi
+	done < userlist
+
+	userCount=${#userInDB[@]};
+	rm -f userlist;
+
+	if [ "$userCount" -ne 0 ];then
+		local noLDAP=0;
+		if (checkLDAP);then
+			for ((count=0;count<$userCount;count++))
+			do
+				checkUser=${userInDB[$count]}
+				checkUser=`echo $checkUser | cut -f1 -d ','`
+
+				if [ $ldapPort -eq 389 ];then
+						ldapUserDN=`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" $checkUser dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
+					else
+						ldapUserDN=`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" $checkUser dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
+				fi
+
+				mobilityUserDN=`psql -U datasync_user datasync -t -c "select dn from targets where dn ilike '%$checkUser%' and \"connectorID\" ilike '%mobility%';" | cut -f2 -d ' ' | head -n1`
+				if [ "$ldapUserDN" != "$mobilityUserDN" ];then
+					warn=true;
+					problem=true;
+					echo -e "$(echo $checkUser | cut -f2 -d '=') has possible incorrect FDN" >>$ghcLog
+					echo -e "LDAP [$ldapUserDN] : Database [$mobilityUserDN]\n" >>$ghcLog
+				fi
+			done
+		fi
+	else
+		echo -e "No LDAP users found in the database" >>$ghcLog
+		noLDAP=1;
+	fi
+
+	# Return either pass/fail, 0 indicates pass.
+	if ($problem); then
+		if ($warn); then
+			passFail 2
+		else passFail 1
+		fi
+	else 
+		if [ $noLDAP -eq 0 ];then echo -e "All detected LDAP users have matching FDNs" >>$ghcLog; fi 
+		passFail 0
+	fi
+}
+
 function exampleHealthCheck {
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "exampleHealthCheck"
@@ -2738,7 +2868,7 @@ EOF
 EOF
 	fi
 	echo
-	read -p "Press [Enter] to continue.";
+	eContinue;
 }
 
 function whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe {
@@ -2749,7 +2879,7 @@ function whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe {
 		psql -U $dbUsername mobility -t -c "drop table if exists tmp; select (xpath('./DisplayName/text()', di.edata::xml)) AS displayname,di.eclass,di.eaction,di.statedata,d.identifierstring,d.devicetype,d.description,di.creationtime INTO tmp from deviceimages di INNER JOIN devices d ON (di.deviceid = d.deviceid) INNER JOIN users u ON di.userid = u.guid WHERE di.edata ilike '%$displayName%' ORDER BY di.creationtime ASC, di.eaction ASC; select * from tmp;" | less
 		# echo "$result"
 	fi
-	read -p "Press [Enter] to Continue."
+	eContinue;
 }
 
 ##################################################################################################
@@ -2785,7 +2915,7 @@ while [ "$1" != "" ]; do
 	;;
 
 	-ghc | --gHealthCheck) dsappSwitch=1
-		generalHealthCheck
+		generalHealthCheck;
 	;;
 
 	--vacuum | -v) dsappSwitch=1
@@ -2879,7 +3009,7 @@ while [ "$1" != "" ]; do
 	#Not valid switch case
  	*) dsappSwitch=1
  	 echo "dsapp: '"$1"' is not a valid command. See '--help'."
- 	 read -p "Press [Enter] to continue."
+ 	 eContinue;
  	 ;; 
 	esac # End of Case
 	shift;
@@ -2953,7 +3083,7 @@ fi
 #Window Size check
 if [ `tput lines` -lt '24' ] && [ `tput cols` -lt '85' ];then
 	echo -e "Terminal window to small. Please resize."
-	read -p "Press [Enter] to Continue."
+	eContinue;
 	exit 1;
 fi
 
@@ -2981,8 +3111,8 @@ cd $cPWD;
  	clear; 
 	verifyUser
 	echo -e "\n----------------------------------\nMobility Database Found: "$uchk "\nDatasync Database Found: "$guchk "\nDatasync AppName Database Found: "$guchk2"\nCN User Compare: "$uidCN "\nValid User Check: "$vuid "\nError Return: "$errorReturn "\n----------------------------------"
-	[[ "$errorReturn" -eq "0" ]] && echo -e "No errors found\n\nPress [Enter] to continue."
-	read;
+	[[ "$errorReturn" -eq "0" ]] && echo -e "No errors found\n\n"
+	eContinue;
 	;;
 
  db+) clear; ###Log into Database### --Not on Menu--
@@ -3026,7 +3156,7 @@ cd $cPWD;
 			kill $progressTask; wait $progressTask 2>/dev/null; printf '\n';
 
 			echo "Logs have been set to defaults."
-			read -p "Press [Enter] to continue"
+			eContinue;
 		fi		
 		;;
 			
@@ -3045,7 +3175,7 @@ cd $cPWD;
 			kill $progressTask; wait $progressTask 2>/dev/null; printf '\n';
 
 			echo "Logs have been set to diagnostic/debug."
-			read -p "Press [Enter] to continue"
+			eContinue;
 		fi
 		;;
 
@@ -3154,7 +3284,7 @@ EOF
 		else
 			echo "No activity found in logs."
 		fi
-		read -p "Press [Enter] to continue"
+		eContinue;
 	     ;;
 
 	   5) 	clear; #Remove log archive
@@ -3178,7 +3308,7 @@ EOF
    2) ps -ef | grep -v grep | grep "y2control*" >/dev/null
 		if [ $? -ne 1 ]; then
 		echo "Please close YaST before continuing.";
-		read -p "Press [Enter] to continue";
+		eContinue;
 		else
 		while :
 		do
@@ -3224,7 +3354,7 @@ EOF
 							else
 								echo "Please register Mobility to use this function."
 							fi
-							read -p "Press [Enter] to continue."
+							eContinue;
 							;;
 
 						2) #Update Datasync using local ISO
@@ -3265,7 +3395,7 @@ EOF
 							path="";
 							isoName="";
 							fi
-							read -p "Press [Enter] to continue."
+							eContinue;
 							;;
 
 						3) #Update Datasync FTP
@@ -3316,7 +3446,7 @@ EOF
 								cat "$dsappConf/patchlevel"
 							else echo "No patches have been applied to this Mobility server."
 							fi
-							echo; read -p "Press [Enter] to continue";
+							echo; eContinue;
 							;;
 
 						2) # Fix slow startup (GMS 2.0.1.53 only) - TID 7014819, Bug 870939
@@ -3383,7 +3513,7 @@ EOF
 			vacuumDB;
 			echo -e "\nDone.\n"
 			fi
-			read -p "Press [Enter] to continue";
+			eContinue;
 		;;
 
 		 2) clear; #Index Database
@@ -3392,7 +3522,7 @@ EOF
 				indexDB;
 			echo -e "\nDone.\n"
 			fi
-			read -p "Press [Enter] to continue";
+			eContinue;
 		;;
 
 		3) clear; #Back up database
@@ -3406,7 +3536,7 @@ EOF
 			else 
 				echo "Invalid path.";
 			fi
-			read -p "Press [Enter] to continue";
+			eContinue;
 		;;
 
 		4) #Restore Database
@@ -3461,7 +3591,7 @@ EOF
 			}
 
 			restore4;
-			read -p "Press [Enter] to continue";
+			eContinue;
 		;;
 
 		5) # Fix Global Address Book (GAL)
@@ -3475,7 +3605,7 @@ EOF
 			echo -e "\nNote: The Global Address Book (GAL) is recreated on startup."
 				if askYesOrNo "Do you want to start Mobility services?"; then
 					rcDS start
-					echo; read -p "Press [Enter] to continue";
+					echo; eContinue;
 					break; break;
 				fi
 			fi
@@ -3514,7 +3644,7 @@ EOF
 				else echo "Failed to dump targets table."
 				fi
 			fi
-			read -p "Press [Enter] to continue";
+			eContinue;
 		;;
 
 			2) #Deletes everything in the database except targets and membershipCache. Removes all attachments
@@ -3523,7 +3653,7 @@ EOF
 			if askYesOrNo $"Clean up and start over (Everything)?"; then
 				cuso 'create'
 			fi
-			read -p "Press [Enter] to continue";
+			eContinue;
 		;;
 
 			3) 
@@ -3532,7 +3662,7 @@ EOF
 			if askYesOrNo $"Uninstall Mobility?"; then
 				cuso 'uninstall';
 			fi
-			read -p "Press [Enter] to continue";
+			eContinue;
 		;;
 
 		/q | q | 0) break;;
@@ -3571,24 +3701,28 @@ do
 
     1) # Self-Signed Certificate
         clear; echo -e "\nNote: The following will create a CSR, private key and generate a self-signed certificate.\n"
-        createCSRKey
-        signCert
-        createPEM
-        configureMobility;;
+        createCSRKey;
+        signCert;
+        createPEM;
+        configureMobility;
+        ;;
 
     2) # CSR/KEY
         clear;
         createCSRKey;
-        echo; read -p "Press [Enter] to continue.";;
+        echo; eContinue;
+        ;;
 
     3) # Create PEM
         clear;
         createPEM;
-        configureMobility;;
+        configureMobility;
+        ;;
 
     4) # Verify Certificates: Private Key, CSR, Public Certificate
         clear;
-        verify;;
+        verify;
+        ;;
 
     /q | q | 0)break;;
     *) ;;
@@ -3612,9 +3746,10 @@ done
  	echo -e "\t3. Remove & reinitialize users options..."
  	echo -e "\n\t4. User authentication issues"
  	echo -e "\t5. Change user application name"
- 	echo -e "\t6. What deleted this (contact, email, folder, calendar)?"
- 	echo -e "\t7. List subjects of deleted items from device"
- 	echo -e "\t8. List all devices from db"
+ 	echo -e "\t6. Change user FDN"
+ 	echo -e "\t7. What deleted this (contact, email, folder, calendar)?"
+ 	echo -e "\t8. List subjects of deleted items from device"
+ 	echo -e "\t9. List all devices from db"
 	echo -e "\n\t0. Back"
  	echo -n -e "\n\tSelection: "
  	read opt;
@@ -3674,7 +3809,7 @@ done
 						if [ $? != 1 ]; then
 							checkGroupWise
 						fi
-						read -p "Press [Enter] to continue.";
+						eContinue;
 						;;
 
 					2) # gwCheck
@@ -3685,7 +3820,7 @@ done
 						if [ -n "$soapSession" ]; then
 							gwCheck
 						fi
-						read -p "Press [Enter] to continue.";
+						eContinue;
 						;;
 
 			/q | q | 0)break;;
@@ -3797,7 +3932,7 @@ done
 						if ($err); then
 							echo -e "No Problems Detected.\n"
 						fi
-						read -p "Press [Enter] to continue."
+						eContinue;
 					fi
 			;;
 
@@ -3805,14 +3940,18 @@ done
 			changeAppName
 			;;
 
-		6) #yup..
+		6) # Calls updateFDN function.
+			updateFDN;
+			;;
+
+		7) #yup..
 			whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe
 			;;
 
-		7) whatDeviceDeleted
+		8) whatDeviceDeleted
 			;;
 
-		8) #Device Info
+		9) #Device Info
 			clear; 
 			echo -e "\nBelow is a list of users and devices. For more details about each device (i.e. OS version), look up what is in the description column. For an iOS device, there could be a listing of Apple-iPhone3C1/902.176. Use the following website, http://enterpriseios.com/wiki/UserAgent to convert to an Apple product, iOS Version and Build.\n"
 			mpsql << EOF
@@ -3855,24 +3994,24 @@ EOF
 			2) # Nightly Maintenance Check
 				clear
 				checkNightlyMaintenance
-				read -p "Press [Enter] to continue.";
+				eContinue;
 				;;
 
 			3)  clear;
 				showStatus
-				read -p "Press [Enter] to continue.";
+				eContinue;
 				;;
 
 			4) # Mobility syncevents
 				clear
 				psql -U $dbUsername mobility -c "select DISTINCT  u.userid AS "FDN", count(eventid) as "events", se.userid FROM syncevents se INNER JOIN users u ON se.userid = u.guid GROUP BY u.userid, se.userid ORDER BY events DESC;"
-				read -p "Press [Enter] to continue.";
+				eContinue;
 				;;
 
 			5) # Mobility attachments
 				clear
 				psql -U $dbUsername mobility -c "select DISTINCT u.userid AS fdn, ROUND(SUM(filesize)/1024/1024::numeric,4) AS \"MB\",  am.userid from attachments a INNER JOIN attachmentmaps am ON a.attachmentid = am.attachmentid INNER JOIN users u ON am.userid = u.guid WHERE a.filestoreid != '0' GROUP BY u.userid, am.userid ORDER BY \"MB\" DESC;"
-				read -p "Press [Enter] to continue.";
+				eContinue;
 				;;
 
 			6) # Mobility attachments over X days
@@ -3989,7 +4128,7 @@ EOF
 					fi
 				fi
 
-				read -p "Press [Enter] to continue.";
+				eContinue;
 				;;
 
 			7) # Watch psql command
