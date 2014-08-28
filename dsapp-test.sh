@@ -2340,7 +2340,7 @@ function ghc_checkRPMs {
 	ghcNewHeader "Checking RPMs..."
 	problem=false
 
-	declare -a needIt=('pyxml')
+	declare -a needIt=('pyxml' 'perl-ldap')
 	
 	wait $rpmsPID
 	rpms=$(<tmpRPMs);rm -f tmpRPMs;
