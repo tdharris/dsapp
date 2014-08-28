@@ -1899,26 +1899,26 @@ function updateFDN {
 			echo -e "\nSearching LDAP..."
 			userFilter="(&(!(objectClass=computer))(cn=$vuid)(|(objectClass=Person)(objectClass=orgPerson)(objectClass=inetOrgPerson)))"
 			# Store baseDN in file to while loop it
-			grep "userContainer" -i $ceconf 2>/dev/null | cut -f2 -d '>' | cut -f1 -d '<' > tmpbaseDN;
+			grep "userContainer" -i $ceconf 2>/dev/null | cut -f2 -d '>' | cut -f1 -d '<' > $dsapptmp/tmpbaseDN;
 
 			# Run Ldapsearch for every baseDN - Store in file, and remove any duplicate from file
 			# Remove and remake so file is clean to start
-			rm -f tmpUserDN; touch tmpUserDN;
+			rm -f $dsapptmp/tmpUserDN; touch $dsapptmp/tmpUserDN;
 			while read line
 			do
 				if [ $ldapPort -eq 389 ];then
-					/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$userFilter" dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' ' >> tmpUserDN;
+					/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$userFilter" dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' ' >> $dsapptmp/tmpUserDN;
 				else
-					/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b "$line" "$userFilter" dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' ' >> tmpUserDN;
+					/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b "$line" "$userFilter" dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' ' >> $dsapptmp/tmpUserDN;
 				fi
-			done < tmpbaseDN
+			done < $dsapptmp/tmpbaseDN
 			# Removing any duplicates found.
-			awk '!seen[$0]++' tmpUserDN > tmpUserDN2; mv tmpUserDN2 tmpUserDN
+			awk '!seen[$0]++' $dsapptmp/tmpUserDN > $dsapptmp/tmpUserDN2; mv $dsapptmp/tmpUserDN2 $dsapptmp/tmpUserDN
 		fi
 
-		if [ $(cat tmpUserDN|wc -l) -gt 1 ];then
+		if [ $(cat $dsapptmp/tmpUserDN|wc -l) -gt 1 ];then
 			echo -e "\nLDAP found multiple users:";
-			cat tmpUserDN;
+			cat $dsapptmp/tmpUserDN;
 			echo
 			while true
 			do
@@ -1932,14 +1932,14 @@ function updateFDN {
 			fi
 			done
 		else
-			defaultuserDN=`cat tmpUserDN`
+			defaultuserDN=`cat $dsapptmp/tmpUserDN`
 			echo -e "$defaultuserDN\n\nPress [Enter] to take LDAP defaults."
 			read -p "Enter users new full FDN [$defaultuserDN]: " userDN
 			userDN="${userDN:-$defaultuserDN}"
 		fi
 
 		# Clean up
-		rm -f tmpbaseDN tmpUserDN
+		rm -f $dsapptmp/tmpbaseDN $dsapptmp/tmpUserDN
 
 		origUserDN=`psql -U datasync_user datasync -t -c "select dn from targets where dn ilike '%$vuid%' and disabled='0';" | head -n1 | cut -f2 -d ' '`
 		echo
@@ -2102,7 +2102,7 @@ function generalHealthCheck {
 	# diskIOPID=$!
 
 	# Start rpm -qa in background.
-	rpm -qa > tmpRPMs &
+	rpm -qa > $dsapptmp/tmpRPMs &
 	rpmsPID=$!
 	
 	# Begin Checks
@@ -2353,7 +2353,7 @@ function ghc_checkRPMs {
 	declare -a needIt=('pyxml' 'perl-ldap')
 	
 	wait $rpmsPID
-	rpms=$(<tmpRPMs);rm -f tmpRPMs;
+	rpms=$(<$dsapptmp/tmpRPMs);rm -f $dsapptmp/tmpRPMs;
 	for i in "${needIt[@]}"; do
 	  res=`echo "$rpms" | grep -iq "$i"; echo $?`
 	  if [[ "$res" -ne 0 ]]; then
@@ -3058,7 +3058,9 @@ while [ "$1" != "" ]; do
 		;;
 
 	--changeHost | -ch ) dsappSwitch=1
+		clear
 
+		# Makes sure version is 2.0 +
 		if [ $dsVersion -lt $dsVersionCompare ]; then
 			echo -e "Must be running version 2.0 or greater"
 			break;
@@ -3098,17 +3100,17 @@ while [ "$1" != "" ]; do
 			mv $dsapptmp/tmpdomain2 $dsapptmp/tmpdomain
 		fi
 
-
+		# Print to screen all results
 		if [ -n "$hostNameVar" ];then printf "Hostnames";fi
 		if [ -n "$domainVar" ];then printf " / Domains";fi
-		printf " used in desending order:\n\n";
+		printf " used in chronological order:\n\n";
 		if [ -n "$hostNameVar" ];then echo -e "Hostnames:"; cat $dsapptmp/tmpHostname;fi
 		if [ -n "$domainVar" ];then echo -e "\nDomains:"; cat $dsapptmp/tmpdomain;fi
 		echo -e "\nCurrent fqdn hostname:";echo `hostname -f`;
 
+		# Prompt user for pervious hostname
 		while true
 		do
-			echo
 			read -p "Enter in previous used fqdn hostname: " oldHostname;
 			if [ -n "$oldHostname" ];then
 				if askYesOrNo $"Set dsapp hostname to [$oldHostname]:";then
@@ -3121,6 +3123,7 @@ while [ "$1" != "" ]; do
 
 		# Clean up
 		rm -f $dsapptmp/tmpHostname $dsapptmp/tmpdomain;
+
 		echo
 		eContinue;
 		;;
