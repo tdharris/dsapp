@@ -3097,11 +3097,11 @@ while [ "$1" != "" ]; do
 		fi
 
 
-		if [ "$(cat $dsapptmp/tmpHostname|wc -l)" -gt 0 ];then printf "Hostnames";fi
-		if [ "$(cat $dsapptmp/tmpdomain|wc -l)" -gt 0 ];then printf " / Domains";fi
+		if [ $(cat $dsapptmp/tmpHostname|wc -l) -gt 0 ];then printf "Hostnames";fi
+		if [ $(cat $dsapptmp/tmpdomain|wc -l) -gt 0 ];then printf " / Domains";fi
 		printf " used in desending order:\n\n";
-		if [ "$(cat $dsapptmp/tmpHostname|wc -l)" -gt 0 ];then echo -e "Hostnames:"; cat $dsapptmp/tmpHostname;fi
-		if [ "$(cat $dsapptmp/tmpdomain|wc -l)" -gt 0 ];then echo -e "\nDomains:"; cat $dsapptmp/tmpdomain;fi
+		if [ $(cat $dsapptmp/tmpHostname|wc -l) -gt 0 ];then echo -e "Hostnames:"; cat $dsapptmp/tmpHostname;fi
+		if [ $(cat $dsapptmp/tmpdomain|wc -l) -gt 0 ];then echo -e "\nDomains:"; cat $dsapptmp/tmpdomain;fi
 		echo -e "\nCurrent fqdn hostname:";echo `hostname -f`;
 
 		while true
