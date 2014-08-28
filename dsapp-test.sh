@@ -1920,7 +1920,17 @@ function updateFDN {
 			echo -e "\nLDAP found multiple users:";
 			cat tmpUserDN;
 			echo
+			while true
+			do
 			read -p "Enter users new full FDN: " userDN
+			if [ -n "$userDN" ];then
+				break;
+			else
+				if (! askYesOrNo $"Invalid Entry... try again?");then 
+					break; break;
+				fi
+			fi
+			done
 		else
 			defaultuserDN=`cat tmpUserDN`
 			echo -e "$defaultuserDN\n\nPress [Enter] to take LDAP defaults."
@@ -1935,7 +1945,7 @@ function updateFDN {
 		echo
 		if [ "$origUserDN" = "$userDN" ];then
 			echo "User FDN match database [$origUserDN]. No changes entered."
-		else
+		elif [ -n "$userDN" ];then
 			if askYesOrNo $"Update [$origUserDN] to [$userDN]";then
 				psql -U $dbUsername datasync 1>/dev/null <<EOF
 				update targets set dn='$userDN' where dn='$origUserDN';
@@ -2949,6 +2959,7 @@ while [ "$1" != "" ]; do
 		echo -e "  -u \t--users\t\tPrint a list of all users with count"
 		echo -e "  -d  \t--devices\tPrint a list of all devices with count"
 		echo -e "  -db \t--database\tChange database password"
+		echo -e "  -ch \t--changeHost\tSet previous hostname to fix encryption"
 	;;
 
 	--version | version) dsappSwitch=1
@@ -3046,6 +3057,72 @@ while [ "$1" != "" ]; do
 		fi
 		;;
 
+	--changeHost | -ch ) dsappSwitch=1
+
+		if [ $dsVersion -lt $dsVersionCompare ]; then
+			echo -e "Must be running version 2.0 or greater"
+			break;
+		fi
+
+		# Attempt to get hostname server once had.
+		grep -i hostname= /var/log/YaST2/y2log | rev | awk '{print $1}' | rev | cut -f2 -d '=' | grep -v "false" > $dsapptmp/tmpHostname
+		echo `hostname` >> $dsapptmp/tmpHostname
+		grep -i domain= /var/log/YaST2/y2log | rev | awk '{print $1}' | rev | cut -f2 -d '=' | grep -v "false" > $dsapptmp/tmpdomain
+		echo `dnsdomainname` >> $dsapptmp/tmpdomain
+
+		if [ "$(cat $dsapptmp/tmpHostname|wc -l)" -gt 0 ];then
+			# Remove any duplicates from $dsapptmp/tmpHostname
+			hostnameLine=""
+			while read line
+			do
+				if [ "$line" != "$hostnameLine" ];then
+					echo "$line" >> $dsapptmp/tmpHostname2
+				fi
+				hostnameLine=$line
+			done < $dsapptmp/tmpHostname
+			mv $dsapptmp/tmpHostname2 $dsapptmp/tmpHostname
+		fi
+
+		if [ "$(cat $dsapptmp/tmpdomain|wc -l)" -gt 0 ];then
+			# Remove any duplicate from $dsapptmp/tmpdomain
+			domainLine=""
+			while read line
+			do
+				if [ "$line" != "$domainLine" ];then
+					echo "$line" >> $dsapptmp/tmpdomain2
+				fi
+				domainLine=$line
+			done < $dsapptmp/tmpdomain
+			mv $dsapptmp/tmpdomain2 $dsapptmp/tmpdomain
+		fi
+
+
+		if [ "$(cat $dsapptmp/tmpHostname|wc -l)" -gt 0 ];then printf "Hostnames";fi
+		if [ "$(cat $dsapptmp/tmpdomain|wc -l)" -gt 0 ];then printf " / Domains";fi
+		printf " used in desending order:\n\n";
+		if [ "$(cat $dsapptmp/tmpHostname|wc -l)" -gt 0 ];then echo -e "Hostnames:"; cat $dsapptmp/tmpHostname;fi
+		if [ "$(cat $dsapptmp/tmpdomain|wc -l)" -gt 0 ];then echo -e "\nDomains:"; cat $dsapptmp/tmpdomain;fi
+		echo -e "\nCurrent fqdn hostname:";echo `hostname -f`;
+
+		while true
+		do
+			echo
+			read -p "Enter in previous used fqdn hostname: " oldHostname;
+			if [ -n "$oldHostname" ];then
+				if askYesOrNo $"Set dsapp hostname to [$oldHostname]:";then
+					checkHostname "$oldHostname"; break;
+				else
+					break
+				fi
+			fi
+		done
+
+		# Clean up
+		rm -f $dsapptmp/tmpHostname $dsapptmp/tmpdomain;
+		echo
+		eContinue;
+		;;
+
 
 	#Not valid switch case
  	*) dsappSwitch=1
@@ -3071,11 +3148,17 @@ fi
 
 
 # Compare dsHostname hostname, with server hostname
-if [[ "$dsHostname" != `hostname -f` ]];then 
-	echo "Hostname differs from last time dsapp ran."
+function checkHostname {
+if [ -n "$1" ];then
+	local skip="true";
+else local skip="false";
+fi
+
+if [[ "$dsHostname" != `hostname -f` ]] || [ "$skip" = "true" ];then 
+	if(! $skip);then echo "Hostname differs from last time dsapp ran.";fi
 	if askYesOrNo "Update configuration files";then
 		getDBPassword;
-
+		if ($skip);then echo "$1" > $dsappConf/dsHostname.conf;fi
 		# Setting dsHostname to new hostname
 		echo `hostname -f` > $dsappConf/dsHostname.conf
 		dsHostname=`cat $dsappConf/dsHostname.conf`
@@ -3114,6 +3197,9 @@ if [[ "$dsHostname" != `hostname -f` ]];then
 		exit 0;
 	fi
 fi
+}
+
+checkHostname;
 
 ##################################################################################################
 #	
