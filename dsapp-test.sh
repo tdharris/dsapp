@@ -3070,7 +3070,8 @@ while [ "$1" != "" ]; do
 		grep -i domain= /var/log/YaST2/y2log | rev | awk '{print $1}' | rev | cut -f2 -d '=' | grep -v "false" > $dsapptmp/tmpdomain
 		echo `dnsdomainname` >> $dsapptmp/tmpdomain
 
-		if [ "$(cat $dsapptmp/tmpHostname|wc -l)" -gt 0 ];then
+		hostNameVar=`cat $dsapptmp/tmpHostname`
+		if [ -n "$hostNameVar" ];then
 			# Remove any duplicates from $dsapptmp/tmpHostname
 			hostnameLine=""
 			while read line
@@ -3083,7 +3084,8 @@ while [ "$1" != "" ]; do
 			mv $dsapptmp/tmpHostname2 $dsapptmp/tmpHostname
 		fi
 
-		if [ "$(cat $dsapptmp/tmpdomain|wc -l)" -gt 0 ];then
+		domainVar=`cat $dsapptmp/tmpdomain`
+		if [ -n "$domainVar" ];then
 			# Remove any duplicate from $dsapptmp/tmpdomain
 			domainLine=""
 			while read line
@@ -3097,11 +3099,11 @@ while [ "$1" != "" ]; do
 		fi
 
 
-		if [ $(cat $dsapptmp/tmpHostname|wc -l) -gt 0 ];then printf "Hostnames";fi
-		if [ $(cat $dsapptmp/tmpdomain|wc -l) -gt 0 ];then printf " / Domains";fi
+		if [ -n "$hostNameVar" ];then printf "Hostnames";fi
+		if [ -n "$domainVar" ];then printf " / Domains";fi
 		printf " used in desending order:\n\n";
-		if [ $(cat $dsapptmp/tmpHostname|wc -l) -gt 0 ];then echo -e "Hostnames:"; cat $dsapptmp/tmpHostname;fi
-		if [ $(cat $dsapptmp/tmpdomain|wc -l) -gt 0 ];then echo -e "\nDomains:"; cat $dsapptmp/tmpdomain;fi
+		if [ -n "$hostNameVar" ];then echo -e "Hostnames:"; cat $dsapptmp/tmpHostname;fi
+		if [ -n "$domainVar" ];then echo -e "\nDomains:"; cat $dsapptmp/tmpdomain;fi
 		echo -e "\nCurrent fqdn hostname:";echo `hostname -f`;
 
 		while true
