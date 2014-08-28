@@ -2845,21 +2845,18 @@ function ghc_checkUserFDN {
 			for ((count=0;count<$userCount;count++))
 			do
 				checkUser=${userInDB[$count]}
-				checkUser=`echo $checkUser | cut -f1 -d ','`
-
-				mobilityUserDN=`psql -U datasync_user datasync -t -c "select dn from targets where dn ilike '%$checkUser%' and \"connectorID\" ilike '%mobility%';" | cut -f2 -d ' ' | head -n1`
 
 				if [ $ldapPort -eq 389 ];then
-						ldapUserDN=`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $mobilityUserDN dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
+						ldapUserDN=`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $checkUser dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
 					else
-						ldapUserDN=`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $mobilityUserDN dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
+						ldapUserDN=`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $checkUser dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
 				fi
 
-				if [ "$ldapUserDN" != "$mobilityUserDN" ];then
+				if [ "$ldapUserDN" != "$checkUser" ];then
 					warn=true;
 					problem=true;
-					echo -e "User $(echo $checkUser | cut -f2 -d '=') has possible incorrect FDN" >>$ghcLog
-					echo -e "LDAP counld not find $mobilityUserDN" >>$ghcLog
+					echo -e "User $(echo $checkUser | cut -f1 -d ',' | cut -f2 -d '=') has possible incorrect FDN" >>$ghcLog
+					echo -e "LDAP counld not find $checkUser\n" >>$ghcLog
 				fi
 			done
 		fi
