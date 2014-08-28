@@ -1897,15 +1897,40 @@ function updateFDN {
 		verifyUser;
 		if [ $? -eq 0 ];then
 			echo -e "\nSearching LDAP..."
-			if [ $ldapPort -eq 389 ];then
-				defaultuserDN=`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" cn=$vuid dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' ' | head -n1`
-			else
-				defaultuserDN=`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" cn=$vuid dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' ' | head -n1`
-			fi
+			userFilter="(&(!(objectClass=computer))(cn=$vuid)(|(objectClass=Person)(objectClass=orgPerson)(objectClass=inetOrgPerson)))"
+			# Store baseDN in file to while loop it
+			grep "userContainer" -i $ceconf 2>/dev/null | cut -f2 -d '>' | cut -f1 -d '<' > tmpbaseDN;
+
+			# Run Ldapsearch for every baseDN - Store in file, and remove any duplicate from file
+			# Remove and remake so file is clean to start
+			rm -f tmpUserDN; touch tmpUserDN;
+			while read line
+			do
+				if [ $ldapPort -eq 389 ];then
+					/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$userFilter" dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' ' >> tmpUserDN;
+				else
+					/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b "$line" "$userFilter" dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' ' >> tmpUserDN;
+				fi
+			done < tmpbaseDN
+			# Removing any duplicates found.
+			awk '!seen[$0]++' tmpUserDN > tmpUserDN2; mv tmpUserDN2 tmpUserDN
 		fi
-		echo -e "$defaultuserDN\n\nPress [Enter] to take LDAP defaults."
-		read -p "Enter users new full FDN [$defaultuserDN]: " userDN
-		userDN="${userDN:-$defaultuserDN}"
+
+		if [ $(cat tmpUserDN|wc -l) -gt 1 ];then
+			echo -e "\nLDAP found multiple users:";
+			cat tmpUserDN;
+			echo
+			read -p "Enter users new full FDN: " userDN
+		else
+			defaultuserDN=`cat tmpUserDN`
+			echo -e "$defaultuserDN\n\nPress [Enter] to take LDAP defaults."
+			read -p "Enter users new full FDN [$defaultuserDN]: " userDN
+			userDN="${userDN:-$defaultuserDN}"
+		fi
+
+		# Clean up
+		rm -f tmpbaseDN tmpUserDN
+
 		origUserDN=`psql -U datasync_user datasync -t -c "select dn from targets where dn ilike '%$vuid%' and disabled='0';" | head -n1 | cut -f2 -d ' '`
 		echo
 		if [ "$origUserDN" = "$userDN" ];then
@@ -1913,22 +1938,18 @@ function updateFDN {
 		else
 			if askYesOrNo $"Update [$origUserDN] to [$userDN]";then
 				psql -U $dbUsername datasync 1>/dev/null <<EOF
-update targets set dn='$userDN' where dn='$origUserDN';
-update cache set "sourceDN"='$userDN' where "sourceDN"='$origUserDN';
-update "folderMappings" set "targetDN"='$userDN' where "targetDN"='$origUserDN';
-update "membershipCache" set memberdn='$userDN' where memberdn='$origUserDN';
-\c mobility
-update users set userid='$userDN' where userid='$origUserDN';
+				update targets set dn='$userDN' where dn='$origUserDN';
+				update cache set "sourceDN"='$userDN' where "sourceDN"='$origUserDN';
+				update "folderMappings" set "targetDN"='$userDN' where "targetDN"='$origUserDN';
+				update "membershipCache" set memberdn='$userDN' where memberdn='$origUserDN';
+				\c mobility
+				update users set userid='$userDN' where userid='$origUserDN';
 EOF
-				# psql -U $dbUsername datasync -c "update targets set dn='$userDN' where dn='$origUserDN';" 1>/dev/null
-				# psql -U $dbUsername datasync -c "update cache set \"sourceDN\"='$userDN' where \"sourceDN\"='$origUserDN';" 1>/dev/null
-				# psql -U $dbUsername datasync -c "update \"folderMappings\" set \"targetDN\"='$userDN' where \"targetDN\"='$origUserDN';" 1>/dev/null
-				# psql -U $dbUsername datasync -c "update \"membershipCache\" set memberdn='$userDN' where memberdn='$origUserDN';" 1>/dev/null
-				# psql -U $dbUsername mobility -c "update users set userid='$userDN' where userid='$origUserDN';" 1>/dev/null
 				echo -e "User FDN update complete\n\nRestart mobility to clear old cache."
 			fi
 		fi
 	fi
+
 	eContinue;
 }
 
@@ -2065,6 +2086,15 @@ function generalHealthCheck {
 		silent=true
 	fi
 
+	# Start diskIO in the background.
+	# hdparm -t `df -P /var | tail -1 | cut -d ' ' -f1` > tmpdiskIO &
+	# dd if=/dev/zero of=/tmp/ddoutput conv=fdatasync bs=384k count=1k 2> tmpdiskIO
+	# diskIOPID=$!
+
+	# Start rpm -qa in background.
+	rpm -qa > tmpRPMs &
+	rpmsPID=$!
+	
 	# Begin Checks
 	ghc_checkServices
 	ghc_checkPOA
@@ -2311,8 +2341,9 @@ function ghc_checkRPMs {
 	problem=false
 
 	declare -a needIt=('pyxml')
-	rpms=$(rpm -qa)
-
+	
+	wait $rpmsPID
+	rpms=$(<tmpRPMs);rm -f tmpRPMs;
 	for i in "${needIt[@]}"; do
 	  res=`echo "$rpms" | grep -iq "$i"; echo $?`
 	  if [[ "$res" -ne 0 ]]; then
@@ -2560,6 +2591,9 @@ function ghc_checkDiskIO {
 	ghcNewHeader "Checking disk IO..."
 	warn=false
 
+	# wait $diskIOPID
+	# rm -f /tmp/ddoutput
+	# diskIO=$(<tmpdiskIO); rm -f tmpdiskIO;
 	diskIO=$(hdparm -t `df -P /var | tail -1 | cut -d ' ' -f1`)
 	resultMBs=$(echo $diskIO | rev | awk '{ print $2 }' | rev)
 	if [ $(echo "$resultMBs>=13.33" | bc) -ne 1 ]; then 
@@ -2813,18 +2847,19 @@ function ghc_checkUserFDN {
 				checkUser=${userInDB[$count]}
 				checkUser=`echo $checkUser | cut -f1 -d ','`
 
+				mobilityUserDN=`psql -U datasync_user datasync -t -c "select dn from targets where dn ilike '%$checkUser%' and \"connectorID\" ilike '%mobility%';" | cut -f2 -d ' ' | head -n1`
+
 				if [ $ldapPort -eq 389 ];then
-						ldapUserDN=`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" $checkUser dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
+						ldapUserDN=`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $mobilityUserDN dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
 					else
-						ldapUserDN=`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" $checkUser dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
+						ldapUserDN=`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $mobilityUserDN dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
 				fi
 
-				mobilityUserDN=`psql -U datasync_user datasync -t -c "select dn from targets where dn ilike '%$checkUser%' and \"connectorID\" ilike '%mobility%';" | cut -f2 -d ' ' | head -n1`
 				if [ "$ldapUserDN" != "$mobilityUserDN" ];then
 					warn=true;
 					problem=true;
-					echo -e "$(echo $checkUser | cut -f2 -d '=') has possible incorrect FDN" >>$ghcLog
-					echo -e "LDAP [$ldapUserDN] : Database [$mobilityUserDN]\n" >>$ghcLog
+					echo -e "User $(echo $checkUser | cut -f2 -d '=') has possible incorrect FDN" >>$ghcLog
+					echo -e "LDAP counld not find $mobilityUserDN" >>$ghcLog
 				fi
 			done
 		fi
