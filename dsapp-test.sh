@@ -3104,12 +3104,12 @@ while [ "$1" != "" ]; do
 		# Print to screen all results
 		if [ -n "$hostNameVar" ];then printf "Hostnames";fi
 		if [ -n "$domainVar" ];then printf " / Domains";fi
-		if [ -n "$domainVar" ] || [ -n "$domainVar" ];then printf " used in chronological order:\n\n";fi
+		if [ -n "$hostNameVar" ] || [ -n "$domainVar" ];then printf " used in chronological order:\n\n";fi
 		if [ -n "$hostNameVar" ];then echo -e "Hostnames:"; cat $dsapptmp/tmpHostname;fi
 		if [ -n "$domainVar" ];then echo -e "\nDomains:"; cat $dsapptmp/tmpdomain;fi
-		if [ -z "$domainVar" ] && [ -z "$domainVar" ];then printf "Could not find any results.\m\m";fi
+		if [ -z "$hostNameVar" ] && [ -z "$domainVar" ];then printf "Could not find any results.\n\n";fi
 		echo -e "\nCurrent fqdn hostname:" `hostname -f`;
-		if [ -n "$domainVar" ] || [ -n "$domainVar" ];then printf "Possible last used hostname: "; printf `tac $dsapptmp/tmpHostname | sed -n 2p`; printf .; printf `tac $dsapptmp/tmpdomain | sed -n 1p`; printf "\n\n";fi
+		if [ -n "$hostNameVar" ] || [ -n "$domainVar" ];then printf "Possible last used hostname: "; printf `tac $dsapptmp/tmpHostname | sed -n 2p`; printf .; printf `tac $dsapptmp/tmpdomain | sed -n 1p`; printf "\n\n";fi
 
 		# Prompt user for pervious hostname
 		while true
