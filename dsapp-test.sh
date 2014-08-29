@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='188'
+	dsappversion='189'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -561,6 +561,8 @@ fi
 		if(! $skip);then echo "Hostname differs from last time dsapp ran.";fi
 		if askYesOrNo "Update configuration files";then
 			getDBPassword;
+			getTrustedAppKey;
+			getldapPassword;
 
 			# Setting dsHostname to new hostname
 			echo `hostname -f` > $dsappConf/dsHostname.conf
@@ -626,11 +628,11 @@ fi
 
 # Things to run in initialization
 decodeProblem=false
-checkHostname;
 dsappLogRotate;
 getldapPassword;
 getTrustedAppKey;
 getDBPassword;
+checkHostname;
 
 if ($decodeProblem);then echo -e "\nPossible hostname change";eContinue;fi
 
