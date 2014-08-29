@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='189'
+	dsappversion='188'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -560,6 +560,7 @@ fi
 	if [[ "$dsHostname" != `hostname -f` ]] || [ "$skip" = "true" ];then 
 		if(! $skip);then echo "Hostname differs from last time dsapp ran.";fi
 		if askYesOrNo "Update configuration files";then
+			rm -f $dsapptmp/error
 			getDBPassword;
 			getTrustedAppKey;
 			getldapPassword;
@@ -601,7 +602,7 @@ fi
 				sed -i ""$lineNumber"s|<password>.*</password>|<password>"$ldapPassword"</password>|g" $ceconf
 			fi
 
-			echo -e "Configuration files updated.\nPlease restart Mobility."
+			echo -e "\nConfiguration files updated.\nPlease restart Mobility."
 			exit 0;
 		fi
 	fi
