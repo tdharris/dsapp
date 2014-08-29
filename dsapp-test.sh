@@ -3066,6 +3066,7 @@ while [ "$1" != "" ]; do
 			break;
 		fi
 
+		echo -e "Searching for hostnames / domains..."
 		# Attempt to get hostname server once had.
 		grep -i hostname= /var/log/YaST2/y2log | rev | awk '{print $1}' | rev | cut -f2 -d '=' | grep -v "false" > $dsapptmp/tmpHostname
 		echo `hostname` >> $dsapptmp/tmpHostname
@@ -3103,15 +3104,17 @@ while [ "$1" != "" ]; do
 		# Print to screen all results
 		if [ -n "$hostNameVar" ];then printf "Hostnames";fi
 		if [ -n "$domainVar" ];then printf " / Domains";fi
-		printf " used in chronological order:\n\n";
+		if [ -n "$domainVar" ] || [ -n "$domainVar" ];then printf " used in chronological order:\n\n";fi
 		if [ -n "$hostNameVar" ];then echo -e "Hostnames:"; cat $dsapptmp/tmpHostname;fi
 		if [ -n "$domainVar" ];then echo -e "\nDomains:"; cat $dsapptmp/tmpdomain;fi
-		echo -e "\nCurrent fqdn hostname:";echo `hostname -f`;
+		if [ -z "$domainVar" ] && [ -z "$domainVar" ];then printf "Could not find any results.\m\m";fi
+		echo -e "\nCurrent fqdn hostname:" `hostname -f`;
+		if [ -n "$domainVar" ] || [ -n "$domainVar" ];then printf "Possible last used hostname: "; printf `tac $dsapptmp/tmpHostname | sed -n 2p`; printf .; printf `tac $dsapptmp/tmpdomain | sed -n 1p`; printf "\n\n";fi
 
 		# Prompt user for pervious hostname
 		while true
 		do
-			read -p "Enter in previous used fqdn hostname: " oldHostname;
+			read -p "Enter in last used fqdn hostname: " oldHostname;
 			if [ -n "$oldHostname" ];then
 				if askYesOrNo $"Set dsapp hostname to [$oldHostname]:";then
 					checkHostname "$oldHostname"; break;
