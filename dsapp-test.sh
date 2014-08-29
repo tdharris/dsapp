@@ -19,16 +19,18 @@
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
+	dsappBackup="$dsappDirectory/backup"
 	dsapptmp="$dsappDirectory/tmp"
 	dsappupload="$dsappDirectory/upload"
 	rootDownloads="/root/Downloads"
 
 	#Create folders to store script files
 	rm -R -f /tmp/novell/ 2>/dev/null;
-	rm -R -f $dsapptmp 2>/dev/null;
+	rm -r -f $dsapptmp/* 2>/dev/null;
 	mkdir -p $dsappDirectory 2>/dev/null;
 	mkdir -p $dsappConf 2>/dev/null;
 	mkdir -p $dsappLogs 2>/dev/null;
+	mkdir -p $dsappBackup 2>/dev/null;
 	mkdir -p $dsapptmp 2>/dev/null;
 	mkdir -p $dsappupload 2>/dev/null;
 	mkdir -p $rootDownloads 2>/dev/null;
@@ -249,6 +251,41 @@ if [ ! -f "/etc/logrotate.d/dsapp" ];then
 fi
 }
 
+function askYesOrNo {
+		REPLY=""
+		while [ -z "$REPLY" ] ; do
+			read -ep "$1 $YES_NO_PROMPT" REPLY
+			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+			log "[askYesOrNo] $1 $REPLY"
+			case $REPLY in
+				$YES_CAPS ) return 0 ;;
+				$NO_CAPS ) return 1 ;;
+				* ) REPLY=""
+			esac
+		done
+	}
+
+function ask {
+	REPLY=""
+	while [ -z "$REPLY" ] ; do
+		read -ep "$1 $YES_NO_PROMPT" REPLY
+		REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+		log "[ask] $1 $REPLY"
+		case $REPLY in
+			$YES_CAPS ) $2; return 0 ;;
+			$NO_CAPS ) return 1 ;;
+			* ) REPLY=""
+		esac
+	done
+}
+
+# Initialize the yes/no prompt
+YES_STRING=$"y"
+NO_STRING=$"n"
+YES_NO_PROMPT=$"[y/n]: "
+YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
+NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
+
 function eContinue {
 	read -p "Press [Enter] to continue"
 }
@@ -423,7 +460,13 @@ function installAlias {
 
 	function decodeString {
 		decodeVar1=`echo "$1" | base64 -d`;
-		decodeVar2=`echo "$decodeVar1" | openssl enc -aes-256-cbc -base64 -k $dsHostname -d`;
+		decodeVar2=`echo "$decodeVar1" | openssl enc -aes-256-cbc -base64 -k $dsHostname -d 2>>$dsapptmp/error`;
+		if [ -f "$dsapptmp/error" ];then
+			local var=`grep "bad decrypt" $dsapptmp/error`
+			if [ -n "$var" ];then
+				echo -e "$2\n" >> $dsapptmp/error
+			fi
+		fi
 		echo $decodeVar2;
 	}
 
@@ -438,7 +481,14 @@ function installAlias {
 		#Grabbing password from configengine.xml
 		dbPassword=`sed -n "/<database>/,/<\/database>/p" $ceconf | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
 		if [[ $(isStringProtected database $ceconf) -eq 1 ]];then
-			dbPassword=$(decodeString $dbPassword)
+			dbPassword=$(decodeString $dbPassword "Database")
+		fi
+
+		if [ -f "$dsapptmp/error" ];then
+			local var=`grep "Database" $dsapptmp/error`
+			if [ -n "$var" ];then echo -e "Encryption on Database wrong.";
+				decodeProblem=true;
+			fi
 		fi
 	}
 
@@ -470,7 +520,14 @@ fi
 	function getTrustedAppKey {
 		trustedAppKey=`cat $gconf | grep -i trustedAppKey | sed 's/<[^>]*[>]//g' | tr -d ' '`
 		if [[ $(isStringProtected protected $gconf) -eq 1 ]];then
-			trustedAppKey=$(decodeString $trustedAppKey)
+			trustedAppKey=$(decodeString $trustedAppKey "Trusted Application")
+		fi
+
+		if [ -f "$dsapptmp/error" ];then
+			local var=`grep "Trusted Application" $dsapptmp/error`
+			if [ -n "$var" ];then echo -e "Encryption on Trusted Application wrong.";
+				decodeProblem=true;
+			fi
 		fi
 	}
 
@@ -480,8 +537,72 @@ fi
 		protectedldapPassword=`sed -n "/<login>/,/<\/login>/p" $ceconf | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
 		ldapPassword="$protectedldapPassword"
 		if [[ $(isStringProtected login $ceconf) -eq 1 ]];then
-			ldapPassword=$(decodeString $ldapPassword)
+			ldapPassword=$(decodeString $ldapPassword "LDAP")
 		fi
+
+		if [ -f "$dsapptmp/error" ];then
+			local var=`grep "LDAP" $dsapptmp/error`
+			if [ -n "$var" ];then echo -e "Encryption on LDAP wrong.";
+				decodeProblem=true;
+			fi
+		fi
+	}
+
+	# Compare dsHostname hostname, with server hostname
+	function checkHostname {
+	if [ -n "$1" ];then
+		local skip="true";
+			echo "$1" > $dsappConf/dsHostname.conf;
+			dsHostname=`cat $dsappConf/dsHostname.conf`
+	else local skip="false";
+	fi
+
+	if [[ "$dsHostname" != `hostname -f` ]] || [ "$skip" = "true" ];then 
+		if(! $skip);then echo "Hostname differs from last time dsapp ran.";fi
+		if askYesOrNo "Update configuration files";then
+			getDBPassword;
+
+			# Setting dsHostname to new hostname
+			echo `hostname -f` > $dsappConf/dsHostname.conf
+			dsHostname=`cat $dsappConf/dsHostname.conf`
+
+			# Storing passwords with new encode
+			dbPassword=$(encodeString $dbPassword)
+			trustedAppKey=$(encodeString $trustedAppKey)
+			ldapPassword=$(encodeString $ldapPassword)
+
+			# Backup all configuration files
+			backupConf "checkHostname"		
+
+			# Setting database password in multiple files
+			if [[ $(isStringProtected database $ceconf) -eq 1 ]];then
+				lineNumber=`grep "database" -A 7 -n $ceconf | grep password | cut -d '-' -f1`
+				sed -i ""$lineNumber"s|<password>.*</password>|<password>"$dbPassword"</password>|g" $ceconf
+			fi
+
+			if [[ $(isStringProtected database $econf) -eq 1 ]];then
+				sed -i "s|<password>.*</password>|<password>"$dbPassword"</password>|g" $econf
+			fi
+
+			if [[ $(isStringProtected protected $mconf) -eq 1 ]];then
+				sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$dbPassword"</dbpass>|g" $mconf
+			fi
+
+			# Setting TrustedAppKey with new hostname encoding
+			if [[ $(isStringProtected protected $gconf) -eq 1 ]];then
+				sed -i "s|<trustedAppKey>.*</trustedAppKey>|<trustedAppKey>"$trustedAppKey"</trustedAppKey>|g" $gconf
+			fi
+
+			# Setting ldapPassword with new hostname encoding
+			if [[ $(isStringProtected login $ceconf) -eq 1 ]];then
+				lineNumber=`grep -i "<login>" -A 4 -n $ceconf | grep password | cut -d '-' -f1`
+				sed -i ""$lineNumber"s|<password>.*</password>|<password>"$ldapPassword"</password>|g" $ceconf
+			fi
+
+			echo -e "Configuration files updated.\nPlease restart Mobility."
+			exit 0;
+		fi
+	fi
 	}
 
 # Skips auto-update if file is not called dsapp.sh (good for testing purposes when using dsapp-test.sh)
@@ -504,10 +625,14 @@ fi
 	setVariables;
 
 # Things to run in initialization
-dsappLogRotate
-getldapPassword
-getTrustedAppKey
-getDBPassword
+decodeProblem=false
+checkHostname;
+dsappLogRotate;
+getldapPassword;
+getTrustedAppKey;
+getDBPassword;
+
+if ($decodeProblem);then echo -e "\nPossible hostname change";eContinue;fi
 
 log "[Init] dsapp v$dsappversion | Mobility version: $mobilityVersion"
 log_debug "[Init] dsHostname: $dsHostname"
@@ -523,40 +648,6 @@ log_debug "[Init] [getldapPassword] $ldapAdmin:$ldapPassword"
 #	Declaration of Functions
 #
 ##################################################################################################
-	function askYesOrNo {
-		REPLY=""
-		while [ -z "$REPLY" ] ; do
-			read -ep "$1 $YES_NO_PROMPT" REPLY
-			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
-			log "[askYesOrNo] $1 $REPLY"
-			case $REPLY in
-				$YES_CAPS ) return 0 ;;
-				$NO_CAPS ) return 1 ;;
-				* ) REPLY=""
-			esac
-		done
-	}
-
-	function ask {
-		REPLY=""
-		while [ -z "$REPLY" ] ; do
-			read -ep "$1 $YES_NO_PROMPT" REPLY
-			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
-			log "[ask] $1 $REPLY"
-			case $REPLY in
-				$YES_CAPS ) $2; return 0 ;;
-				$NO_CAPS ) return 1 ;;
-				* ) REPLY=""
-			esac
-		done
-	}
-
-	# Initialize the yes/no prompt
-	YES_STRING=$"y"
-	NO_STRING=$"n"
-	YES_NO_PROMPT=$"[y/n]: "
-	YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
-	NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
 
 	function getLogs {
 		clear; 
@@ -1563,6 +1654,9 @@ function changeDBPass {
 	#Get Encrypted password from user input
 	inputEncrpt=$(encodeString $input)
 
+	# Backup conf files
+	backupConf "changeDBPass";
+
 	echo "Changing database password"
 	su postgres -c "psql -c \"ALTER USER datasync_user WITH password '"$input"';\"" &>/dev/null
 	lineNumber=`grep "database" -A 7 -n $ceconf | grep password | cut -d '-' -f1`
@@ -2198,6 +2292,18 @@ function empty {
     fi
 
     [[ $( echo "" ) ]]
+}
+
+function backupConf { # $1 = function name calling this function.
+	local now=$(date '+%X_%F')
+		mkdir -p $dsappBackup/$1/$now/
+		cp $ceconf $econf $dsappBackup/$1/$now/
+		mkdir -p $dsappBackup/$1/$now/gConnector/
+		cp $gconf $dsappBackup/$1/$now/gConnector/
+		mkdir -p $dsappBackup/$1/$now/mConnector/
+		cp $mconf $dsappBackup/$1/$now/mConnector/
+
+		echo "Backup of configuration files at $dsappBackup/$1/$now"
 }
 
 # Check Functions/Modules
@@ -2933,6 +3039,8 @@ function whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe {
 	eContinue;
 }
 
+
+
 ##################################################################################################
 #	
 #	Switches / Command-line parameters
@@ -3157,60 +3265,6 @@ if [ "$dsappSwitch" -eq "1" ];then
 	exit 0;
 fi
 
-
-# Compare dsHostname hostname, with server hostname
-function checkHostname {
-if [ -n "$1" ];then
-	local skip="true";
-else local skip="false";
-fi
-
-if [[ "$dsHostname" != `hostname -f` ]] || [ "$skip" = "true" ];then 
-	if(! $skip);then echo "Hostname differs from last time dsapp ran.";fi
-	if askYesOrNo "Update configuration files";then
-		getDBPassword;
-		if ($skip);then echo "$1" > $dsappConf/dsHostname.conf;fi
-		# Setting dsHostname to new hostname
-		echo `hostname -f` > $dsappConf/dsHostname.conf
-		dsHostname=`cat $dsappConf/dsHostname.conf`
-
-		# Storing passwords with new encode
-		dbPassword=$(encodeString $dbPassword)
-		trustedAppKey=$(encodeString $trustedAppKey)
-		ldapPassword=$(encodeString $ldapPassword)
-
-		# Setting database password in multiple files
-		if [[ $(isStringProtected database $ceconf) -eq 1 ]];then
-			lineNumber=`grep "database" -A 7 -n $ceconf | grep password | cut -d '-' -f1`
-			sed -i ""$lineNumber"s|<password>.*</password>|<password>"$dbPassword"</password>|g" $ceconf
-		fi
-
-		if [[ $(isStringProtected database $econf) -eq 1 ]];then
-			sed -i "s|<password>.*</password>|<password>"$dbPassword"</password>|g" $econf
-		fi
-
-		if [[ $(isStringProtected protected $mconf) -eq 1 ]];then
-			sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$dbPassword"</dbpass>|g" $mconf
-		fi
-
-		# Setting TrustedAppKey with new hostname encoding
-		if [[ $(isStringProtected protected $gconf) -eq 1 ]];then
-			sed -i "s|<trustedAppKey>.*</trustedAppKey>|<trustedAppKey>"$trustedAppKey"</trustedAppKey>|g" $gconf
-		fi
-
-		# Setting ldapPassword with new hostname encoding
-		if [[ $(isStringProtected login $ceconf) -eq 1 ]];then
-			lineNumber=`grep -i "<login>" -A 4 -n $ceconf | grep password | cut -d '-' -f1`
-			sed -i ""$lineNumber"s|<password>.*</password>|<password>"$ldapPassword"</password>|g" $ceconf
-		fi
-
-		echo -e "Configuration files updated.\nPlease restart Mobility."
-		exit 0;
-	fi
-fi
-}
-
-checkHostname;
 
 ##################################################################################################
 #	
