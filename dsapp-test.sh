@@ -3109,7 +3109,10 @@ while [ "$1" != "" ]; do
 		if [ -n "$domainVar" ];then echo -e "\nDomains:"; cat $dsapptmp/tmpdomain;fi
 		if [ -z "$hostNameVar" ] && [ -z "$domainVar" ];then printf "Could not find any results.\n\n";fi
 		echo -e "\nCurrent fqdn hostname:" `hostname -f`;
-		if [ -n "$hostNameVar" ] || [ -n "$domainVar" ];then printf "Possible last used hostname: "; printf `tac $dsapptmp/tmpHostname | sed -n 2p`; printf .; printf `tac $dsapptmp/tmpdomain | sed -n 1p`; printf "\n\n";fi
+		if [ -n "$hostNameVar" ];then printf "Possible last used hostname: "; printf `tac $dsapptmp/tmpHostname | sed -n 2p`;
+			if [ -n "$domainVar" ];then printf .; printf `tac $dsapptmp/tmpdomain | sed -n 1p`;fi
+			printf "\n\n";
+		fi
 
 		# Prompt user for pervious hostname
 		while true
