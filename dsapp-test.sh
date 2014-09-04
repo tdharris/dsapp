@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='188'
+	dsappversion='191'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -609,9 +609,11 @@ fi
 	}
 
 # Skips auto-update if file is not called dsapp.sh (good for testing purposes when using dsapp-test.sh)
-if [[ "$0" = *dsapp.sh ]]; then
-	autoUpdateDsapp;
-	installAlias
+if [ -z "$1" ];then
+	if [[ "$0" = *dsapp.sh ]]; then
+		autoUpdateDsapp;
+		installAlias
+	fi
 fi
 
 ##################################################################################################
@@ -3282,8 +3284,10 @@ if [ `tput lines` -lt '24' ] && [ `tput cols` -lt '85' ];then
 	exit 1;
 fi
 
-# Announce new Feature
-announceNewFeature
+if [ -z "$1" ];then
+	# Announce new Feature
+	announceNewFeature
+fi
 
 while :
 do
