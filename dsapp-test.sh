@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='191'
+	dsappversion='192'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -661,9 +661,6 @@ log_debug "[Init] [getldapPassword] $ldapAdmin:$ldapPassword"
 
 		if askYesOrNo $"Grab log files?"; then
 			echo -e "\nGrabbing log files..."
-			# Copy log files..
-			# cd $log
-			# cp --parents $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog $dsappupload  2>/dev/null
 
 			# Get version information..
 			echo -e "Grabbing version info..."
@@ -705,7 +702,7 @@ log_debug "[Init] [getldapPassword] $ldapAdmin:$ldapPassword"
 			read -ep "SR#: " srn;
 			echo -e "\nCompressing logs for upload..."
 
-			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog $dsappLog 2>/dev/null;
+			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog $dsappLog `find /etc/datasync/ -name *.xml -type f` `ls $mAlog-* | tail -n1 2>/dev/null` `ls $gAlog-* | tail -n1 2>/dev/null` 2>/dev/null;
 
 			if [ $? -eq 0 ]; then
 				echo -e "\n$dsappupload/$srn"_"$d.tgz\n"
@@ -727,6 +724,7 @@ EOF
 					echo -e "Failed FTP: host (connection) might have problems\n"
 				fi
 			fi
+			echo -e "Logs at $dsappupload/$srn"_"$d.tgz\n"
 		fi;
 
 		eContinue;
