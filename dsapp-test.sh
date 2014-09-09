@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='193'
+	dsappversion='192'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -2204,28 +2204,30 @@ function generalHealthCheck {
 	
 	# Begin Checks
 	ghc_checkServices
-	ghc_checkPOA
-	ghc_verifyCertificates
 	ghc_checkLDAP
-	ghc_checkUserFDN
-	ghc_checkDatabaseEquality
-	ghc_checkUserConnectors
+	ghc_checkPOA
 	ghc_checkXML
 	ghc_checkPSQLConfig
 	ghc_checkRPMSave
 	ghc_checkProxy
-	ghc_checkManualMaintenance
-	ghc_checkReferenceCount
 	ghc_checkDiskSpace
 	ghc_checkMemory
 	ghc_checkVMWare
 	ghc_checkConfig
 	ghc_checkUpdateSH
+	ghc_checkManualMaintenance
+	ghc_checkReferenceCount
+	ghc_checkUserFDN
+	ghc_verifyDatabaseIntegrity
+	ghc_verifyTargetsIntegrity
 
 	# Slow checks...
 	ghc_checkRPMs
 	ghc_checkDiskIO
 	ghc_verifyNightlyMaintenance
+
+	# Lots of information...
+	ghc_verifyCertificates
 
 	# View Logs?
 	echo
@@ -3005,7 +3007,7 @@ function ghc_checkUserFDN {
 	fi
 }
 
-function ghc_checkDatabaseEquality {
+function ghc_verifyDatabaseIntegrity {
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Verifiying database integrity..."
 	problem=false
@@ -3056,7 +3058,7 @@ function ghc_checkDatabaseEquality {
 
 }
 
-function ghc_checkUserConnectors {
+function ghc_verifyTargetsIntegrity {
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Verifying integrity of targets table..."
 	problem=false
