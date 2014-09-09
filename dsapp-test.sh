@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='192'
+	dsappversion='191'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -2208,6 +2208,8 @@ function generalHealthCheck {
 	ghc_verifyCertificates
 	ghc_checkLDAP
 	ghc_checkUserFDN
+	ghc_checkDatabaseEquality
+	ghc_checkUserConnectors
 	ghc_checkXML
 	ghc_checkPSQLConfig
 	ghc_checkRPMSave
@@ -2391,7 +2393,7 @@ function ghc_checkServices {
 
 function ghc_checkXML {
 	# Display HealthCheck name to user and create section in logs
-	ghcNewHeader "Validating XML configuration files..."
+	ghcNewHeader "Checking XML configuration files..."
 	# Any logging info >> $ghcLog
 
 	echo -e "Checking for XML files in /etc/datasync:" >> $ghcLog
@@ -2481,7 +2483,7 @@ function ghc_checkRPMs {
 
 function ghc_checkLDAP {
 	# Display HealthCheck name to user and create section in logs
-	ghcNewHeader "Verifying LDAP connectivity..."
+	ghcNewHeader "Checking LDAP connectivity..."
 	# Any logging info >> $ghcLog
 
 	problem=false
@@ -2529,7 +2531,7 @@ function ghc_verifyNightlyMaintenance {
 
 function ghc_verifyCertificates {
 	# Display HealthCheck name to user and create section in logs
-	ghcNewHeader "Verifying Certificates..."
+	ghcNewHeader "Checking Certificates..."
 	devCert="/var/lib/datasync/device/mobility.pem"
 	webCert="/var/lib/datasync/webadmin/server.pem"
 	dateTolerance=`date -ud "+90 day" | awk '{print $2, $3, $6}'`
@@ -2937,7 +2939,7 @@ EOF`
 
 function ghc_checkUserFDN {
 	# Display HealthCheck name to user and create section in logs
-	ghcNewHeader "Checking users FDN"
+	ghcNewHeader "Checking users FDN..."
 	problem=false
 	warn=false
 	# Any logging info >>$ghcLog
@@ -2992,6 +2994,95 @@ function ghc_checkUserFDN {
 		fi
 	else 
 		if [ $noLDAP -eq 0 ];then echo -e "All detected LDAP users have matching FDNs" >>$ghcLog; fi 
+		passFail 0
+	fi
+}
+
+function ghc_checkDatabaseEquality {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking database equality..."
+	problem=false
+	# Any logging info >>$ghcLog
+
+	psql -U $dbUsername datasync -t -c "select distinct dn from targets where disabled='0' and \"targetType\"='user';" > $dsapptmp/output.txt
+	psql -U $dbUsername mobility -t -c "select distinct userid from users;" > $dsapptmp/output2.txt 
+
+	local var=""
+	local var2=""
+	while read line
+	do 
+		if [ "$var" != "$line" ];then 
+			if [ -n "$line" ];then  
+				var="$line";
+				var2=`grep -o "$var" $dsapptmp/output2.txt`
+				if [ -z "$var2" ];then 
+					problem=true
+					echo "Datasync: $var not on mobility database" >>$ghcLog
+				fi
+			fi
+		fi
+	done < $dsapptmp/output.txt
+
+	while read line
+	do
+		if [ "$var" != "$line" ];then
+			if [ -n "$line" ];then
+				var="$line";
+				var2=`grep -o "$var" $dsapptmp/output.txt`
+				if [ -z "$var2" ];then
+					problem=true
+					echo "Mobility: $var not on datasync database" >>$ghcLog
+				fi
+			fi
+		fi
+	done < $dsapptmp/output2.txt
+
+	rm $dsapptmp/output.txt $dsapptmp/output2.txt
+
+	# Return either pass/fail, 0 indicates pass.
+	if ($problem); then
+		passFail 1
+	else 
+		echo -e "All detected users on both databases" >>$ghcLog
+		passFail 0
+	fi
+
+}
+
+function ghc_checkUserConnectors {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Checking datasync connectors..."
+	problem=false
+	# Any logging info >>$ghcLog
+
+	psql -U $dbUsername datasync -t -c "select dn,\"connectorID\",\"targetType\" from targets where disabled='0';" > $dsapptmp/output.txt
+
+	local var=""
+	local var2=""
+	local var3=""
+	while read line
+	do 
+		if [ "$var" != "$line" ];then 
+			if [ -n "$line" ];then  
+				var=`echo "$line" | awk '{print $1}'`
+				var2=`grep -o "$var" $dsapptmp/output.txt | wc -l`;
+				if [ $var2 -ne 2 ];then
+					problem=true
+					var3=`echo "$line" | awk '{print $5}' | python -c "print raw_input().capitalize()"`
+					var2=`echo "$line" | awk '{print $3}'| cut -f3 -d '.'`
+					echo "$var3 $var only found on $var2 connector" >>$ghcLog;
+				fi
+			fi
+		fi
+	done < $dsapptmp/output.txt
+
+	rm $dsapptmp/output.txt
+
+	# Return either pass/fail, 0 indicates pass.
+	if ($problem); then
+		passFail 1
+	else 
+		echo -e "All users/groups on both connectors" >>$ghcLog;
 		passFail 0
 	fi
 }
