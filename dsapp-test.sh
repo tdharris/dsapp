@@ -1967,7 +1967,7 @@ function checkLDAP {
 		fi
 
 		if [[ "$ldapPort" -eq "389" ]]; then
-			/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" 1>/dev/null
+			/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" &>/dev/null
 			if [[ "$?" -eq 0 ]]; then
 				return 0
 			else
@@ -1975,7 +1975,7 @@ function checkLDAP {
 			fi
 
 		elif [[ "$ldapPort" -eq "636" ]]; then
-			/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" 1>/dev/null
+			/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" &>/dev/null
 			if [[ "$?" -eq 0 ]]; then
 				return 0
 			else
@@ -2641,7 +2641,7 @@ function ghc_checkProxy {
 
 function ghc_checkManualMaintenance {
 	# Display HealthCheck name to user and create section in logs
-	ghcNewHeader "Checking for database maintenance: vacuum..."
+	ghcNewHeader "Checking for database maintenance: vacuum & reindex..."
 	dbMaintTolerance=180
 	problem=false
 	
@@ -2872,7 +2872,6 @@ function ghc_checkPOA {
 		local cookie="$dsapptmp/getStatusData.cookie"
 		local res="$dsapptmp/getStatusData.response"
 		local admin=`echo "$ldapAdmin" | grep -Po '(?<=(=)).*(?=,)'`
-
 		rm "$auth" "$res" "$cookie" 2>/dev/null
 
 		# Authenticate, obtain session-id returned in cookie
@@ -2884,6 +2883,10 @@ function ghc_checkPOA {
 		wget --no-check-certificate --load-cookies "$cookie" https://localhost:8120/admin/dashboard/getStatusData -O "$res" &>/dev/null
 
 		# cat "$res" | python -mjson.tool | less
+		if [ `cat "$auth"` -ne 0 ]; then
+			echo "Failed ldap login!" >>$ghcLog
+			warn=true;
+		else
 		local checkPOA=`python <<EOF
 import json
 from pprint import pprint
@@ -2918,21 +2921,21 @@ def checkMe(data):
 print checkMe("$res")
 
 EOF`
+echo -e "\n\n$checkPOA\n\n"
 
-	if [ $(echo "$checkPOA" | tail -n1) -ne 0 ]; then
-		problem=true;
-	fi
+			if [[ $(echo "$checkPOA" | tail -n1) -ne 0 ]]; then
+				problem=true;
+			fi
+		fi
 
 	fi
 	
-
 	# Return either pass/fail, 0 indicates pass.
 	echo "$checkPOA" >>$ghcLog
 	if ($problem); then
-		if ($warn); then
-			passFail 2
-		else passFail 1
-		fi
+		passFail 1
+	elif ($warn); then
+		passFail 2
 	else passFail 0
 	fi
 }
