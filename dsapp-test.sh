@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='192'
+	dsappversion='193'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -2883,7 +2883,8 @@ function ghc_checkPOA {
 		wget --no-check-certificate --load-cookies "$cookie" https://localhost:8120/admin/dashboard/getStatusData -O "$res" &>/dev/null
 
 		# cat "$res" | python -mjson.tool | less
-		if [ `cat "$auth"` -ne 0 ]; then
+		grep -i admin "$auth" &>/dev/null
+		if [ $? -ne 0 ]; then
 			echo "Failed ldap login!" >>$ghcLog
 			warn=true;
 		else
@@ -2921,7 +2922,6 @@ def checkMe(data):
 print checkMe("$res")
 
 EOF`
-echo -e "\n\n$checkPOA\n\n"
 
 			if [[ $(echo "$checkPOA" | tail -n1) -ne 0 ]]; then
 				problem=true;
