@@ -2980,6 +2980,10 @@ function ghc_checkUserFDN {
 					echo -e "LDAP counld not find $checkUser\n" >>$ghcLog
 				fi
 			done
+		else
+			warn=true
+			problem=true
+			echo -e "LDAP connection was not successful" >>$ghcLog
 		fi
 	else
 		echo -e "No LDAP users found in the database" >>$ghcLog
@@ -3000,7 +3004,7 @@ function ghc_checkUserFDN {
 
 function ghc_checkDatabaseEquality {
 	# Display HealthCheck name to user and create section in logs
-	ghcNewHeader "Checking database equality..."
+	ghcNewHeader "Verifiying database integrity..."
 	problem=false
 	# Any logging info >>$ghcLog
 
@@ -3051,7 +3055,7 @@ function ghc_checkDatabaseEquality {
 
 function ghc_checkUserConnectors {
 	# Display HealthCheck name to user and create section in logs
-	ghcNewHeader "Checking datasync connectors..."
+	ghcNewHeader "Verifying integrity of targets table..."
 	problem=false
 	# Any logging info >>$ghcLog
 
