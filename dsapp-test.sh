@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='193'
+	dsappversion='194'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -2973,15 +2973,15 @@ function ghc_checkUserFDN {
 				checkUser=${userInDB[$count]}
 
 				if [ $ldapPort -eq 389 ];then
-						ldapUserDN=`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $checkUser dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
+						ldapUserDN=`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b "$checkUser" dn | grep dn: | cut -f2 -d ':' | cut -f2- -d ' '`
 					else
-						ldapUserDN=`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $checkUser dn | grep dn: | cut -f2 -d ':' | cut -f2 -d ' '`
+						ldapUserDN=`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b "$checkUser" dn | grep dn: | cut -f2 -d ':' | cut -f2- -d ' '`
 				fi
 
 				if [ "$ldapUserDN" != "$checkUser" ];then
 					warn=true;
 					problem=true;
-					echo -e "User $(echo $checkUser | cut -f1 -d ',' | cut -f2 -d '=') has possible incorrect FDN" >>$ghcLog
+					echo -e "User $(echo "$checkUser" | cut -f1 -d ',' | cut -f2 -d '=') has possible incorrect FDN" >>$ghcLog
 					echo -e "LDAP counld not find $checkUser\n" >>$ghcLog
 				fi
 			done
@@ -3073,12 +3073,12 @@ function ghc_verifyTargetsIntegrity {
 	do 
 		if [ "$var" != "$line" ];then 
 			if [ -n "$line" ];then  
-				var=`echo "$line" | awk '{print $1}'`
+				var=`echo "$line" | cut -f1 -d '|'`
 				var2=`grep -o "$var" $dsapptmp/output.txt | wc -l`;
 				if [ $var2 -ne 2 ];then
 					problem=true
-					var3=`echo "$line" | awk '{print $5}' | python -c "print raw_input().capitalize()"`
-					var2=`echo "$line" | awk '{print $3}'| cut -f3 -d '.'`
+					var3=`echo "$line" | cut -f3 -d '|' | python -c "print raw_input().capitalize()"`
+					var2=`echo "$line" | cut -f2 -d '|' | cut -f3 -d '.'`
 					echo "$var3 $var only found on $var2 connector" >>$ghcLog;
 				fi
 			fi
