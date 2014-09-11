@@ -19,6 +19,7 @@
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
+	dsapplib="/opt/novell/datasync/tools/dsapp/lib"
 	dsappBackup="$dsappDirectory/backup"
 	dsapptmp="$dsappDirectory/tmp"
 	dsappupload="$dsappDirectory/upload"
@@ -34,6 +35,7 @@
 	mkdir -p $dsapptmp 2>/dev/null;
 	mkdir -p $dsappupload 2>/dev/null;
 	mkdir -p $rootDownloads 2>/dev/null;
+	mkdir -p $dsapplib 2>/dev/null;
 
 	# Version
 	version="/opt/novell/datasync/version"
@@ -60,6 +62,7 @@
 	dirVarMobility="/var/lib/datasync"
 	log="/var/log/datasync"
 	dirPGSQL="/var/lib/pgsql"
+	mAttach="$dirVarMobility/mobility/attachments/"
 
 	# Mobility logs
 	configenginelog="$log/configengine/configengine.log"
@@ -91,6 +94,9 @@
 	glistenAddress=`grep -i "<listeningLocation>" $gconf | sed 's/<[^>]*[>]//g' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
 	authentication=`grep -i "<authentication>" $ceconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	provisioning=`grep -i "<provisioning>" $ceconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
+
+	# Global variable for verifyUser
+	vuid="";
 
 
 	# DSAPP configuration files
@@ -942,52 +948,104 @@ EOF
 		fi
 	}
 
-	vuid='';
-	function verifyUser {
-		clear;
-			read -ep "UserID: " uid;
-			while [ -z "$uid" ]; do
-				if askYesOrNo $"Invalid Entry... try again?"; then
-					read -ep "UserID: " uid;
-				else
-					break;
-				fi
-			done
-			if [ -n "$uid" ];then
-				errorReturn="NULL";
-				# Confirm user exists in mobility database as DirectoryID
-				uchk=`psql -U $dbUsername mobility -c "select userid from users where \"userid\" ilike '%$uid%'" | grep -iw "$uid" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
-				# Check if user exists in GroupWise database as DirectoryID
-				guchk=`psql -U $dbUsername datasync -c "select dn from targets where \"dn\" ilike '%$uid%'" | grep -iwm1 "$uid" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
-				# Check if user exists in GroupWise database as GroupwiseID
-				guchk2=`psql -U $dbUsername datasync -t -c "select dn from targets where LOWER(\"targetName\")=LOWER('$uid') AND \"connectorID\"='default.pipeline1.groupwise';" | cut -d "," -f1 | tr [:upper:] [:lower:] | sed -e 's/^ *//g' -e 's/ *$//g'`
-				uidCN="cn="$(echo ${uid}|tr [:upper:] [:lower:])
-				if [ -n "$uchk" ] && [ "$uchk" = "$uidCN" ]; then
-					vuid=$uid
-					errorReturn='0'; return 0;
-				elif [ -n "$guchk" ] && [ "$guchk" = "$uidCN" ]; then
-					vuid=$uid
-					errorReturn='0'; return 0;
-				elif [ -n "$guchk2" ];then
-					vuid=`echo $guchk2 | cut -f2 -d '='`
-					errorReturn='0'; return 0;
-				else
-					echo -e "User does not exist in Mobility Database.\n"; 
-					vuid='userDoesNotExist'; 
-					eContinue;
-					errorReturn='1'; 
-					return 1;
-				fi
-			else
-				errorReturn='1';
+	function verifyUserDataSyncDB { # Requires $1 passed in as a username
+		if [ -n "$1" ];then
+			local uid=`echo "$1" | tr [:upper:] [:lower:]`
+
+			# Check if user exists in datasync database on dn table
+			local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where \"dn\" ~* '($uid[.|,].*)$'" | sed 's/^ *//' | sed 's/ *$//'`
+		
+			# User not found with dn table - Checking targetName
+			if [ -z "$validUser" ];then
+				local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where LOWER(\"targetName\")=LOWER('$uid') AND \"connectorID\"='default.pipeline1.groupwise';" | sed 's/^ *//' | sed 's/ *$//'`
+			fi
+			if [ -z "$validUser" ];then
+				local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where LOWER(\"targetName\")=LOWER('$uid') AND \"connectorID\"='default.pipeline1.mobility';" | sed 's/^ *//' | sed 's/ *$//'`
+			fi
+
+			# No user found with either eDirectoryID or GroupwiseID: return 1
+			if [ -z "$validUser" ];then
 				return 1;
 			fi
+
+			# Return 0 if validUser has something
+			if [ `echo "$validUser" | wc -w` -ne 0 ];then
+				return 0;
+			else
+				return 1;
+			fi
+		fi
+	}
+
+	function verifyUserMobilityDB { # Requires $1 passed in as a username
+		if [ -n "$1" ];then
+			local uid=`echo "$1" | tr [:upper:] [:lower:]`
+
+			# Check if user exists in mobility database as eDirectoryID
+			local validUser=`psql -U $dbUsername mobility -t -c "select distinct name from users where userid ~* '($uid[.|,].*)$';" | sed 's/^ *//' | sed 's/ *$//'`
 			
+			# User not found with eDirectoryID - Checking Groupwise ID
+			if [ -z "$validUser" ];then
+				local validUser=`psql -U $dbUsername mobility -t -c "select distinct name from users where name ~* '($uid)$'" | sed 's/^ *//' | sed 's/ *$//'`
+			fi
+
+			# No user found with either eDirectoryID or GroupwiseID: return 1
+			if [ -z "$validUser" ];then
+				return 1;
+			fi
+
+			# Return 0 if validUser has something
+			if [ `echo "$validUser" | wc -w` -ne 0 ];then
+				return 0;
+			else
+				return 1;
+			fi
+		fi
+	}
+
+	function verifyUser { # Requires 1 variable passed in to be assigned uid
+		clear;
+		local uid=""
+		read -ep "UserID: " uid;
+		while [ -z "$uid" ]; do
+			if askYesOrNo $"Invalid Entry... try again?"; then
+			    read -ep "UserID: " uid;
+			else
+			    break;
+			fi
+		done
+
+		if [ -n "$uid" ];then
+			# Calculate verifyCount based on where user was found
+			local verifyCount=3;
+			# 3 = no user found ; 1 = datasync only ; 2 = mobility only ; 0 = both database
+			if (verifyUserDataSyncDB "$uid");then
+				verifyCount=$(($verifyCount - 2))
+			fi
+
+			if (verifyUserMobilityDB "$uid");then
+				verifyCount=$(($verifyCount - 1))
+			fi
+
+			# Run case
+			case "$verifyCount" in
+				3 ) # No user found
+					echo -e "\nUser [$uid] cannot be found."
+					eContinue;
+					return 3; ;;
+				2 ) # mobility only
+					eval "$1='$uid'"; return 2; ;;
+				1 ) # datasync only
+					eval "$1='$uid'"; return 1; ;;
+				0 ) # both database
+					eval "$1='$uid'"; return 0; ;;
+			esac
+		fi
 	}
 
 	function monitorUser {
-		verifyUser
-		if [ $? != 1 ]; then
+		verifyUser vuid; verifyReturnNum=$?
+		if [ $verifyReturnNum -eq 2 ] || [ $verifyReturnNum -eq 0 ] ; then
 				echo -e "\n" && watch -n1 "psql -U '$dbUsername' mobility -c \"select state,userID from users where userid ilike '%$vuid%'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\""
 				# tailf /var/log/datasync/default.pipeline1.mobility-AppInterface.log | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid
 				break;
@@ -1001,8 +1059,8 @@ EOF
 
 	function setUserState {
 		# verifyUser sets vuid variable used in setUserState and removeAUser functions
-		verifyUser
-		if [ $? != 1 ]; then
+		verifyUser vuid; verifyReturnNum=$?
+		if [ $verifyReturnNum -eq 2 ] || [ $verifyReturnNum -eq 0 ] ; then
 			mpsql << EOF
 			update users set state = '$1' where userid ilike '%$vuid%';
 			\q
@@ -1015,8 +1073,8 @@ EOF
 
 	function dremoveUser {
 		# verifyUser sets vuid variable used in setUserState and removeAUser functions
-		verifyUser
-		if [ $? != 1 ]; then
+		verifyUser vuid; verifyReturnNum=$?
+		if [ $verifyReturnNum -eq 2 ] || [ $verifyReturnNum -eq 0 ] ; then
 			if askYesOrNo $"Remove $vuid from database?"; then
 			dpsql << EOF
 			update targets set disabled='3' where dn ilike '%$vuid%';
@@ -1613,8 +1671,8 @@ EOF
 
 function whatDeviceDeleted {
 clear;
-verifyUser
-if [ $? = 0 ]; then
+verifyUser vuid; verifyReturnNum=$?
+if [ $verifyReturnNum -ne 3 ] ; then
 	cd $log
 
 	deletions=`cat $mAlog* | grep -i -A 8 "<origSourceName>$vuid</origSourceName>" | grep -i -A 2 "<type>delete</type>" | grep -i "<creationEventID>" | cut -d '.' -f4- | sed 's|<\/creationEventID>||g'`
@@ -1688,8 +1746,8 @@ function changeDBPass {
 
 function changeAppName {
 	clear;
-	verifyUser
-	if [ $? = 0 ]; then
+	verifyUser vuid; verifyReturnNum=$?
+	if [ $verifyReturnNum -eq 1 ] || [ $verifyReturnNum -eq 0 ] ; then
 		#Assign application names from database to default variables
 		defaultMAppName=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.mobility';" | sed 's/^ *//'`
 		defaultGAppName=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.groupwise';" | sed 's/^ *//'`
@@ -1991,8 +2049,8 @@ function checkLDAP {
 function updateFDN {
 	clear;
 	if (checkLDAP);then
-		verifyUser;
-		if [ $? -eq 0 ];then
+		verifyUser vuid; verifyReturnNum=$?
+		if [ $verifyReturnNum -ne 3 ] ; then
 			echo -e "\nSearching LDAP..."
 			userFilter="(&(!(objectClass=computer))(cn=$vuid)(|(objectClass=Person)(objectClass=orgPerson)(objectClass=inetOrgPerson)))"
 			# Store baseDN in file to while loop it
@@ -3404,14 +3462,6 @@ cd $cPWD;
  a=true;
  case $opt in
 
- v+) ##Test verifyUser function --Not on Menu--
- 	clear; 
-	verifyUser
-	echo -e "\n----------------------------------\nMobility Database Found: "$uchk "\nDatasync Database Found: "$guchk "\nDatasync AppName Database Found: "$guchk2"\nCN User Compare: "$uidCN "\nValid User Check: "$vuid "\nError Return: "$errorReturn "\n----------------------------------"
-	[[ "$errorReturn" -eq "0" ]] && echo -e "No errors found\n\n"
-	eContinue;
-	;;
-
  db+) clear; ###Log into Database### --Not on Menu--
 	dpsql;
 	;;
@@ -4070,8 +4120,8 @@ done
 						;;
 
 					2) # Check Sync Count
-						verifyUser
-						if [ $? != 1 ]; then
+						verifyUser vuid; verifyReturnNum=$?
+						if [ $verifyReturnNum -ne 3 ] ; then
 							echo -e "\nCat result:"
 								cat $mAlog | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid | tail
 							echo ""
@@ -4102,8 +4152,8 @@ done
 
 					1) # Check GroupWise Folder Structure
 						clear;
-						verifyUser
-						if [ $? != 1 ]; then
+						verifyUser vuid; verifyReturnNum=$?
+						if [ $verifyReturnNum -ne 3 ] ; then
 							checkGroupWise
 						fi
 						eContinue;
@@ -4111,7 +4161,6 @@ done
 
 					2) # gwCheck
 						clear;
-						# verifyUser
 						read -p "userID: " vuid
 						soapLogin
 						if [ -n "$soapSession" ]; then
@@ -4174,8 +4223,8 @@ done
 
 				echo -e "\nCheck for User Authentication Problems\n"
 				# Confirm user exists in database
-				verifyUser
-					if [ $? = 0 ]; then
+				verifyUser vuid; verifyReturnNum=$?
+					if [ $verifyReturnNum -ne 3 ] ; then
 						echo -e "\nChecking log files..."
 						err=true
 						# User locked/expired/disabled - "authentication problem"
