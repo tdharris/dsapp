@@ -3073,12 +3073,12 @@ function ghc_verifyTargetsIntegrity {
 	do 
 		if [ "$var" != "$line" ];then 
 			if [ -n "$line" ];then  
-				var=`echo "$line" | cut -f1 -d '|'`
+				var=`echo "$line" | cut -f1 -d '|' | sed 's/^ *//' | sed 's/ *$//'`
 				var2=`grep -o "$var" $dsapptmp/output.txt | wc -l`;
 				if [ $var2 -ne 2 ];then
 					problem=true
-					var3=`echo "$line" | cut -f3 -d '|' | python -c "print raw_input().capitalize()"`
-					var2=`echo "$line" | cut -f2 -d '|' | cut -f3 -d '.'`
+					var3=`echo "$line" | cut -f3 -d '|' | sed 's/^ *//' | sed 's/ *$//' | python -c "print raw_input().capitalize()"`
+					var2=`echo "$line" | cut -f2 -d '|' | sed 's/^ *//' | sed 's/ *$//' | cut -f3 -d '.'`
 					echo "$var3 $var only found on $var2 connector" >>$ghcLog;
 				fi
 			fi
