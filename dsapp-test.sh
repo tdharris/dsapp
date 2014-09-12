@@ -42,6 +42,7 @@
 	mobilityVersion=`cat $version`
 	serverinfo="/etc/*release"
 	rpminfo="datasync"
+	dsapp_tar="dsapp-rpm.tgz"
 
 	# Configuration Files
 	mconf="/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml"
@@ -322,22 +323,16 @@ function checkFTP {
 function updateDsapp {
 	echo -e "\nUpdating dsapp..."
 	log_info "Updating dsapp..."
-	# Remove running instance/version
-	rm dsapp.sh 2>/dev/null
-
-	# Remove the stored app
-	cd $dsappDirectory; rm -f dsapp.sh
 
 	# Download new version & extract
-	curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -zx 2>/dev/null;
+	local tmpVersion=`curl -s ftp://ftp.novell.com/outgoing/$dsapp_tar | tar -zxv 2>/dev/null`;
 	if [ $? -eq 0 ];then
-		tmpVersion=`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
-		echo -e "Update finished: v$tmpVersion"
-		log_success "Update finished: v$tmpVersion"
-		echo
-		eContinue;
-		$dsappDirectory/dsapp.sh && exit 0
-	else log_error "Failed to download and extract ftp://ftp.novell.com/outgoing/dsapp.tgz"
+		rpm -Uvh "$tmpVersion"
+		if [ $? -ne 0 ];then
+			eContinue
+			exit 1;
+		fi
+	else log_error "Failed to download and extract ftp://ftp.novell.com/outgoing/$dsapp_tar"
 	fi
 
 }
@@ -354,7 +349,7 @@ function autoUpdateDsapp {
 				# Fetch online dsapp and store to memory, check version
 				publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp-version.info | grep -m1 dsappversion= | cut -f2 -d "'"`
 				log_debug "[Init] [autoUpdateDsapp] publicVersion: $publicVersion, currentVersion: $dsappversion"
-				# publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
+				# publicVersion=`curl -s ftp://ftp.novell.com/outgoing/$dsapp_tar | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
 
 				# Download if newer version is available
 				if [ "$dsappversion" -ne "$publicVersion" ];then
@@ -367,69 +362,6 @@ function autoUpdateDsapp {
 			fi
 			
 		fi
-}
-
-function installAlias {
-	resetEnvironment=false
-	tellUserAboutAlias=false
-
-	# If there is dsapp.sh
-	ls $dsappDirectory/dsapp.sh &>/dev/null
-	if [ $? -ne 0 ]; then
-		resetEnvironment=true
-		tellUserAboutAlias=true
-		mv -v dsapp.sh $dsappDirectory
-	fi
-
-	# Create /etc/profile.local if not already there
-	if [[ ! -f /etc/profile.local ]];then 
-		log_debug "[Init] [installAlias] Creating /etc/profile.local for dsapp alias..."
-		touch /etc/profile.local
-	fi
-
-	# Insert alias shortcut if not already there
-	if [[ -z `grep "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" /etc/profile.local` ]]; then
-		echo "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" >> /etc/profile.local
-
-		# Configure sudo to be compatible for alias, allows it to look for aliases after first word
-		echo "alias sudo='sudo '" >> /etc/profile.local
-
-		log_debug "[Init] [installAlias] Configured dsapp alias in /etc/profile.local"
-		echo -e "\nConfigured dsapp alias."
-		tellUserAboutAlias=true
-		resetEnvironment=true
-	fi
-	
-	#Skip if already in dsappDirectory
-    if [[ "$PWD" != "$dsappDirectory" ]] && [[ "$0" != "$dsappDirectory/dsapp.sh" ]];then
-    	
-		# Check if running version is newer than installed version
-		installedVersion=`grep -m1 dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
-		if [[ "$dsappversion" -gt "$installedVersion" ]];then
-			tellUserAboutAlias=true
-			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
-			mv -v dsapp.sh $dsappDirectory
-			if [ $? -ne 0 ]; then
-				echo -e "\nThere was a problem copying dsapp.sh to /opt/novell/datasync/tools/dsapp..."
-			fi
-		else 
-			tellUserAboutAlias=true
-			rm dsapp.sh 2>/dev/null
-		fi
-
-		if ($tellUserAboutAlias); then
-			log_debug "[Init] [installAlias] Informing user of installAlias..."
-			echo -e "\nPlease use /opt/novell/datasync/tools/dsapp/dsapp.sh"
-			echo -e "To launch, enter the following anywhere: dsapp\n"
-		fi
-		# Reset environment variables (loads /etc/profile for dsapp alias)
-		if ($resetEnvironment); then
-			log_debug "[Init] [installAlias] Resetting environment variables..."
-			echo -e "Refreshing environment variables..."
-			su -
-		fi
-		exit 0
-	fi
 }
 
 	#Get datasync version.
@@ -618,7 +550,6 @@ fi
 if [ -z "$1" ];then
 	if [[ "$0" = *dsapp.sh ]]; then
 		autoUpdateDsapp;
-		installAlias
 	fi
 fi
 
@@ -1662,7 +1593,7 @@ s="$(cat <<EOF
 EOF
 )"
 
-	echo -e "$s\n\t\t\t      v$dsappversion\n"
+	echo -e "$s\n\t\t\t\t      v$dsappversion\n"
 
 	if [ $dsappForce ];then
 		echo -e "  Running --force. Some functions may not work properly.\n"
