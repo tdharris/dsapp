@@ -326,12 +326,13 @@ function updateDsapp {
 	log_info "Updating dsapp..."
 
 	# Download new version & extract
-	local tmpVersion=`curl -s ftp://ftp.novell.com/outgoing/$dsapp_tar | tar -zxv 2>/dev/null`;
+	local tmpVersion=`curl -s ftp://ftp.novell.com/outgoing/$dsapp_tar | tar -zxv 2>/dev/null | egrep -o '(dsapp.*.rpm)'`;
 	if [ $? -eq 0 ];then
 		rpm -Uvh "$tmpVersion"
 		if [ $? -ne 0 ];then
 			eContinue
-			exit 1;
+		else
+			$dsappDirectory/dsapp.sh && exit 0
 		fi
 	else log_error "Failed to download and extract ftp://ftp.novell.com/outgoing/$dsapp_tar"
 	fi
