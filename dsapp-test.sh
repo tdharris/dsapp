@@ -914,6 +914,7 @@ EOF
 
 			# Return 0 if validUser has something
 			if [ `echo "$validUser" | wc -w` -ne 0 ];then
+				uid="$validUser";
 				return 0;
 			else
 				return 1;
@@ -941,8 +942,9 @@ EOF
 			if [ $? -eq 0 ];then
 				verifyCount=$(($verifyCount - 2))
 			fi
-		
-			if (verifyUserMobilityDB "$uid");then
+			
+			verifyUserMobilityDB "$uid"
+			if [ $? -eq 0 ];then
 				verifyCount=$(($verifyCount - 1))
 			fi
 
