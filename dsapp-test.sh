@@ -921,7 +921,8 @@ EOF
 		fi
 	}
 
-	function verifyUser { # Requires 1 variable passed in to be assigned uid
+	function verifyUser { # Can have 2 variables passed in. 1 to be assigned uid
+		clear;
 		read -ep "UserID: " uid;
 		while [ -z "$uid" ]; do
 			if askYesOrNo $"Invalid Entry... try again?"; then
@@ -945,17 +946,21 @@ EOF
 				verifyCount=$(($verifyCount - 1))
 			fi
 
-			# Run case
-			case "$verifyCount" in
-				3 ) # No user found
-					return 3; ;;
-				2 ) # mobility only
-					eval "$1='$uid'"; return 2; ;;
-				1 ) # datasync only
-					eval "$1='$uid'"; return 1; ;;
-				0 ) # both database
-					eval "$1='$uid'"; return 0; ;;
-			esac
+			if [ "$2" != "noReturn" ];then
+				# Run case
+				case "$verifyCount" in
+					3 ) # No user found
+						return 3; ;;
+					2 ) # mobility only
+						eval "$1='$uid'"; return 2; ;;
+					1 ) # datasync only
+						eval "$1='$uid'"; return 1; ;;
+					0 ) # both database
+						eval "$1='$uid'"; return 0; ;;
+				esac
+			else
+				eval "$1='$uid'";
+			fi
 		fi
 	}
 
@@ -1018,15 +1023,11 @@ EOF
 function removeUser {
 	# Remove User Database References according to TID 7008852
 		clear;
-		echo -e "\t--- WARNING DANGEROUS ---\n[Enter full userID to avoid parital match]\n"
-		read -ep "userID: " uid;
-		while [ -z "$uid" ]; do
-			echo -e "Invalid Entry... try again.\n";
-			read -ep "userID: " uid;
-		done
+		echo -e "\t--- CAUTION ---\n[Removes all reference of userID]\n"
+		verifyUser vuid "noReturn"
 
-	if askYesOrNo $"Remove [$uid] from databases?"; then
-		dCleanup "$uid"; mCleanup "$uid";
+	if askYesOrNo $"Remove [$vuid] from databases?"; then
+		dCleanup "$vuid"; mCleanup "$vuid";
 	fi
 	echo;eContinue;
 }
