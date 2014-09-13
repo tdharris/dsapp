@@ -98,6 +98,7 @@
 
 	# Global variable for verifyUser
 	vuid="";
+	uid="";
 
 
 	# DSAPP configuration files
@@ -881,18 +882,9 @@ EOF
 
 	function verifyUserDataSyncDB { # Requires $1 passed in as a username
 		if [ -n "$1" ];then
-			local uid=`echo "$1" | tr [:upper:] [:lower:]`
 
-			# Check if user exists in datasync database on dn table
-			local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where \"dn\" ~* '($uid[.|,].*)$'" | sed 's/^ *//' | sed 's/ *$//'`
-		
-			# User not found with dn table - Checking targetName
-			if [ -z "$validUser" ];then
-				local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where LOWER(\"targetName\")=LOWER('$uid') AND \"connectorID\"='default.pipeline1.groupwise';" | sed 's/^ *//' | sed 's/ *$//'`
-			fi
-			if [ -z "$validUser" ];then
-				local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where LOWER(\"targetName\")=LOWER('$uid') AND \"connectorID\"='default.pipeline1.mobility';" | sed 's/^ *//' | sed 's/ *$//'`
-			fi
+			# Check if user exists in datasync database
+			local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where \"dn\" ~* '($uid[.|,].*)$' OR dn ilike '$uid' OR \"targetName\" ilike '$uid';" | sed 's/^ *//' | sed 's/ *$//'`
 
 			# No user found with either eDirectoryID or GroupwiseID: return 1
 			if [ -z "$validUser" ];then
@@ -901,6 +893,7 @@ EOF
 
 			# Return 0 if validUser has something
 			if [ `echo "$validUser" | wc -w` -ne 0 ];then
+				uid="$validUser"
 				return 0;
 			else
 				return 1;
@@ -910,15 +903,9 @@ EOF
 
 	function verifyUserMobilityDB { # Requires $1 passed in as a username
 		if [ -n "$1" ];then
-			local uid=`echo "$1" | tr [:upper:] [:lower:]`
 
-			# Check if user exists in mobility database as eDirectoryID
-			local validUser=`psql -U $dbUsername mobility -t -c "select distinct name from users where userid ~* '($uid[.|,].*)$';" | sed 's/^ *//' | sed 's/ *$//'`
-			
-			# User not found with eDirectoryID - Checking Groupwise ID
-			if [ -z "$validUser" ];then
-				local validUser=`psql -U $dbUsername mobility -t -c "select distinct name from users where name ~* '($uid)$'" | sed 's/^ *//' | sed 's/ *$//'`
-			fi
+			# Check if user exists in mobility database
+			local validUser=`psql -U $dbUsername mobility -t -c "select distinct userid from users where userid ~* '($uid[.|,].*)$' OR userid ilike '$uid' OR name ilike '$uid';" | sed 's/^ *//' | sed 's/ *$//'`
 
 			# No user found with either eDirectoryID or GroupwiseID: return 1
 			if [ -z "$validUser" ];then
@@ -935,14 +922,12 @@ EOF
 	}
 
 	function verifyUser { # Requires 1 variable passed in to be assigned uid
-		clear;
-		local uid=""
 		read -ep "UserID: " uid;
 		while [ -z "$uid" ]; do
 			if askYesOrNo $"Invalid Entry... try again?"; then
 			    read -ep "UserID: " uid;
 			else
-			    break;
+				return 3;
 			fi
 		done
 
@@ -950,10 +935,12 @@ EOF
 			# Calculate verifyCount based on where user was found
 			local verifyCount=3;
 			# 3 = no user found ; 1 = datasync only ; 2 = mobility only ; 0 = both database
-			if (verifyUserDataSyncDB "$uid");then
+
+			verifyUserDataSyncDB "$uid";
+			if [ $? -eq 0 ];then
 				verifyCount=$(($verifyCount - 2))
 			fi
-
+		
 			if (verifyUserMobilityDB "$uid");then
 				verifyCount=$(($verifyCount - 1))
 			fi
@@ -961,8 +948,6 @@ EOF
 			# Run case
 			case "$verifyCount" in
 				3 ) # No user found
-					echo -e "\nUser [$uid] cannot be found."
-					eContinue;
 					return 3; ;;
 				2 ) # mobility only
 					eval "$1='$uid'"; return 2; ;;
@@ -1002,165 +987,131 @@ EOF
 		
 	}
 
-	function dremoveUser {
-		# verifyUser sets vuid variable used in setUserState and removeAUser functions
-		verifyUser vuid; verifyReturnNum=$?
-		if [ $verifyReturnNum -eq 2 ] || [ $verifyReturnNum -eq 0 ] ; then
-			if askYesOrNo $"Remove $vuid from database?"; then
+function dremoveUser {
+	# verifyUser sets vuid variable used in setUserState and removeAUser functions
+	verifyUser vuid; verifyReturnNum=$?
+	if [ $verifyReturnNum -eq 2 ] || [ $verifyReturnNum -eq 0 ] ; then
+		if askYesOrNo $"Remove $vuid from database?"; then
 			dpsql << EOF
 			update targets set disabled='3' where dn ilike '%$vuid%';
 			\q
 EOF
-
 			echo -e "\nSetting user to be deleted..."
 				rcdatasync-configengine restart 1>/dev/null;
 				echo -e "\nWaiting on Mobility Connector..."
 				isUserGone=$vuid
 			while [ ! -z "$isUserGone" ]; do
 				sleep 2
-				isUserGone=`psql -U 'datasync_user' mobility -c "select state,userid from users where userid ilike '%$vuid%'" | grep -wio "$vuid"`
+				isUserGone=`psql -U $dbUsername mobility -c "select state,userid from users where userid ilike '%$vuid%'" | grep -wio "$vuid"`
 			done
-			removeUserSilently
+			case "$verifyReturnNum" in
+				0 ) dCleanup "$vuid"; mCleanup "$vuid"; ;;
+				1 ) dCleanup "$vuid"; ;;
+				2 ) mCleanup "$vuid"; ;;
+			esac
 			echo -e "\n$vuid has been successfully deleted."
-			fi
-			eContinue;
 		fi
-		
-		
-		
-		# sMonitorUser
-	}
+		eContinue;
+	fi
+}
 
 function removeUser {
 	# Remove User Database References according to TID 7008852
 		clear;
-		echo -e "\n--- WARNING DANGEROUS ---\nRemove from connectors first!\n"
-		read -ep "Specify userID: " uid;
+		echo -e "\t--- WARNING DANGEROUS ---\n[Enter full userID to avoid parital match]\n"
+		read -ep "userID: " uid;
 		while [ -z "$uid" ]; do
 			echo -e "Invalid Entry... try again.\n";
-			read -ep "Specify userID: " uid;
+			read -ep "userID: " uid;
 		done
 
-	if askYesOrNo $"Remove "$uid" from database?"; then
-
-		echo -e "Checking database for user references..."
-		psqlTarget=`psql -U $dbUsername datasync -c "select dn from targets where dn ilike '%$uid%' limit 1" | grep -iw -m 1 "$uid" | tr -d ' '`
-		psqlAppNameG=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$uid%' AND \"connectorID\"='default.pipeline1.groupwise';"| sed 's/^ *//'`
-		psqlAppNameM=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$uid%' AND \"connectorID\"='default.pipeline1.mobility';"| sed 's/^ *//'`
-		psqlObject=`psql -U $dbUsername datasync -c "select * from \"objectMappings\" where \"objectID\" ilike '%$uid%'" | grep -iwo -m 1 "$uid"`
-        psqlCache=`psql -U $dbUsername datasync -c "select \"sourceDN\" from \"cache\" where \"sourceDN\" ilike '%$uid%' limit 1" |grep -iw -m 1 "$uid" | tr -d ' '`
-		psqlFolder=`psql -U $dbUsername datasync -c "select \"targetDN\" from \"folderMappings\" where \"targetDN\" ilike '%$uid%' limit 1" | grep -iw  -m 1 "$uid" | tr -d ' '`
-
-		userRef=true;
-
-		##Troubleshooting uncomment line below
-		#echo -e "UID: "$uid "\nTarget: "$psqlTarget "\nAppNameG: "$psqlAppNameG "\nAppNameM: "$psqlAppNameM "\nObject: "$psqlObject "\nCache: "$psqlCache "\nFolder: "$psqlFolder; read; exit 0;
-		
-		#Removes user from targets
-		if [ ! -z "$psqlTarget" ];then
-			userRef=false;
-			echo -e "\nFound "$psqlTarget" in target database."
-				echo -e "Removing $psqlTarget from targets.";
-				dpsql << EOF
-				delete from targets where dn ilike '%$uid%';
-				\q
-EOF
-		fi
-
-		#Removes user from objectMappings
-		if [ ! -z "$psqlObject" ];then
-			userRef=false;
-			echo -e "\nFound "$psqlObject" in objectMappings database."
-				echo -e "Removing $uid | $psqlAppNameG | $psqlAppNameM from objectMappings.";
-				dpsql << EOF
-				delete from "objectMappings" where "objectID" ilike '%|$psqlAppNameG%';
-				delete from "objectMappings" where "objectID" ilike '%|$psqlAppNameM%';
-				delete from "objectMappings" where "objectID" ilike '%|$uid%';
-				\q
-EOF
-		fi
-
-			#Removes user from folderMappings
-			if [ ! -z "$psqlFolder" ];then
-				userRef=false;
-				echo -e "\nFound "$psqlFolder" in folderMappings database."
-					echo -e "Removing $psqlFolder from folderMappings.";
-					dpsql << EOF
-					delete from "folderMappings" where "targetDN" ilike '%$uid%';
-					\q
-EOF
-			fi
-
-			#Removes user from cache
-			if [ ! -z "$psqlCache" ];then
-				userRef=false;
-				echo -e "\nFound "$psqlCache" in cache database."
-					echo -e "Removing $psqlCache from cache.";
-					dpsql << EOF
-					delete from "cache" where "sourceDN" ilike '%$uid%';
-					\q
-EOF
-			fi
-
-		#user not found.
-		if($userRef);then
-			echo -e "\nNo user references found.\n"
-		fi
+	if askYesOrNo $"Remove [$uid] from databases?"; then
+		dCleanup "$uid"; mCleanup "$uid";
 	fi
-	eContinue;
+	echo;eContinue;
 }
 
-function removeUserSilently {
-	# Remove User Database References according to TID 7008852
-		echo -e "Checking database for user references..."
+function mCleanup { # Requires userID passed in.
+	echo -e "\nCleaning up mobility database"
 
-        psqlTarget=`psql -U $dbUsername datasync -c "select dn from targets where dn ilike '%$vuid%' limit 1" | grep -iw -m 1 "$vuid" | tr -d ' '`
-		psqlAppNameG=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.groupwise';"| sed 's/^ *//'`
-		psqlAppNameM=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.mobility';"| sed 's/^ *//'`
-		psqlObject=`psql -U $dbUsername datasync -c "select * from \"objectMappings\" where \"objectID\" ilike '%$vuid%'" | grep -iwo -m 1 "$vuid"`
-        psqlCache=`psql -U $dbUsername datasync -c "select \"sourceDN\" from \"cache\" where \"sourceDN\" ilike '%$vuid%' limit 1" |grep -iw -m 1 "$vuid" | tr -d ' '`
-		psqlFolder=`psql -U $dbUsername datasync -c "select \"targetDN\" from \"folderMappings\" where \"targetDN\" ilike '%$vuid%' limit 1" | grep -iw  -m 1 "$vuid" | tr -d ' '`
+	# Get users mobility guid
+	local uGuid=`psql -U $dbUsername mobility -t -c "select guid from users where userid ~* '($1[.|,].*)$' OR name ilike '$1' OR userid ilike '$1';" | sed 's/^ *//'| sed 's/ *$//'`
 
-		userRef=true;
+	# Get users devices
+	local uDevices=`psql -U $dbUsername mobility -t -c "select deviceid from devices where userid='$uGuid';" | sed 's/^ *//'| sed 's/ *$//'`
 
-		#Removes user from targets
-		if [ ! -z "$psqlTarget" ];then
-		echo -e "Removing $psqlTarget from targets.";
-		dpsql << EOF
-		delete from targets where dn ilike '%$vuid%';
-		\q
+	# Get attachments to delete
+	local uAttachment=`psql -U $dbUsername mobility -t -c "select attachmentid from attachmentmaps where objectid in (select objectid from deviceimages where userid='$uGuid');" | sed 's/^ *//'| sed 's/ *$//'`
+
+	# While loop to remove all users devices from foldermaps
+	while IFS= read -r line
+	do
+		psql -U $dbUsername mobility -c "delete from foldermaps where deviceid='$line';" &>/dev/null
+	done <<< "$uDevices"
+
+	# Delete attachmentmaps
+	psql -U $dbUsername mobility -c "delete from attachmentmaps where userid='$uGuid';";
+
+	# Get filestoreIDs that are safe to delete
+	local fileID=`psql -U $dbUsername mobility -t -c "select filestoreid from attachments where attachmentid not in (select attachmentid from attachmentmaps);" | sed 's/^ *//' | sed 's/ *$//'`
+
+	# Log into mobility database, and clean tables with users guid
+	psql -U $dbUsername mobility <<EOF
+	delete from deviceimages where userid='$uGuid';
+	delete from syncevents where userid='$uGuid';
+	delete from deviceevents where userid='$uGuid';
+	delete from devices where userid='$uGuid';
+	delete from users where guid='$uGuid';
+	\q
+
 EOF
-		fi
+	
+	# While loop to remove all users attachments
+	while IFS= read -r line
+	do
+		psql -U $dbUsername mobility -c "delete from attachments where attachmentid='$line';" &>/dev/null
+	done <<< "$uAttachment"
 
-		#Removes user from objectMappings
-		if [ ! -z "$psqlObject" ];then
-		echo -e "Removing $uid | $psqlAppNameG | $psqlAppNameM from objectMappings.";
-		dpsql << EOF
-		delete from "objectMappings" where "objectID" ilike '%|$psqlAppNameG%';
-		delete from "objectMappings" where "objectID" ilike '%|$psqlAppNameM%';
-		delete from "objectMappings" where "objectID" ilike '%|$vuid%';
-		\q
-EOF
-		fi
-
-		#Removes user from folderMappings
-		if [ ! -z "$psqlFolder" ];then
-		echo -e "Removing $psqlFolder from folderMappings.";
-		dpsql << EOF
-		delete from "folderMappings" where "targetDN" ilike '%$vuid%';
-		\q
-EOF
-		fi
-
-		#Removes user from cache
-		if [ ! -z "$psqlCache" ];then
-		echo -e "Removing $psqlCache from cache.";
-		dpsql << EOF
-		delete from "cache" where "sourceDN" ilike '%$vuid%';
-		\q
-EOF
-		fi
+	# While loop to delete all 'safe to delete' attachments from the file system
+	if [ -n "$fileID" ];then
+		while IFS= read -r line
+		do
+			if [ -f "$mAttach`python $dsapplib/filestoreIdToPath.pyc $line`" ];then 
+				rm -f $mAttach`python $dsapplib/filestoreIdToPath.pyc $line`
+			fi
+		done <<< "$fileID"
+	fi
 }
+
+function dCleanup { # Requires userID passed in.
+	echo -e "\nCleaning up datasync database"
+
+	# Get user dn from targets table;
+	local uUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where \"dn\" ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1';" | sed 's/^ *//' | sed 's/ *$//'`
+
+	# Get targetName from each connector
+	local psqlAppNameG=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.groupwise';"| sed 's/^ *//' | sed 's/ *$//'`
+	local psqlAppNameM=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.mobility';"| sed 's/^ *//' | sed 's/ *$//'`
+	
+	# Get all creationEventIDs from objectMappins
+	local uEventID=`psql -U $dbUsername datasync -t -c "select \"objectID\",\"creationEventID\" from \"objectMappings\" where \"objectID\" ilike '%|$psqlAppNameG' OR \"objectID\" ilike '%|$psqlAppNameM' OR \"objectID\" ilike '%|$1';" | cut -f3 -d '|' | rev | cut -f1 -d '.' | rev`
+
+	# While loop to delete objectMappings
+	while IFS= read -r line
+	do
+		psql -U $dbUsername datasync -c "delete from \"objectMappings\" where \"creationEventID\" ilike '%.$line'" &>/dev/null
+	done <<< "$uEventID"
+
+	# Delete objectMappings, cache, membershipCache, folderMappings, and targets from datasync DB
+	psql -U $dbUsername datasync <<EOF
+	delete from "folderMappings" where "targetDN" ilike '($1[.|,].*)$' OR "targetDN" ilike '$uUser';
+	delete from cache where "sourceDN" ilike '($1[.|,].*)$' OR "sourceDN" ilike '$uUser';
+	delete from "membershipCache" where (groupdn ilike '($1[.|,].*)$' OR memberdn ilike '($1[.|,].*)$') OR (groupdn ilike '$uUser' OR memberdn ilike '$uUser');
+	delete from targets where dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR "targetName" ilike '$1';
+	\q
+EOF
+}
+
 
 function addGroup {
 	clear;
@@ -1593,7 +1544,7 @@ s="$(cat <<EOF
 EOF
 )"
 
-	echo -e "$s\n\t\t\t\t      v$dsappversion\n"
+	echo -e "$s\n\t\t\t      v$dsappversion\n"
 
 	if [ $dsappForce ];then
 		echo -e "  Running --force. Some functions may not work properly.\n"
