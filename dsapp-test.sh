@@ -42,7 +42,7 @@
 	mobilityVersion=`cat $version`
 	serverinfo="/etc/*release"
 	rpminfo="datasync"
-	dsapp_tar="dsapp-rpm.tgz"
+	dsapp_tar="dsapp.tgz"
 
 	# Configuration Files
 	mconf="/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml"
