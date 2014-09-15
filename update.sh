@@ -38,7 +38,7 @@ function incrementBuild {
 }
 
 function uploadFTP {
-	./dsappSource dsapp;
+	$PWD/dsappSource dsapp;
 	# cp dsapp-test.sh dsapp.sh;
 	# tar -czf dsapp.tgz dsapp.sh;
 	ftp ftp.novell.com -a <<EOF
@@ -71,7 +71,7 @@ function githubPush {
 	if [ $? -eq 0 ]; then
 		# Upload to Github.com
 		echo -e "\nUpload to Github.com:"
-		git add dsapp-test.sh update.sh dsapp-rpm.sh dsappSource.sh 2> /dev/null
+		git add dsapp-test.sh update.sh dsapp-rpm.sh dsappSource.sh filestoreIdToPath.pyc 2> /dev/null
 		if [ $? -eq 0 ]; then
 			#prompt for commit message
 			read -ep "Commit message? " message

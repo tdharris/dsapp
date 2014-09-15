@@ -11,14 +11,16 @@ find /usr/src/packages/RPMS -name ${1}-[0-9]\* -exec rm -f {} \;
 find /usr/src/packages/noarch -name ${1}-[0-9]\* -exec rm -f {} \;
 
 cd /usr/src/packages/SOURCES/
-cp /root/Desktop/dsapp/dsapp-test.sh ./dsapp.sh
-cp /usr/code/dsapp/filestoreIdToPath.pyc ./
+cp $PWD/dsapp-test.sh ./dsapp.sh
+cp $PWD/filestoreIdToPath.pyc ./
+oldDir=$PWD
 
 # build the package
 dos2unix /home/rpmbuild/rpmbuild/SPECS/${1}.spec
 su rpmbuild -c "rpmbuild -ba /home/rpmbuild/rpmbuild/SPECS/${1}.spec"
 
-cp /usr/src/packages/RPMS/noarch/dsapp*.rpm /root/Desktop/dsapp/
-cd /root/Desktop/dsapp/
+cp /usr/src/packages/RPMS/noarch/dsapp*.rpm $oldDir
+cd $oldDir
 cp dsapp-rpm.sh dsapp.sh
 tar czf dsapp.tgz dsapp*.rpm dsapp.sh
+rm dsapp*.rpm
