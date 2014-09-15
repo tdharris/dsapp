@@ -9,11 +9,11 @@ fi
 # versions in there when we still have the src.rpms in the SRPMS dir
 find /usr/src/packages/RPMS -name ${1}-[0-9]\* -exec rm -f {} \;
 find /usr/src/packages/noarch -name ${1}-[0-9]\* -exec rm -f {} \;
+oldDir=$PWD
 
 cd /usr/src/packages/SOURCES/
-cp $PWD/dsapp-test.sh ./dsapp.sh
-cp $PWD/filestoreIdToPath.pyc ./
-oldDir=$PWD
+cp $oldDir/dsapp-test.sh ./dsapp.sh
+cp $oldDir/filestoreIdToPath.pyc ./
 
 # build the package
 dos2unix /home/rpmbuild/rpmbuild/SPECS/${1}.spec
