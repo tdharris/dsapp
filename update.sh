@@ -29,14 +29,18 @@ function incrementBuild {
 		version=$((version+1))
 		lineNumber=`grep dsappversion= -n -m1 dsapp-test.sh | cut -f1 -d ':'`
 		sed -i ""$lineNumber"s|dsappversion='[0-9]*'|dsappversion='$version'|g" dsapp-test.sh
+
+		lineNumber=`grep dsappversion= -n -m1 dsapp-rpm.sh | cut -f1 -d ':'`
+		sed -i ""$lineNumber"s|dsappversion='[0-9]*'|dsappversion='$version'|g" dsapp-rpm.sh
 	fi
 
 	echo -e $version"\n"
 }
 
 function uploadFTP {
-	cp dsapp-test.sh dsapp.sh;
-	tar -czf dsapp.tgz dsapp.sh;
+	./dsappSource dsapp;
+	# cp dsapp-test.sh dsapp.sh;
+	# tar -czf dsapp.tgz dsapp.sh;
 	ftp ftp.novell.com -a <<EOF
 	cd outgoing
 	bin
@@ -55,7 +59,7 @@ EOF
 		echo "Problem uploading to tharris7.lab.novell.com:/wrk/outgoing..."
 		return 2
 	fi
-	rm dsapp.sh dsapp.tgz;
+	rm -f dsapp.sh dsapp.tgz;
 	echo -e "\n-----------------------------------------"
 	echo -e "Added to FTP Successfully!"
 	echo -e "-----------------------------------------\n"
@@ -67,7 +71,7 @@ function githubPush {
 	if [ $? -eq 0 ]; then
 		# Upload to Github.com
 		echo -e "\nUpload to Github.com:"
-		git add dsapp-test.sh update.sh 2> /dev/null
+		git add dsapp-test.sh update.sh dsapp-rpm.sh dsappSource.sh 2> /dev/null
 		if [ $? -eq 0 ]; then
 			#prompt for commit message
 			read -ep "Commit message? " message
