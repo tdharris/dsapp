@@ -8,7 +8,7 @@ fi
 # delete older versions of the rpm since there's no point having old 
 # versions in there when we still have the src.rpms in the SRPMS dir
 rm -f /usr/src/packages/RPMS/*
-rm -f /usr/src/packages/noarch/*
+rm -f /usr/src/packages/RPMS/noarch/*
 oldDir=$PWD
 
 cd /usr/src/packages/SOURCES/

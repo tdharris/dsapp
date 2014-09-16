@@ -11,7 +11,7 @@
 ##################################################################################################
 
 dsappDirectory="/opt/novell/datasync/tools/dsapp"
-dsappversion='196'
+dsappversion='197'
 mkdir -p $dsappDirectory
 var=`rpm -qa dsapp`
 
