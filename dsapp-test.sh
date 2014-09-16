@@ -364,7 +364,7 @@ function updateDsapp {
 		rpm -Uvh "$tmpVersion"
 		if [ $? -ne 0 ];then
 			log_error "$header $tmpVersion failed to update"
-			echo -e "$tmpVersion failed to update\n\nRun the following:\nrpm --force -ivh $tmpVersion"
+			echo -e "$tmpVersion failed to update\n\nRun the following:\nrpm --force -ivh $tmpVersion\n"
 			eContinue
 		else
 			log_success "$header $tmpVersion successfully updated."
