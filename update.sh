@@ -43,7 +43,7 @@ function incrementBuild {
 }
 
 function uploadFTP {
-	$PWD/dsappSource dsapp;
+	$PWD/dsappSource.sh dsapp;
 	# cp dsapp-test.sh dsapp.sh;
 	# tar -czf dsapp.tgz dsapp.sh;
 	ftp ftp.novell.com -a <<EOF

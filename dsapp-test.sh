@@ -368,6 +368,11 @@ function updateDsapp {
 			eContinue
 		else
 			log_success "$header $tmpVersion successfully updated."
+			echo "$tmpVersion successfully updated."
+			if [ "$PWD" != "$dsappDirectory" ];then
+                rm -f dsapp.sh
+            fi
+			eContinue;
 			$dsappDirectory/dsapp.sh && exit 0
 		fi
 	else log_error "$header Failed to download and extract ftp://ftp.novell.com/outgoing/$dsapp_tar"
