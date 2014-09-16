@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='195'
+	dsappversion='196'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -55,6 +55,25 @@
 	if [ ! -f "$dsappConf/dsapp.conf" ];then
 		echo -e "#Configuration for dsapp\n\n#Auto update dsapp [boolean: true | false]\nautoUpdate=true" > $dsappConf/dsapp.conf
 		echo -e "\n#Log level for dsapp [boolean: true | false]\ndebug=false" >> $dsappConf/dsapp.conf
+	fi
+
+	# Add new configurations to existing dsapp.conf file
+	if [ -f "$dsappConf/dsapp.conf" ];then
+		# Add into array to check conf file
+		dsappConfArray=('pgpass')
+		for ((i=0;i<`echo ${#dsappConfArray[@]}`;i++))
+		do
+			dsappConfLoop=`grep "${dsappConfArray[$i]}" $dsappConf/dsapp.conf`
+			if [ -z "$dsappConfLoop" ];then
+				# Add if statement for each new conf setting inside this IF block
+				if [ "${dsappConfArray[$i]}" = "pgpass" ];then
+					echo -e "\n#Delete ~/.pgpass after dsapp closes [boolean: true | false]\npgpass=true" >> $dsappConf/dsapp.conf
+				fi
+				# if [ "${dsappConfArray[$i]}" = "Array Item" ];then
+				# 	echo -e "Text to conf file" >> $dsappConf/dsapp.conf
+				# fi
+			fi
+		done
 	fi
 
 	# Mobility Directories
@@ -3593,41 +3612,66 @@ EOF
 						2) #Update Datasync using local ISO
 							clear;
 							if askYesOrNo $"Permission to restart Mobility when applying update?"; then
-							#Get Directory
-							while [ ! -d "$path" ]; do
-							read -ep "Enter full path to the directory of ISO file: " path;
-							if [ ! -d "$path" ]; then
-							echo "Invalid directory entered. Please try again.";
-							fi
-							echo $path
-							if [ -d "$path" ]; then
-							ls "$path"/novell*mobility*.iso &>/dev/null;
-							if [ $? -ne "0" ]; then
-							echo "No mobility ISO found at this path.";
-							path="";
-							fi
-							fi
-							done
-							cd "$path";
+								#Get Directory
+								while [ ! -d "$path" ]; do
+									read -ep "Enter full path to the directory of ISO file: " path;
+									if [ ! -d "$path" ]; then
+										echo "Invalid directory entered. Please try again.";
+									fi
+									if [ -d "$path" ]; then
+										ls "$path"/novell*mobility*.iso &>/dev/null;
+										if [ $? -ne "0" ]; then
+										echo "No mobility ISO found at this path.";
+										path="";
+										fi
+									fi
+								done
+								cd "$path";
 
-							#Get File
-							while [ ! -f "${PWD}/$isoName" ]; do
-							echo -e "\n";
-							ls novell*mobility*.iso;
-							read -ep "Enter ISO to use for update: " isoName;
-							if [ ! -f "${PWD}/$isoName" ]; then
-							echo "Invalid file entered. Please try again.";
-							fi
-							done
+								#Get File
+								# Check if multiple ISO found
+								if [ `ls novell*mobility*.iso | wc -w` -gt 1 ];then
+									isoArray=($(ls novell*mobility*.iso))
+									while true;
+									do
+										clear;
+										echo -e "Multiple ISOs found"
+										echo -e "Input what ISO to apply\n";
+										# Loop through array to print all available selections.
+										for ((i=0;i<`echo ${#isoArray[@]}`;i++))
+										do
+											echo "$i." ${isoArray[$i]};
+										done;
+										echo -n -e "q. quit\n\nSelection: ";
+										read opt;
+										isoName=`echo ${isoArray[$opt]}`
+										if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
+											updateQuit=true
+											break;
+										elif [[ $opt =~ ^[0-9]$ ]] && [ $opt -lt `echo ${#isoArray[@]}` ];then
+											updateQuit=false
+											break;
+										fi
+									done
+								else
+									isoName=`ls novell*mobility*.iso`
+									updateQuit=false
+								fi
 
-							#zypper update process
-							zypper rr mobility 2>/dev/null;
-							zypper addrepo 'iso:///?iso='$isoName'&url=file://'"$path"'' mobility;
-							dsUpdate mobility;
-							
-							path="";
-							isoName="";
+								if (! $updateQuit);then
+									# Confirm to update with the following ISO
+									echo
+									if askYesOrNo "Update to $isoName?";then
+										#zypper update process
+										zypper rr mobility 2>/dev/null;
+										zypper addrepo 'iso:///?iso='$isoName'&url=file://'"$path"'' mobility;
+										dsUpdate mobility;
+									fi
+									path="";
+									isoName="";
+								fi
 							fi
+							echo
 							eContinue;
 							;;
 
@@ -4398,15 +4442,14 @@ EOF
 			done
 			;; 
 
-	ru+) clear;
-  		removeUser;
-		;;
-
 # # # # # # # # # # # # # # # # # # # # # #
 
   /q | q | 0) 
 				clear
 				echo "Bye $USER"
+				if($pgpass);then
+					rm ~/.pgpass
+				fi
 				exit 0;;
   *) ;;
 
