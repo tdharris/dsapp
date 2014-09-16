@@ -1122,6 +1122,7 @@ EOF
 
 	# While loop to delete all 'safe to delete' attachments from the file system
 	if [ -n "$fileID" ];then
+		echo -e "\nCleaning up attachments\nPlease wait."
 		while IFS= read -r line
 		do
 			if [ -f "$mAttach`python $dsapplib/filestoreIdToPath.pyc $line`" ];then 
