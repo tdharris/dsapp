@@ -60,7 +60,7 @@
 	# Add new configurations to existing dsapp.conf file
 	if [ -f "$dsappConf/dsapp.conf" ];then
 		# Add into array to check conf file
-		dsappConfArray=('pgpass')
+		dsappConfArray=('pgpass' 'newFeature')
 		for ((i=0;i<`echo ${#dsappConfArray[@]}`;i++))
 		do
 			dsappConfLoop=`grep "${dsappConfArray[$i]}" $dsappConf/dsapp.conf`
@@ -68,6 +68,9 @@
 				# Add if statement for each new conf setting inside this IF block
 				if [ "${dsappConfArray[$i]}" = "pgpass" ];then
 					echo -e "\n#Delete ~/.pgpass after dsapp closes [boolean: true | false]\npgpass=true" >> $dsappConf/dsapp.conf
+				fi
+				if [ "${dsappConfArray[$i]}" = "newFeature" ];then
+					echo -e "\n#Promp new feature on load [boolean: true | false]\nnewFeature=true" >> $dsappConf/dsapp.conf
 				fi
 				# if [ "${dsappConfArray[$i]}" = "Array Item" ];then
 				# 	echo -e "Text to conf file" >> $dsappConf/dsapp.conf
@@ -120,11 +123,16 @@
 	uid="";
 
 
-	# DSAPP configuration files
+	# Get Hostname of server
 	if [ ! -f "$dsappConf/dsHostname.conf" ];then
 		echo `hostname -f` > $dsappConf/dsHostname.conf
 	fi
 	dsHostname=`cat $dsappConf/dsHostname.conf`
+
+	# Store dsapp version 
+	if [ ! -f "$dsappConf/dsappVersion" ];then
+		echo $dsappversion > $dsappConf/dsappVersion
+	fi
 	
 ##################################################################################################
 # Begin Logging Section
@@ -257,6 +265,17 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 		forceMode=1;
 	fi
 
+function pushConf {
+	local header="[pushConf] [$dsappconfFile] :"
+	# $1 = variableName | $2 = value
+	sed -i "s|$1=.*|$1=$2|g" "$dsappconfFile";
+	if [ $? -eq 0 ];then
+		log_debug "$header $1 has been reconfigured to $2"
+	else
+		log_error "$header Failed to reconfigure $1 to $2"
+	fi
+}
+
 function dsappLogRotate {
 logRotate="$(cat <<EOF                                                        
 /opt/novell/datasync/tools/dsapp/logs/*.log {
@@ -292,20 +311,6 @@ function askYesOrNo {
 		done
 	}
 
-function ask {
-	REPLY=""
-	while [ -z "$REPLY" ] ; do
-		read -ep "$1 $YES_NO_PROMPT" REPLY
-		REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
-		log "[ask] $1 $REPLY"
-		case $REPLY in
-			$YES_CAPS ) $2; return 0 ;;
-			$NO_CAPS ) return 1 ;;
-			* ) REPLY=""
-		esac
-	done
-}
-
 # Initialize the yes/no prompt
 YES_STRING=$"y"
 NO_STRING=$"n"
@@ -317,10 +322,18 @@ function eContinue {
 	read -p "Press [Enter] to continue"
 }
 
+
+# Toggle announceNewFeature to true
+# Put dsapp version in newFeatureVersion that will have the new feature
+newFeatureVersion='196'
+if [ `cat $dsappConf/dsappVersion` -lt $newFeatureVersion ];then
+	pushConf "newFeature" true
+	newFeature=true
+fi
 function announceNewFeature {
-	if [ ! -f $ghcLog ]; then
+	if($newFeature);then
 		clear; datasyncBanner
-		echo -e "\nWe noticed you haven't run dsapp's new General Health Check feature.\nIt's located in the Checks & Queries menu.\n"
+		echo -e "\tNew Feature\n\nGeneral Health Check.\nLocated in the Checks & Queries menu.\n"
 		if askYesOrNo "Would you like to run it now?"; then
 			generalHealthCheck
 		fi
@@ -328,32 +341,36 @@ function announceNewFeature {
 }
 
 function checkFTP {
-	# Echo back 0 or 1 into if statement
-	# To call/use: if [ $(checkFTP) -eq 0 ];then
-	netcat -z -w 1 ftp.novell.com 21;
+	local header="[checkFTP] :"
+	# To call/use: if (checkFTP);then
+	netcat -z -w 2 ftp.novell.com 21;
 	if [ $? -eq 0 ]; then
-		log_success "Passed checkFTP: ftp.novell.com:21"
-		echo "0"
+		log_success "$header Passed ftp.novell.com:21"
+		return 0;
 	else 
-		log_warning "Failed checkFTP: ftp.novell.com:21"
-		echo "1"
+		log_warning "$header Failed ftp.novell.com:21"
+		return 1;
 	fi
 }
 
 function updateDsapp {
+	local header="[updateDsapp] :"
 	echo -e "\nUpdating dsapp..."
-	log_info "Updating dsapp..."
+	log_info "$header Updating dsapp..."
 
 	# Download new version & extract
 	local tmpVersion=`curl -s ftp://ftp.novell.com/outgoing/$dsapp_tar | tar -zxv 2>/dev/null | egrep -o '(dsapp.*.rpm)'`;
 	if [ $? -eq 0 ];then
 		rpm -Uvh "$tmpVersion"
 		if [ $? -ne 0 ];then
+			log_error "$header $tmpVersion failed to update"
+			echo -e "$tmpVersion failed to update\n\nRun the following:\nrpm --force -ivh $tmpVersion"
 			eContinue
 		else
+			log_success "$header $tmpVersion successfully updated."
 			$dsappDirectory/dsapp.sh && exit 0
 		fi
-	else log_error "Failed to download and extract ftp://ftp.novell.com/outgoing/$dsapp_tar"
+	else log_error "$header Failed to download and extract ftp://ftp.novell.com/outgoing/$dsapp_tar"
 	fi
 
 }
@@ -365,7 +382,7 @@ function autoUpdateDsapp {
 
 			log_debug "[Init] autoUpdateDsapp ($autoUpdate)..."
 			# Check FTP connectivity
-			if [ $(checkFTP) -eq 0 ];then
+			if (checkFTP);then
 
 				# Fetch online dsapp and store to memory, check version
 				publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp-version.info | grep -m1 dsappversion= | cut -f2 -d "'"`
@@ -660,8 +677,16 @@ log_debug "[Init] [getldapPassword] $ldapAdmin:$ldapPassword"
 			read -ep "SR#: " srn;
 			echo -e "\nCompressing logs for upload..."
 
-			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog $dsappLog `find /etc/datasync/ -name *.xml -type f` `ls $mAlog-* | tail -n1 2>/dev/null` `ls $gAlog-* | tail -n1 2>/dev/null` 2>/dev/null;
+			# Move logs and remove color tags
+			cp $dsappLogs/dsapp.log $dsappLogs/dsapp.tmp
+			cat $dsappLogs/dsapp.tmp | sed "s/[[:cntrl:]]\[[0-9;]*m//g" > $dsappLogs/dsapp.log
 
+			# Tar up all files
+			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog $dsappLog `find /etc/datasync/ -name *.xml -type f` `ls $mAlog-* | tail -n1 2>/dev/null` `ls $gAlog-* | tail -n1 2>/dev/null` 2>/dev/null;
+			
+			# Move tmp log back
+			mv $dsappLogs/dsapp.tmp $dsappLogs/dsapp.log
+			
 			if [ $? -eq 0 ]; then
 				echo -e "\n$dsappupload/$srn"_"$d.tgz\n"
 			fi
@@ -3106,7 +3131,6 @@ function whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe {
 }
 
 
-
 ##################################################################################################
 #	
 #	Switches / Command-line parameters
@@ -3213,20 +3237,20 @@ while [ "$1" != "" ]; do
 
 	--autoUpdate | -au ) dsappSwitch=1
 		if [ "$autoUpdate" = "true" ];then
-			sed -i "s|autoUpdate=true|autoUpdate=false|g" $dsappconfFile;
+			pushConf "autoUpdate" false
 			echo "Setting dsapp autoUpdate: false"
 		else
-			sed -i "s|autoUpdate=false|autoUpdate=true|g" $dsappconfFile;
+			pushConf "autoUpdate" true
 			echo "Setting dsapp autoUpdate: true"
 		fi
 		;;
 
 	--debug ) dsappSwitch=1
 		if [ "$debug" = "true" ];then
-			sed -i "s|debug=true|debug=false|g" $dsappconfFile;
+			pushConf "debug" false
 			echo "Setting dsapp log debug: false"
 		else
-			sed -i "s|debug=false|debug=true|g" $dsappconfFile;
+			pushConf "autoUpdate" true
 			echo "Setting dsapp log debug: true"
 		fi
 		;;
@@ -3349,6 +3373,12 @@ if [ -z "$1" ];then
 	# Announce new Feature
 	announceNewFeature
 fi
+
+# Turn off announce new feature after first prompt
+pushConf "newFeature" false
+
+# Update dsappVersion file
+echo $dsappversion > $dsappConf/dsappVersion
 
 while :
 do
@@ -3540,8 +3570,8 @@ EOF
 	     ;;
 
 	   5) 	clear; #Remove log archive
-			ask $"Permission to clean log archives?" cleanLog;
-			read -p "Press [Enter] when completed..."
+			askYesOrNo $"Permission to clean log archives?" cleanLog;
+			eContinue;
 			;;
 
 
@@ -3688,10 +3718,11 @@ EOF
 			3) # Apply FTF / Patch Files
 			   # Menu-requirements: ftp connection to Novell
 				clear
-				if [ $(checkFTP) -ne 0 ];
-					then error "Unable to connect to ftp://ftp.novell.com";
-				fi
-
+				if (! checkFTP);then
+					echo "Unable to connect to ftp://ftp.novell.com";
+					eContinue
+					break;
+				else
 				while :
 				do
 					clear;
@@ -3742,11 +3773,12 @@ EOF
 							;;
 
 				/q | q | 0) break;;
-				*) ;;
+						*) ;;
 
-				esac
-				done
-				;;
+					esac
+					done
+				fi
+					;;
 
 			  /q | q | 0) break;;
 			  *) ;;
