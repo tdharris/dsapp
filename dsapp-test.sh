@@ -482,7 +482,7 @@ function autoUpdateDsapp {
 	# Get & Decode dbpass
 	function getDBPassword {
 		#Grabbing password from configengine.xml
-		dbPassword=`sed -n "/<database>/,/<\/database>/p" $ceconf | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
+		dbPassword=`xmlpath 'config/configengine/database/password' < $ceconf`
 		if [[ $(isStringProtected database $ceconf) -eq 1 ]];then
 			dbPassword=$(decodeString $dbPassword "Database")
 		fi
@@ -491,7 +491,7 @@ function autoUpdateDsapp {
 			local var=`grep "Database" $dsapptmp/error`
 			if [ -n "$var" ];then echo -e "Encryption on Database wrong.";
 				decodeProblem=true;
-			fi
+			fi;
 		fi
 	}
 
@@ -521,7 +521,7 @@ fi
 
 	# Get & decode trustedAppKey
 	function getTrustedAppKey {
-		trustedAppKey=`cat $gconf | grep -i trustedAppKey | sed 's/<[^>]*[>]//g' | tr -d ' '`
+		trustedAppKey=`xmlpath 'connector/settings/custom/trustedAppKey' < $gconf`
 		if [[ $(isStringProtected protected $gconf) -eq 1 ]];then
 			trustedAppKey=$(decodeString $trustedAppKey "Trusted Application")
 		fi
@@ -537,7 +537,7 @@ fi
 	# Get & decode ldapLogin password
 	function getldapPassword {
 		# Keeping protected for General Health Check Log
-		protectedldapPassword=`sed -n "/<login>/,/<\/login>/p" $ceconf | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
+		protectedldapPassword=`xmlpath 'config/configengine/ldap/login/password' < $ceconf`
 		ldapPassword="$protectedldapPassword"
 		if [[ $(isStringProtected login $ceconf) -eq 1 ]];then
 			ldapPassword=$(decodeString $ldapPassword "LDAP")
@@ -1123,7 +1123,7 @@ function removeUser {
 	echo;eContinue;
 }
 
-function mCleanup { # Requires userID passed in.
+function mCleanup { # Requires userID passed in. # IF 2nd variable passed in. Will skip attachment build list
 	echo -e "\nCleaning up mobility database"
 
 	# Get users mobility guid
@@ -1145,8 +1145,8 @@ function mCleanup { # Requires userID passed in.
 	psql -U $dbUsername mobility -c "delete from attachmentmaps where userid='$uGuid';";
 
 	# Get filestoreIDs that are safe to delete
+	echo -e "Building list of safe to remove attachments\nPlease wait."
 	local fileID=`psql -U $dbUsername mobility -t -c "select filestoreid from attachments where attachmentid not in (select attachmentid from attachmentmaps);" | sed 's/^ *//' | sed 's/ *$//'`
-
 	# Log into mobility database, and clean tables with users guid
 	psql -U $dbUsername mobility <<EOF
 	delete from deviceimages where userid='$uGuid';
