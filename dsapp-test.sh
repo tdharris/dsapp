@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='198'
+	dsappversion='199'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -42,7 +42,6 @@
 	mobilityVersion=`cat $version`
 	serverinfo="/etc/*release"
 	rpminfo="datasync"
-	dsapp_tar="dsapp.tgz"
 
 	# Configuration Files
 	mconf="/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml"
@@ -55,28 +54,6 @@
 	if [ ! -f "$dsappConf/dsapp.conf" ];then
 		echo -e "#Configuration for dsapp\n\n#Auto update dsapp [boolean: true | false]\nautoUpdate=true" > $dsappConf/dsapp.conf
 		echo -e "\n#Log level for dsapp [boolean: true | false]\ndebug=false" >> $dsappConf/dsapp.conf
-	fi
-
-	# Add new configurations to existing dsapp.conf file
-	if [ -f "$dsappConf/dsapp.conf" ];then
-		# Add into array to check conf file
-		dsappConfArray=('pgpass' 'newFeature')
-		for ((i=0;i<`echo ${#dsappConfArray[@]}`;i++))
-		do
-			dsappConfLoop=`grep "${dsappConfArray[$i]}" $dsappConf/dsapp.conf`
-			if [ -z "$dsappConfLoop" ];then
-				# Add if statement for each new conf setting inside this IF block
-				if [ "${dsappConfArray[$i]}" = "pgpass" ];then
-					echo -e "\n#Delete ~/.pgpass after dsapp closes [boolean: true | false]\npgpass=true" >> $dsappConf/dsapp.conf
-				fi
-				if [ "${dsappConfArray[$i]}" = "newFeature" ];then
-					echo -e "\n#Promp new feature on load [boolean: true | false]\nnewFeature=true" >> $dsappConf/dsapp.conf
-				fi
-				# if [ "${dsappConfArray[$i]}" = "Array Item" ];then
-				# 	echo -e "Text to conf file" >> $dsappConf/dsapp.conf
-				# fi
-			fi
-		done
 	fi
 
 	# Mobility Directories
@@ -106,33 +83,48 @@
 	ghcLog="$dsappLogs/generalHealthCheck.log"
 
 	# Fetch variables from confs
-	ldapAddress=`grep -i "<ldapAddress>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	ldapPort=`grep -i "<ldapPort>" /etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	ldapAdmin=`grep -im1 "<dn>" $ceconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	trustedName=`cat $gconf| grep -i trustedAppName | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	mPort=`grep -i "<listenPort>" $mconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	gPort=`grep -i "<port>" $gconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	wPort=`sed -n "/<server>/,/<\/server>/p" $wconf | grep "<port>" | cut -f2 -d '>' | cut -f1 -d '<'`
-	mlistenAddress=`grep -i "<listenAddress>" $mconf | sed 's/<[^>]*[>]//g' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
-	glistenAddress=`grep -i "<listeningLocation>" $gconf | sed 's/<[^>]*[>]//g' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
-	authentication=`grep -i "<authentication>" $ceconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	provisioning=`grep -i "<provisioning>" $ceconf | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	function xmlpath() {
+	  local expr="${1//\// }"
+	  local path=()
+	  local chunk tag data
+
+	  while IFS='' read -r -d '<' chunk; do
+	    IFS='>' read -r tag data <<< "$chunk"
+
+	    case "$tag" in
+	      '?'*) ;;
+	      '!–-'*) ;;
+	      '![CDATA['*) data="${tag:8:${#tag}-10}" ;;
+	      ?*'/') ;;
+	      '/'?*) unset path[${#path[@]}-1] ;;
+	      ?*) path+=("$tag") ;;
+	    esac
+
+	    [[ "${path[@]}" == "$expr" ]] && echo "$data"
+	  done
+	}
+
+	ldapAddress=`xmlpath 'connector/settings/custom/ldapAddress' < $mconf`
+	ldapPort=`xmlpath 'connector/settings/custom/ldapPort' < $mconf`
+	mPort=`xmlpath 'connector/settings/custom/listenPort' < $mconf`
+	mlistenAddress=`xmlpath 'connector/settings/custom/listenAddress' < $mconf`
+	trustedName=`xmlpath 'connector/settings/custom/trustedAppName' < $gconf`
+	glistenAddress=`xmlpath 'connector/settings/custom/listeningLocation' < $gconf`
+	gPort=`xmlpath 'connector/settings/custom/port' < $gconf`
+	wPort=`xmlpath 'config/server/port' < $wconf`
+	ldapAdmin=`xmlpath 'config/configengine/ldap/login/dn' < $ceconf`
+	authentication=`xmlpath 'config/configengine/source/authentication' < $ceconf`
+	provisioning=`xmlpath 'config/configengine/source/provisioning' < $ceconf`
 
 	# Global variable for verifyUser
 	vuid="";
-	uid="";
 
 
-	# Get Hostname of server
+	# DSAPP configuration files
 	if [ ! -f "$dsappConf/dsHostname.conf" ];then
 		echo `hostname -f` > $dsappConf/dsHostname.conf
 	fi
 	dsHostname=`cat $dsappConf/dsHostname.conf`
-
-	# Store dsapp version 
-	if [ ! -f "$dsappConf/dsappVersion" ];then
-		echo $dsappversion > $dsappConf/dsappVersion
-	fi
 	
 ##################################################################################################
 # Begin Logging Section
@@ -265,17 +257,6 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 		forceMode=1;
 	fi
 
-function pushConf {
-	local header="[pushConf] [$dsappconfFile] :"
-	# $1 = variableName | $2 = value
-	sed -i "s|$1=.*|$1=$2|g" "$dsappconfFile";
-	if [ $? -eq 0 ];then
-		log_debug "$header $1 has been reconfigured to $2"
-	else
-		log_error "$header Failed to reconfigure $1 to $2"
-	fi
-}
-
 function dsappLogRotate {
 logRotate="$(cat <<EOF                                                        
 /opt/novell/datasync/tools/dsapp/logs/*.log {
@@ -311,6 +292,20 @@ function askYesOrNo {
 		done
 	}
 
+function ask {
+	REPLY=""
+	while [ -z "$REPLY" ] ; do
+		read -ep "$1 $YES_NO_PROMPT" REPLY
+		REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+		log "[ask] $1 $REPLY"
+		case $REPLY in
+			$YES_CAPS ) $2; return 0 ;;
+			$NO_CAPS ) return 1 ;;
+			* ) REPLY=""
+		esac
+	done
+}
+
 # Initialize the yes/no prompt
 YES_STRING=$"y"
 NO_STRING=$"n"
@@ -322,18 +317,10 @@ function eContinue {
 	read -p "Press [Enter] to continue"
 }
 
-
-# Toggle announceNewFeature to true
-# Put dsapp version in newFeatureVersion that will have the new feature
-newFeatureVersion='196'
-if [ `cat $dsappConf/dsappVersion` -lt $newFeatureVersion ];then
-	pushConf "newFeature" true
-	newFeature=true
-fi
 function announceNewFeature {
-	if($newFeature);then
+	if [ ! -f $ghcLog ]; then
 		clear; datasyncBanner
-		echo -e "\tNew Feature\n\nGeneral Health Check.\nLocated in the Checks & Queries menu.\n"
+		echo -e "\nWe noticed you haven't run dsapp's new General Health Check feature.\nIt's located in the Checks & Queries menu.\n"
 		if askYesOrNo "Would you like to run it now?"; then
 			generalHealthCheck
 		fi
@@ -341,42 +328,37 @@ function announceNewFeature {
 }
 
 function checkFTP {
-	local header="[checkFTP] :"
-	# To call/use: if (checkFTP);then
-	netcat -z -w 2 ftp.novell.com 21;
+	# Echo back 0 or 1 into if statement
+	# To call/use: if [ $(checkFTP) -eq 0 ];then
+	netcat -z -w 1 ftp.novell.com 21;
 	if [ $? -eq 0 ]; then
-		log_success "$header Passed ftp.novell.com:21"
-		return 0;
+		log_success "Passed checkFTP: ftp.novell.com:21"
+		echo "0"
 	else 
-		log_warning "$header Failed ftp.novell.com:21"
-		return 1;
+		log_warning "Failed checkFTP: ftp.novell.com:21"
+		echo "1"
 	fi
 }
 
 function updateDsapp {
-	local header="[updateDsapp] :"
 	echo -e "\nUpdating dsapp..."
-	log_info "$header Updating dsapp..."
+	log_info "Updating dsapp..."
+	# Remove running instance/version
+	rm dsapp.sh 2>/dev/null
+
+	# Remove the stored app
+	cd $dsappDirectory; rm -f dsapp.sh
 
 	# Download new version & extract
-	local tmpVersion=`curl -s ftp://ftp.novell.com/outgoing/$dsapp_tar | tar -zxv 2>/dev/null | egrep -o '(dsapp.*.rpm)'`;
+	curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -zx 2>/dev/null;
 	if [ $? -eq 0 ];then
-		rpm -Uvh "$tmpVersion"
-		if [ $? -ne 0 ];then
-			log_error "$header $tmpVersion failed to update"
-			echo -e "$tmpVersion failed to update\n\nRun the following:\nrpm --force -ivh $tmpVersion\n"
-			eContinue
-		else
-			log_success "$header $tmpVersion successfully updated."
-			echo "$tmpVersion successfully updated."
-			if [ "$PWD" != "$dsappDirectory" ];then
-                rm -f dsapp.sh
-            fi
-            rm -f $tmpVersion;
-			eContinue;
-			$dsappDirectory/dsapp.sh && exit 0
-		fi
-	else log_error "$header Failed to download and extract ftp://ftp.novell.com/outgoing/$dsapp_tar"
+		tmpVersion=`grep -wm 1 "dsappversion" dsapp.sh | cut -f2 -d"'"`
+		echo -e "Update finished: v$tmpVersion"
+		log_success "Update finished: v$tmpVersion"
+		echo
+		eContinue;
+		$dsappDirectory/dsapp.sh && exit 0
+	else log_error "Failed to download and extract ftp://ftp.novell.com/outgoing/dsapp.tgz"
 	fi
 
 }
@@ -388,12 +370,12 @@ function autoUpdateDsapp {
 
 			log_debug "[Init] autoUpdateDsapp ($autoUpdate)..."
 			# Check FTP connectivity
-			if (checkFTP);then
+			if [ $(checkFTP) -eq 0 ];then
 
 				# Fetch online dsapp and store to memory, check version
 				publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp-version.info | grep -m1 dsappversion= | cut -f2 -d "'"`
 				log_debug "[Init] [autoUpdateDsapp] publicVersion: $publicVersion, currentVersion: $dsappversion"
-				# publicVersion=`curl -s ftp://ftp.novell.com/outgoing/$dsapp_tar | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
+				# publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp.tgz | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
 
 				# Download if newer version is available
 				if [ "$dsappversion" -ne "$publicVersion" ];then
@@ -406,6 +388,69 @@ function autoUpdateDsapp {
 			fi
 			
 		fi
+}
+
+function installAlias {
+	resetEnvironment=false
+	tellUserAboutAlias=false
+
+	# If there is dsapp.sh
+	ls $dsappDirectory/dsapp.sh &>/dev/null
+	if [ $? -ne 0 ]; then
+		resetEnvironment=true
+		tellUserAboutAlias=true
+		mv -v dsapp.sh $dsappDirectory
+	fi
+
+	# Create /etc/profile.local if not already there
+	if [[ ! -f /etc/profile.local ]];then 
+		log_debug "[Init] [installAlias] Creating /etc/profile.local for dsapp alias..."
+		touch /etc/profile.local
+	fi
+
+	# Insert alias shortcut if not already there
+	if [[ -z `grep "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" /etc/profile.local` ]]; then
+		echo "alias dsapp=\"/opt/novell/datasync/tools/dsapp/dsapp.sh\"" >> /etc/profile.local
+
+		# Configure sudo to be compatible for alias, allows it to look for aliases after first word
+		echo "alias sudo='sudo '" >> /etc/profile.local
+
+		log_debug "[Init] [installAlias] Configured dsapp alias in /etc/profile.local"
+		echo -e "\nConfigured dsapp alias."
+		tellUserAboutAlias=true
+		resetEnvironment=true
+	fi
+	
+	#Skip if already in dsappDirectory
+    if [[ "$PWD" != "$dsappDirectory" ]] && [[ "$0" != "$dsappDirectory/dsapp.sh" ]];then
+    	
+		# Check if running version is newer than installed version
+		installedVersion=`grep -m1 dsappversion= /opt/novell/datasync/tools/dsapp/dsapp.sh 2>/dev/null | cut -f2 -d "'"`
+		if [[ "$dsappversion" -gt "$installedVersion" ]];then
+			tellUserAboutAlias=true
+			echo "Installing dsapp to /opt/novell/datasync/tools/dsapp/"
+			mv -v dsapp.sh $dsappDirectory
+			if [ $? -ne 0 ]; then
+				echo -e "\nThere was a problem copying dsapp.sh to /opt/novell/datasync/tools/dsapp..."
+			fi
+		else 
+			tellUserAboutAlias=true
+			rm dsapp.sh 2>/dev/null
+		fi
+
+		if ($tellUserAboutAlias); then
+			log_debug "[Init] [installAlias] Informing user of installAlias..."
+			echo -e "\nPlease use /opt/novell/datasync/tools/dsapp/dsapp.sh"
+			echo -e "To launch, enter the following anywhere: dsapp\n"
+		fi
+		# Reset environment variables (loads /etc/profile for dsapp alias)
+		if ($resetEnvironment); then
+			log_debug "[Init] [installAlias] Resetting environment variables..."
+			echo -e "Refreshing environment variables..."
+			su -
+		fi
+		exit 0
+	fi
 }
 
 	#Get datasync version.
@@ -594,6 +639,7 @@ fi
 if [ -z "$1" ];then
 	if [[ "$0" = *dsapp.sh ]]; then
 		autoUpdateDsapp;
+		installAlias
 	fi
 fi
 
@@ -636,7 +682,7 @@ log_debug "[Init] [getldapPassword] $ldapAdmin:$ldapPassword"
 ##################################################################################################
 
 	function getLogs {
-		datasyncBanner;
+		clear; 
 		rm -r $dsappupload/* 2>/dev/null
 		mkdir $dsappupload/version
 
@@ -683,16 +729,8 @@ log_debug "[Init] [getldapPassword] $ldapAdmin:$ldapPassword"
 			read -ep "SR#: " srn;
 			echo -e "\nCompressing logs for upload..."
 
-			# Move logs and remove color tags
-			cp $dsappLogs/dsapp.log $dsappLogs/dsapp.tmp
-			cat $dsappLogs/dsapp.tmp | sed "s/[[:cntrl:]]\[[0-9;]*m//g" > $dsappLogs/dsapp.log
-
-			# Tar up all files
 			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog $dsappLog `find /etc/datasync/ -name *.xml -type f` `ls $mAlog-* | tail -n1 2>/dev/null` `ls $gAlog-* | tail -n1 2>/dev/null` 2>/dev/null;
-			
-			# Move tmp log back
-			mv $dsappLogs/dsapp.tmp $dsappLogs/dsapp.log
-			
+
 			if [ $? -eq 0 ]; then
 				echo -e "\n$dsappupload/$srn"_"$d.tgz\n"
 			fi
@@ -719,55 +757,19 @@ EOF
 		eContinue;
 	}
 
-function dropDatabases {
-	#Dropping Tables
-	echo -e "Dropping datasync database"
-	dropdb -U $dbUsername datasync;
-	echo -e "Dropping mobility database"
-	dropdb -U $dbUsername mobility;
-	if [ $dsVersion -gt $dsVersionCompare ];then
-		echo -e "Dropping dsmonitor database"
-		dropdb -U $dbUsername dsmonitor;
-	fi
-}
-
-function createDatabases {
-	#Recreating Tables - Code from postgres_setup_1.sh
-	PGPASSWORD="$dbPassword" createdb "datasync" -U "$dbUsername" -h "localhost" -p "5432"
-	echo "create datasync database done.."
-	PGPASSWORD="$dbPassword" psql -d "datasync" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/common/sql/postgresql/configengine.sql"
-	echo "extend schema configengine done.."
-	PGPASSWORD="$dbPassword" psql -d "datasync" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/common/sql/postgresql/datasync.sql"
-	echo "extend schema syncengine done.."
-
-	DATE=`date +"%Y-%m-%d %H:%M:%S"`
-	VERSION=`cat $dirOptMobility/version`
-	COMMAND="INSERT INTO services (service, initial_version, initial_timestamp, previous_version, previous_timestamp, service_version, service_timestamp) VALUES ('Mobility','"$VERSION"', '"$DATE"', '"$VERSION"', '"$DATE"', '"$VERSION"', '"$DATE"');"
-	PGPASSWORD="$dbPassword" psql -d "datasync" -U "$dbUsername" -h "localhost" -p "5432" -c "$COMMAND"
-	echo "add service record done.."
-
-	PGPASSWORD="$dbPassword" createdb "mobility" -U $dbUsername
-	echo "create mobility database done.."
-	PGPASSWORD="$dbPassword" psql -d "mobility" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/syncengine/connectors/mobility/mobility_pgsql.sql"
-	echo "extend schema mobility done.."
-	
-	if [ $dsVersion -gt $dsVersionCompare ];then
-		PGPASSWORD="$dbPassword" createdb "dsmonitor" -U $dbUsername
-		echo "create monitor database done.."
-		PGPASSWORD="$dbPassword" psql -d "dsmonitor" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/monitorengine/sql/monitor.sql"
-		echo "extend schema for monitor done.."
-	fi
-}
-
 	function  cuso {
 		local tempVar=true
 		if [ $(checkDBPass) -eq 0 ];then
 
 			#Dropping Tables
-			dropDatabases;
+			dropdb -U $dbUsername datasync;
+			dropdb -U $dbUsername mobility;
+			if [ $dsVersion -gt $dsVersionCompare ];then
+				dropdb -U $dbUsername dsmonitor;
+			fi
 
 			#Check if databases properly dropped.
-			local dbNames=`psql -l -U $dbUsername -t | cut -d \| -f 1 | grep -i -e datasync -e dsmonitor -e mobility`
+			dbNames=`psql -l -U $dbUsername -t | cut -d \| -f 1 | grep -i -e datasync -e dsmonitor -e mobility`
 
 			#Recreate tables switch
 			if [[ "$1" == 'create' ]];then
@@ -779,8 +781,31 @@ function createDatabases {
 					break;
 				fi
 
-				#Recreating Tables
-				createDatabases;
+				#Recreating Tables - Code from postgres_setup_1.sh
+				PGPASSWORD="$dbPassword" createdb "datasync" -U "$dbUsername" -h "localhost" -p "5432"
+				echo "create datasync database done.."
+				PGPASSWORD="$dbPassword" psql -d "datasync" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/common/sql/postgresql/configengine.sql"
+				echo "extend schema configengine done.."
+				PGPASSWORD="$dbPassword" psql -d "datasync" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/common/sql/postgresql/datasync.sql"
+				echo "extend schema syncengine done.."
+
+				DATE=`date +"%Y-%m-%d %H:%M:%S"`
+				VERSION=`cat $dirOptMobility/version`
+				COMMAND="INSERT INTO services (service, initial_version, initial_timestamp, previous_version, previous_timestamp, service_version, service_timestamp) VALUES ('Mobility','"$VERSION"', '"$DATE"', '"$VERSION"', '"$DATE"', '"$VERSION"', '"$DATE"');"
+				PGPASSWORD="$dbPassword" psql -d "datasync" -U "$dbUsername" -h "localhost" -p "5432" -c "$COMMAND"
+				echo "add service record done.."
+
+				PGPASSWORD="$dbPassword" createdb "mobility" -U $dbUsername
+				echo "create mobility database done.."
+				PGPASSWORD="$dbPassword" psql -d "mobility" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/syncengine/connectors/mobility/mobility_pgsql.sql"
+				echo "extend schema mobility done.."
+				
+				if [ $dsVersion -gt $dsVersionCompare ];then
+					PGPASSWORD="$dbPassword" createdb "dsmonitor" -U $dbUsername
+					echo "create monitor database done.."
+					PGPASSWORD="$dbPassword" psql -d "dsmonitor" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/monitorengine/sql/monitor.sql"
+					echo "extend schema for monitor done.."
+				fi
 
 				if [[ "$2" == 'users' ]];then
 				#Repopulating targets and membershipCache
@@ -803,9 +828,6 @@ function createDatabases {
 				rcpostgresql stop; killall -9 postgres &>/dev/null; killall -9 python &>/dev/null;
 				rpm -e `rpm -qa | grep "datasync-"`
 				rpm -e `rpm -qa | grep "postgresql"`
-				if [ $dsappVersion -gt 194 ];then
-					rpm -e dsapp;
-				fi
 				rm -r $dirPGSQL;
 				rm -r $dirEtcMobility;
 				rm -r $dirVarMobility;
@@ -819,17 +841,17 @@ function createDatabases {
 				echo -e "Mobility uninstalled."
 				eContinue;
 				exit 0;
-				else
-					#Vacuum database
-					vacuumDB;
-					#Index database
-					indexDB;
-				fi
+			fi
+			
+			#Vacuum database
+			vacuumDB;
+			#Index database
+			indexDB;
 			echo -e "\nClean up complete."
 		fi
 		}
 
-	function registerDS {
+	function registerDS(){
 		clear;
 		echo -e "\nThe following will register your Mobility product with Novell, allowing you to use the Novell Update Channel to Install a Mobility Pack Update. If you have not already done so, obtain the Mobility Pack activation code from the Novell Customer Center:";
 		echo -e "\n\t1. Login to Customer Center at http://www.novell.com/center"
@@ -949,9 +971,18 @@ function createDatabases {
 
 	function verifyUserDataSyncDB { # Requires $1 passed in as a username
 		if [ -n "$1" ];then
+			local uid=`echo "$1" | tr [:upper:] [:lower:]`
 
-			# Check if user exists in datasync database
-			local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where \"dn\" ~* '($uid[.|,].*)$' OR dn ilike '$uid' OR \"targetName\" ilike '$uid';" | sed 's/^ *//' | sed 's/ *$//'`
+			# Check if user exists in datasync database on dn table
+			local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where \"dn\" ~* '($uid[.|,].*)$'" | sed 's/^ *//' | sed 's/ *$//'`
+		
+			# User not found with dn table - Checking targetName
+			if [ -z "$validUser" ];then
+				local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where LOWER(\"targetName\")=LOWER('$uid') AND \"connectorID\"='default.pipeline1.groupwise';" | sed 's/^ *//' | sed 's/ *$//'`
+			fi
+			if [ -z "$validUser" ];then
+				local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where LOWER(\"targetName\")=LOWER('$uid') AND \"connectorID\"='default.pipeline1.mobility';" | sed 's/^ *//' | sed 's/ *$//'`
+			fi
 
 			# No user found with either eDirectoryID or GroupwiseID: return 1
 			if [ -z "$validUser" ];then
@@ -960,7 +991,6 @@ function createDatabases {
 
 			# Return 0 if validUser has something
 			if [ `echo "$validUser" | wc -w` -ne 0 ];then
-				uid="$validUser"
 				return 0;
 			else
 				return 1;
@@ -970,9 +1000,15 @@ function createDatabases {
 
 	function verifyUserMobilityDB { # Requires $1 passed in as a username
 		if [ -n "$1" ];then
+			local uid=`echo "$1" | tr [:upper:] [:lower:]`
 
-			# Check if user exists in mobility database
-			local validUser=`psql -U $dbUsername mobility -t -c "select distinct userid from users where userid ~* '($uid[.|,].*)$' OR userid ilike '$uid' OR name ilike '$uid';" | sed 's/^ *//' | sed 's/ *$//'`
+			# Check if user exists in mobility database as eDirectoryID
+			local validUser=`psql -U $dbUsername mobility -t -c "select distinct name from users where userid ~* '($uid[.|,].*)$';" | sed 's/^ *//' | sed 's/ *$//'`
+			
+			# User not found with eDirectoryID - Checking Groupwise ID
+			if [ -z "$validUser" ];then
+				local validUser=`psql -U $dbUsername mobility -t -c "select distinct name from users where name ~* '($uid)$'" | sed 's/^ *//' | sed 's/ *$//'`
+			fi
 
 			# No user found with either eDirectoryID or GroupwiseID: return 1
 			if [ -z "$validUser" ];then
@@ -981,7 +1017,6 @@ function createDatabases {
 
 			# Return 0 if validUser has something
 			if [ `echo "$validUser" | wc -w` -ne 0 ];then
-				uid="$validUser";
 				return 0;
 			else
 				return 1;
@@ -989,14 +1024,15 @@ function createDatabases {
 		fi
 	}
 
-	function verifyUser { # Can have 2 variables passed in. 1 to be assigned uid
-		datasyncBanner;
+	function verifyUser { # Requires 1 variable passed in to be assigned uid
+		clear;
+		local uid=""
 		read -ep "UserID: " uid;
 		while [ -z "$uid" ]; do
 			if askYesOrNo $"Invalid Entry... try again?"; then
 			    read -ep "UserID: " uid;
 			else
-				return 3;
+			    break;
 			fi
 		done
 
@@ -1004,32 +1040,27 @@ function createDatabases {
 			# Calculate verifyCount based on where user was found
 			local verifyCount=3;
 			# 3 = no user found ; 1 = datasync only ; 2 = mobility only ; 0 = both database
-
-			verifyUserDataSyncDB "$uid";
-			if [ $? -eq 0 ];then
+			if (verifyUserDataSyncDB "$uid");then
 				verifyCount=$(($verifyCount - 2))
 			fi
-			
-			verifyUserMobilityDB "$uid"
-			if [ $? -eq 0 ];then
+
+			if (verifyUserMobilityDB "$uid");then
 				verifyCount=$(($verifyCount - 1))
 			fi
 
-			if [ "$2" != "noReturn" ];then
-				# Run case
-				case "$verifyCount" in
-					3 ) # No user found
-						return 3; ;;
-					2 ) # mobility only
-						eval "$1='$uid'"; return 2; ;;
-					1 ) # datasync only
-						eval "$1='$uid'"; return 1; ;;
-					0 ) # both database
-						eval "$1='$uid'"; return 0; ;;
-				esac
-			else
-				eval "$1='$uid'";
-			fi
+			# Run case
+			case "$verifyCount" in
+				3 ) # No user found
+					echo -e "\nUser [$uid] cannot be found."
+					eContinue;
+					return 3; ;;
+				2 ) # mobility only
+					eval "$1='$uid'"; return 2; ;;
+				1 ) # datasync only
+					eval "$1='$uid'"; return 1; ;;
+				0 ) # both database
+					eval "$1='$uid'"; return 0; ;;
+			esac
 		fi
 	}
 
@@ -1061,132 +1092,168 @@ EOF
 		
 	}
 
-function dremoveUser {
-	# verifyUser sets vuid variable used in setUserState and removeAUser functions
-	verifyUser vuid; verifyReturnNum=$?
-	if [ $verifyReturnNum -eq 2 ] || [ $verifyReturnNum -eq 0 ] ; then
-		if askYesOrNo $"Remove $vuid from database?"; then
+	function dremoveUser {
+		# verifyUser sets vuid variable used in setUserState and removeAUser functions
+		verifyUser vuid; verifyReturnNum=$?
+		if [ $verifyReturnNum -eq 2 ] || [ $verifyReturnNum -eq 0 ] ; then
+			if askYesOrNo $"Remove $vuid from database?"; then
 			dpsql << EOF
 			update targets set disabled='3' where dn ilike '%$vuid%';
 			\q
 EOF
+
 			echo -e "\nSetting user to be deleted..."
 				rcdatasync-configengine restart 1>/dev/null;
 				echo -e "\nWaiting on Mobility Connector..."
 				isUserGone=$vuid
 			while [ ! -z "$isUserGone" ]; do
 				sleep 2
-				isUserGone=`psql -U $dbUsername mobility -c "select state,userid from users where userid ilike '%$vuid%'" | grep -wio "$vuid"`
+				isUserGone=`psql -U 'datasync_user' mobility -c "select state,userid from users where userid ilike '%$vuid%'" | grep -wio "$vuid"`
 			done
-			case "$verifyReturnNum" in
-				0 ) dCleanup "$vuid"; mCleanup "$vuid"; ;;
-				1 ) dCleanup "$vuid"; ;;
-				2 ) mCleanup "$vuid"; ;;
-			esac
+			removeUserSilently
 			echo -e "\n$vuid has been successfully deleted."
+			fi
+			eContinue;
 		fi
-		eContinue;
-	fi
-}
+		
+		
+		
+		# sMonitorUser
+	}
 
 function removeUser {
 	# Remove User Database References according to TID 7008852
-		datasyncBanner;
-		echo -e "\t--- CAUTION ---\n[Removes all reference of userID]\n"
-		verifyUser vuid "noReturn"
-		if [ $? -ne 3 ];then
-			if askYesOrNo $"Remove [$vuid] from databases?"; then
-				dCleanup "$vuid"; mCleanup "$vuid";
-			fi
+		clear;
+		echo -e "\n--- WARNING DANGEROUS ---\nRemove from connectors first!\n"
+		read -ep "Specify userID: " uid;
+		while [ -z "$uid" ]; do
+			echo -e "Invalid Entry... try again.\n";
+			read -ep "Specify userID: " uid;
+		done
+
+	if askYesOrNo $"Remove "$uid" from database?"; then
+
+		echo -e "Checking database for user references..."
+		psqlTarget=`psql -U $dbUsername datasync -c "select dn from targets where dn ilike '%$uid%' limit 1" | grep -iw -m 1 "$uid" | tr -d ' '`
+		psqlAppNameG=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$uid%' AND \"connectorID\"='default.pipeline1.groupwise';"| sed 's/^ *//'`
+		psqlAppNameM=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$uid%' AND \"connectorID\"='default.pipeline1.mobility';"| sed 's/^ *//'`
+		psqlObject=`psql -U $dbUsername datasync -c "select * from \"objectMappings\" where \"objectID\" ilike '%$uid%'" | grep -iwo -m 1 "$uid"`
+        psqlCache=`psql -U $dbUsername datasync -c "select \"sourceDN\" from \"cache\" where \"sourceDN\" ilike '%$uid%' limit 1" |grep -iw -m 1 "$uid" | tr -d ' '`
+		psqlFolder=`psql -U $dbUsername datasync -c "select \"targetDN\" from \"folderMappings\" where \"targetDN\" ilike '%$uid%' limit 1" | grep -iw  -m 1 "$uid" | tr -d ' '`
+
+		userRef=true;
+
+		##Troubleshooting uncomment line below
+		#echo -e "UID: "$uid "\nTarget: "$psqlTarget "\nAppNameG: "$psqlAppNameG "\nAppNameM: "$psqlAppNameM "\nObject: "$psqlObject "\nCache: "$psqlCache "\nFolder: "$psqlFolder; read; exit 0;
+		
+		#Removes user from targets
+		if [ ! -z "$psqlTarget" ];then
+			userRef=false;
+			echo -e "\nFound "$psqlTarget" in target database."
+				echo -e "Removing $psqlTarget from targets.";
+				dpsql << EOF
+				delete from targets where dn ilike '%$uid%';
+				\q
+EOF
 		fi
-	echo;eContinue;
-}
 
-function mCleanup { # Requires userID passed in.
-	echo -e "\nCleaning up mobility database"
-
-	# Get users mobility guid
-	local uGuid=`psql -U $dbUsername mobility -t -c "select guid from users where userid ~* '($1[.|,].*)$' OR name ilike '$1' OR userid ilike '$1';" | sed 's/^ *//'| sed 's/ *$//'`
-
-	# Get users devices
-	local uDevices=`psql -U $dbUsername mobility -t -c "select deviceid from devices where userid='$uGuid';" | sed 's/^ *//'| sed 's/ *$//'`
-
-	# Get attachments to delete
-	local uAttachment=`psql -U $dbUsername mobility -t -c "select attachmentid from attachmentmaps where objectid in (select objectid from deviceimages where userid='$uGuid');" | sed 's/^ *//'| sed 's/ *$//'`
-
-	# While loop to remove all users devices from foldermaps
-	while IFS= read -r line
-	do
-		psql -U $dbUsername mobility -c "delete from foldermaps where deviceid='$line';" &>/dev/null
-	done <<< "$uDevices"
-
-	# Delete attachmentmaps
-	psql -U $dbUsername mobility -c "delete from attachmentmaps where userid='$uGuid';";
-
-	# Get filestoreIDs that are safe to delete
-	local fileID=`psql -U $dbUsername mobility -t -c "select filestoreid from attachments where attachmentid not in (select attachmentid from attachmentmaps);" | sed 's/^ *//' | sed 's/ *$//'`
-
-	# Log into mobility database, and clean tables with users guid
-	psql -U $dbUsername mobility <<EOF
-	delete from deviceimages where userid='$uGuid';
-	delete from syncevents where userid='$uGuid';
-	delete from deviceevents where userid='$uGuid';
-	delete from devices where userid='$uGuid';
-	delete from users where guid='$uGuid';
-	\q
-
+		#Removes user from objectMappings
+		if [ ! -z "$psqlObject" ];then
+			userRef=false;
+			echo -e "\nFound "$psqlObject" in objectMappings database."
+				echo -e "Removing $uid | $psqlAppNameG | $psqlAppNameM from objectMappings.";
+				dpsql << EOF
+				delete from "objectMappings" where "objectID" ilike '%|$psqlAppNameG%';
+				delete from "objectMappings" where "objectID" ilike '%|$psqlAppNameM%';
+				delete from "objectMappings" where "objectID" ilike '%|$uid%';
+				\q
 EOF
-	
-	# While loop to remove all users attachments
-	while IFS= read -r line
-	do
-		psql -U $dbUsername mobility -c "delete from attachments where attachmentid='$line';" &>/dev/null
-	done <<< "$uAttachment"
+		fi
 
-	# While loop to delete all 'safe to delete' attachments from the file system
-	if [ -n "$fileID" ];then
-		echo -e "\nCleaning up attachments\nPlease wait."
-		while IFS= read -r line
-		do
-			if [ -f "$mAttach`python $dsapplib/filestoreIdToPath.pyc $line`" ];then 
-				rm -f $mAttach`python $dsapplib/filestoreIdToPath.pyc $line`
+			#Removes user from folderMappings
+			if [ ! -z "$psqlFolder" ];then
+				userRef=false;
+				echo -e "\nFound "$psqlFolder" in folderMappings database."
+					echo -e "Removing $psqlFolder from folderMappings.";
+					dpsql << EOF
+					delete from "folderMappings" where "targetDN" ilike '%$uid%';
+					\q
+EOF
 			fi
-		done <<< "$fileID"
-	fi
-}
 
-function dCleanup { # Requires userID passed in.
-	echo -e "\nCleaning up datasync database"
-
-	# Get user dn from targets table;
-	local uUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where \"dn\" ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1';" | sed 's/^ *//' | sed 's/ *$//'`
-
-	# Get targetName from each connector
-	local psqlAppNameG=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.groupwise';"| sed 's/^ *//' | sed 's/ *$//'`
-	local psqlAppNameM=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.mobility';"| sed 's/^ *//' | sed 's/ *$//'`
-	
-	# Get all creationEventIDs from objectMappins
-	local uEventID=`psql -U $dbUsername datasync -t -c "select \"objectID\",\"creationEventID\" from \"objectMappings\" where \"objectID\" ilike '%|$psqlAppNameG' OR \"objectID\" ilike '%|$psqlAppNameM' OR \"objectID\" ilike '%|$1';" | cut -f3 -d '|' | rev | cut -f1 -d '.' | rev`
-
-	# While loop to delete objectMappings
-	while IFS= read -r line
-	do
-		psql -U $dbUsername datasync -c "delete from \"objectMappings\" where \"creationEventID\" ilike '%.$line'" &>/dev/null
-	done <<< "$uEventID"
-
-	# Delete objectMappings, cache, membershipCache, folderMappings, and targets from datasync DB
-	psql -U $dbUsername datasync <<EOF
-	delete from "folderMappings" where "targetDN" ilike '($1[.|,].*)$' OR "targetDN" ilike '$uUser';
-	delete from cache where "sourceDN" ilike '($1[.|,].*)$' OR "sourceDN" ilike '$uUser';
-	delete from "membershipCache" where (groupdn ilike '($1[.|,].*)$' OR memberdn ilike '($1[.|,].*)$') OR (groupdn ilike '$uUser' OR memberdn ilike '$uUser');
-	delete from targets where dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR "targetName" ilike '$1';
-	\q
+			#Removes user from cache
+			if [ ! -z "$psqlCache" ];then
+				userRef=false;
+				echo -e "\nFound "$psqlCache" in cache database."
+					echo -e "Removing $psqlCache from cache.";
+					dpsql << EOF
+					delete from "cache" where "sourceDN" ilike '%$uid%';
+					\q
 EOF
+			fi
+
+		#user not found.
+		if($userRef);then
+			echo -e "\nNo user references found.\n"
+		fi
+	fi
+	eContinue;
 }
 
+function removeUserSilently {
+	# Remove User Database References according to TID 7008852
+		echo -e "Checking database for user references..."
+
+        psqlTarget=`psql -U $dbUsername datasync -c "select dn from targets where dn ilike '%$vuid%' limit 1" | grep -iw -m 1 "$vuid" | tr -d ' '`
+		psqlAppNameG=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.groupwise';"| sed 's/^ *//'`
+		psqlAppNameM=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.mobility';"| sed 's/^ *//'`
+		psqlObject=`psql -U $dbUsername datasync -c "select * from \"objectMappings\" where \"objectID\" ilike '%$vuid%'" | grep -iwo -m 1 "$vuid"`
+        psqlCache=`psql -U $dbUsername datasync -c "select \"sourceDN\" from \"cache\" where \"sourceDN\" ilike '%$vuid%' limit 1" |grep -iw -m 1 "$vuid" | tr -d ' '`
+		psqlFolder=`psql -U $dbUsername datasync -c "select \"targetDN\" from \"folderMappings\" where \"targetDN\" ilike '%$vuid%' limit 1" | grep -iw  -m 1 "$vuid" | tr -d ' '`
+
+		userRef=true;
+
+		#Removes user from targets
+		if [ ! -z "$psqlTarget" ];then
+		echo -e "Removing $psqlTarget from targets.";
+		dpsql << EOF
+		delete from targets where dn ilike '%$vuid%';
+		\q
+EOF
+		fi
+
+		#Removes user from objectMappings
+		if [ ! -z "$psqlObject" ];then
+		echo -e "Removing $uid | $psqlAppNameG | $psqlAppNameM from objectMappings.";
+		dpsql << EOF
+		delete from "objectMappings" where "objectID" ilike '%|$psqlAppNameG%';
+		delete from "objectMappings" where "objectID" ilike '%|$psqlAppNameM%';
+		delete from "objectMappings" where "objectID" ilike '%|$vuid%';
+		\q
+EOF
+		fi
+
+		#Removes user from folderMappings
+		if [ ! -z "$psqlFolder" ];then
+		echo -e "Removing $psqlFolder from folderMappings.";
+		dpsql << EOF
+		delete from "folderMappings" where "targetDN" ilike '%$vuid%';
+		\q
+EOF
+		fi
+
+		#Removes user from cache
+		if [ ! -z "$psqlCache" ];then
+		echo -e "Removing $psqlCache from cache.";
+		dpsql << EOF
+		delete from "cache" where "sourceDN" ilike '%$vuid%';
+		\q
+EOF
+		fi
+}
 
 function addGroup {
-	datasyncBanner;
+	clear;
 	ldapGroups=$dsapptmp/ldapGroups.txt
 	ldapGroupMembership=$dsapptmp/ldapGroupMembership.txt
 	rm -f $ldapGroups $ldapGroupMembership
@@ -1524,7 +1591,7 @@ fi
 }
 
 function updateMobilityFTP {
-	datasyncBanner;
+	clear;
 	if askYesOrNo $"Permission to restart Mobility when applying update?"; then
 		echo -e "\n"
 		echo -e "Connecting to ftp..."
@@ -1554,7 +1621,7 @@ function updateMobilityFTP {
 function checkNightlyMaintenance {
 	problem=false
 	echo -e "\nNightly Maintenance:"
-	cat $mconf | grep -i database | fold -s
+	cat $mconf | grep -i database
 	grep -iw "<databaseMaintenance>1</databaseMaintenance>" $mconf
 	if [ $? -ne 0 ]; then
 		problem=true
@@ -1563,7 +1630,7 @@ function checkNightlyMaintenance {
 	echo -e "\nNightly Maintenance History:"
 	history=`grep -i  "nightly maintenance" $mAlog | tail -5`
 	if [ -z "$history" ]; then
-		for file in `ls -t $mAlog-* 2>/dev/null | head -5`
+		for file in `ls -t $mAlog-* | head -5`
 		do
 			history=`zgrep -i "nightly maintenance" "$file" 2>/dev/null | tail -5`
 			if [ -n "$history" ]; then
@@ -1616,7 +1683,7 @@ s="$(cat <<EOF
 EOF
 )"
 
-	clear; echo -e "$s\n\t\t\t      v$dsappversion\n"
+	echo -e "$s\n\t\t\t      v$dsappversion\n"
 
 	if [ $dsappForce ];then
 		echo -e "  Running --force. Some functions may not work properly.\n"
@@ -1624,9 +1691,9 @@ EOF
 }
 
 function whatDeviceDeleted {
-datasyncBanner;
-verifyUser vuid;
-if [ $? -ne 3 ] ; then
+clear;
+verifyUser vuid; verifyReturnNum=$?
+if [ $verifyReturnNum -ne 3 ] ; then
 	cd $log
 
 	deletions=`cat $mAlog* | grep -i -A 8 "<origSourceName>$vuid</origSourceName>" | grep -i -A 2 "<type>delete</type>" | grep -i "<creationEventID>" | cut -d '.' -f4- | sed 's|<\/creationEventID>||g'`
@@ -1660,7 +1727,7 @@ EOF
 }
 
 function changeDBPass {
-	datasyncBanner;
+	clear;
 	read -p "Enter new database password: " input
 	if [ -z "$input" ];then
 		echo "Invalid input";
@@ -1699,7 +1766,7 @@ function changeDBPass {
 }
 
 function changeAppName {
-	datasyncBanner;
+	clear;
 	verifyUser vuid; verifyReturnNum=$?
 	if [ $verifyReturnNum -eq 1 ] || [ $verifyReturnNum -eq 0 ] ; then
 		#Assign application names from database to default variables
@@ -1728,12 +1795,11 @@ function changeAppName {
 				psql -U $dbUsername	datasync -c "UPDATE targets set \"targetName\"='$mAppName' where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.mobility';"
 				psql -U $dbUsername	datasync -c "UPDATE targets set \"targetName\"='$gAppName' where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.groupwise';"
 			fi
-			echo -e "\nRestart mobility to pick up changes."
 		else
 			echo -e "No application names found for user [$vuid]\n"
 		fi
+		eContinue;
 	fi
-	echo;eContinue;
 }
 
 function reinitAllUsers {
@@ -2002,10 +2068,10 @@ function checkLDAP {
 }
 
 function updateFDN {
-	datasyncBanner;
+	clear;
 	if (checkLDAP);then
-		verifyUser vuid;
-		if [ $? -ne 3 ] ; then
+		verifyUser vuid; verifyReturnNum=$?
+		if [ $verifyReturnNum -ne 3 ] ; then
 			echo -e "\nSearching LDAP..."
 			userFilter="(&(!(objectClass=computer))(cn=$vuid)(|(objectClass=Person)(objectClass=orgPerson)(objectClass=inetOrgPerson)))"
 			# Store baseDN in file to while loop it
@@ -2024,53 +2090,53 @@ function updateFDN {
 			done < $dsapptmp/tmpbaseDN
 			# Removing any duplicates found.
 			awk '!seen[$0]++' $dsapptmp/tmpUserDN > $dsapptmp/tmpUserDN2; mv $dsapptmp/tmpUserDN2 $dsapptmp/tmpUserDN
+		fi
 
-			if [ $(cat $dsapptmp/tmpUserDN|wc -l) -gt 1 ];then
-				echo -e "\nLDAP found multiple users:";
-				cat $dsapptmp/tmpUserDN;
-				echo
-				while true
-				do
-				read -p "Enter users new full FDN: " userDN
-				if [ -n "$userDN" ];then
-					break;
-				else
-					if (! askYesOrNo $"Invalid Entry... try again?");then 
-						break; break;
-					fi
-				fi
-				done
-			else
-				defaultuserDN=`cat $dsapptmp/tmpUserDN`
-				echo -e "$defaultuserDN\n\nPress [Enter] to take LDAP defaults."
-				read -p "Enter users new full FDN [$defaultuserDN]: " userDN
-				userDN="${userDN:-$defaultuserDN}"
-			fi
-
-			# Clean up
-			rm -f $dsapptmp/tmpbaseDN $dsapptmp/tmpUserDN
-
-			origUserDN=`psql -U datasync_user datasync -t -c "select dn from targets where dn ilike '%$vuid%' and disabled='0';" | head -n1 | cut -f2 -d ' '`
+		if [ $(cat $dsapptmp/tmpUserDN|wc -l) -gt 1 ];then
+			echo -e "\nLDAP found multiple users:";
+			cat $dsapptmp/tmpUserDN;
 			echo
-			if [ "$origUserDN" = "$userDN" ];then
-				echo "User FDN match database [$origUserDN]. No changes entered."
-			elif [ -n "$userDN" ];then
-				if askYesOrNo $"Update [$origUserDN] to [$userDN]";then
-					psql -U $dbUsername datasync 1>/dev/null <<EOF
-					update targets set dn='$userDN' where dn='$origUserDN';
-					update cache set "sourceDN"='$userDN' where "sourceDN"='$origUserDN';
-					update "folderMappings" set "targetDN"='$userDN' where "targetDN"='$origUserDN';
-					update "membershipCache" set memberdn='$userDN' where memberdn='$origUserDN';
-					\c mobility
-					update users set userid='$userDN' where userid='$origUserDN';
-EOF
-					echo -e "User FDN update complete\n\nRestart mobility to pick up changes."
+			while true
+			do
+			read -p "Enter users new full FDN: " userDN
+			if [ -n "$userDN" ];then
+				break;
+			else
+				if (! askYesOrNo $"Invalid Entry... try again?");then 
+					break; break;
 				fi
+			fi
+			done
+		else
+			defaultuserDN=`cat $dsapptmp/tmpUserDN`
+			echo -e "$defaultuserDN\n\nPress [Enter] to take LDAP defaults."
+			read -p "Enter users new full FDN [$defaultuserDN]: " userDN
+			userDN="${userDN:-$defaultuserDN}"
+		fi
+
+		# Clean up
+		rm -f $dsapptmp/tmpbaseDN $dsapptmp/tmpUserDN
+
+		origUserDN=`psql -U datasync_user datasync -t -c "select dn from targets where dn ilike '%$vuid%' and disabled='0';" | head -n1 | cut -f2 -d ' '`
+		echo
+		if [ "$origUserDN" = "$userDN" ];then
+			echo "User FDN match database [$origUserDN]. No changes entered."
+		elif [ -n "$userDN" ];then
+			if askYesOrNo $"Update [$origUserDN] to [$userDN]";then
+				psql -U $dbUsername datasync 1>/dev/null <<EOF
+				update targets set dn='$userDN' where dn='$origUserDN';
+				update cache set "sourceDN"='$userDN' where "sourceDN"='$origUserDN';
+				update "folderMappings" set "targetDN"='$userDN' where "targetDN"='$origUserDN';
+				update "membershipCache" set memberdn='$userDN' where memberdn='$origUserDN';
+				\c mobility
+				update users set userid='$userDN' where userid='$origUserDN';
+EOF
+				echo -e "User FDN update complete\n\nRestart mobility to clear old cache."
 			fi
 		fi
 	fi
 
-	echo; eContinue;
+	eContinue;
 }
 
 ##################################################################################################
@@ -2103,7 +2169,7 @@ function ftfPatchlevelCheck {
 		return 0;
 	else 
 		if (`cat "$dsappConf/patchlevel" | grep -qi "$1"`);then
-			datasyncBanner;
+			clear;
 			echo -e "Patch $1 has already been applied.\n"
 			eContinue;
 			return 1;
@@ -2148,7 +2214,7 @@ function uncompressIt {
 
 function patchEm {
 	
-	datasyncBanner;
+	clear
 	local ftpFile="$1"
 	local version="$2"
 	local now=$(date +"%s")
@@ -2188,133 +2254,6 @@ function patchEm {
 	eContinue;
 }
 
-function backupDatabase {
-	datasyncBanner; #Back up database
-	time=`date +%m.%d.%y-%s`;
-	read -ep "Enter the full path to place back up files. (ie. /root/backup): " path;
-	if [ -d "$path" ] && [ -n "$path" ];then
-	echo -e "\nDumping databases..."
-	pg_dump -U $dbUsername mobility > "$path/mobility.BAK_"$time;
-	echo -e "\nBackup mobility.BAK_"$time "created at $path";
-
-	pg_dump -U $dbUsername datasync > "$path/datasync.BAK_"$time;
-	echo -e "Backup datasync.BAK_"$time "created at $path";
-
-	else 
-		echo "Invalid path.";
-	fi
-	echo; eContinue;
-}
-
-function restoreDatabase {
-	#Restore Database
-	datasyncBanner;
-	read -ep "Enter the full path to backup files (ie. /root/backup): " path;
-	if [ -d "$path" ];then
-		cd $path;
-
-		# Check if ANY backups are found
-		if [ `ls mobility.BAK_* 2>/dev/null | wc -w` -eq 0 ] || [ `ls datasync.BAK_* 2>/dev/null | wc -w` -eq 0 ];then
-			echo -e "No backups found"
-			local quit=true
-		else
-			# Check if multiple mobility backups are found
-			if [ `ls mobility.BAK_* | wc -w` -gt 1 ];then
-				bakArray=($(ls mobility.BAK_*))
-				while true;
-				do
-					datasyncBanner;
-					echo -e "Multiple mobility backups found"
-					echo -e "Input what backup to use\n";
-					# Loop through array to print all available selections.
-					for ((i=0;i<`echo ${#bakArray[@]}`;i++))
-					do
-						echo "$i." ${bakArray[$i]};
-					done;
-					echo -n -e "q. quit\n\nSelection: ";
-					read opt;
-					mobileBackup=`echo ${bakArray[$opt]}`
-					if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
-						break;
-						local quit=true
-					elif [[ $opt =~ ^[0-9]$ ]] && [ $opt -lt `echo ${#bakArray[@]}` ];then
-						break;
-					fi
-				done
-				datasyncBanner;
-			elif [ `ls mobility.BAK_* | wc -w` -eq 1 ];then
-				mobileBackup=`ls mobility.BAK_*`
-			else
-				echo "No mobility backups found."
-			fi
-
-			# Check if multiple datasync backups are found
-			if [ `ls datasync.BAK_* | wc -w` -gt 1 ];then
-				bakArray=($(ls datasync.BAK_*))
-				while true;
-				do
-					datasyncBanner;
-					echo -e "Multiple datasync backups found"
-					echo -e "Input what backup to use\n";
-					# Loop through array to print all available selections.
-					for ((i=0;i<`echo ${#bakArray[@]}`;i++))
-					do
-						echo "$i." ${bakArray[$i]};
-					done;
-					echo -n -e "q. quit\n\nSelection: ";
-					read opt;
-					datasyncBackup=`echo ${bakArray[$opt]}`
-					if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
-						break;
-						local quit=true
-					elif [[ $opt =~ ^[0-9]$ ]] && [ $opt -lt `echo ${#bakArray[@]}` ];then
-						break;
-					fi
-				done
-				datasyncBanner;
-			elif [ `ls datasync.BAK_* | wc -w` -eq 1 ];then
-				mobileBackup=`ls datasync.BAK_*`
-			else
-				echo "No datasync backups found."
-			fi
-		fi
-
-		if (! $quit);then
-			datasyncBanner;
-			echo -e "Backups selected:\nMobility - $mobileBackup\nDatasync - $datasyncBackup\n"
-			if askYesOrNo $"Restore backups?"; then
-				#Dropping Tables
-				dropDatabases;
-
-				#Check if databases properly dropped.
-				dbNames=`psql -l -U $dbUsername -t | cut -d \| -f 1 | grep -i -e datasync -e dsmonitor -e mobility`
-
-				#If databases are not properly dropped. Abort.
-				if [ -n "$dbNames" ];then
-					echo -e "\nUnable to drop the following databases:\n$dbNames\n\nAborting...\nPlease try again, or manually drop the databases.";
-					eContinue;
-					break;
-				fi
-				#Recreating Tables
-				createDatabases;
-				vacuumDB;
-				indexDB;
-
-				echo -e "Restoring databases..."
-				if [ -n "$datasyncBackup" ];then
-					psql -U $dbUsername datasync < $datasyncBackup 2>/dev/null;
-				fi
-				if [ -n "$mobileBackup" ];then
-					psql -U $dbUsername mobility < $mobileBackup 2>/dev/null;
-				fi
-				echo -e "\nRestore complete.";
-			fi
-		fi
-	else echo "Invalid path.";
-	fi
-	echo; eContinue;
-}
-
 # Initialize Patch / FTF Fixes
 getExactMobilityVersion
 
@@ -2324,7 +2263,7 @@ getExactMobilityVersion
 #
 ##################################################################################################
 function generalHealthCheck {
-	datasyncBanner; echo -e "##########################################################\n#	\n#  General Health Check\n#\n##########################################################" > $ghcLog
+	clear; echo -e "##########################################################\n#	\n#  General Health Check\n#\n##########################################################" > $ghcLog
 	echo -e "Gathered by dsapp v$dsappversion on $(date)\n" >> $ghcLog
 	ghc_problem=false
 	silent=false
@@ -3250,7 +3189,7 @@ function exampleHealthCheck {
 }
 
 function removeDisabled_fixReferenceCount {
-	datasyncBanner;
+	clear; echo
 	#disabled+ will remove disabled entries from targets table.
 	if askYesOrNo $"Remove all disabled users/groups from target table?"; then
 		dpsql << EOF
@@ -3272,8 +3211,8 @@ EOF
 }
 
 function whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe {
-	datasyncBanner;
-	read -p "Item name (subject, folder, contact, calendar): " displayName
+	clear; echo 
+	read -p "Item name (subject, folder, contact, calendar)? " displayName
 	echo $displayName
 	if [[ -n "$displayName" ]]; then
 		psql -U $dbUsername mobility -t -c "drop table if exists tmp; select (xpath('./DisplayName/text()', di.edata::xml)) AS displayname,di.eclass,di.eaction,di.statedata,d.identifierstring,d.devicetype,d.description,di.creationtime INTO tmp from deviceimages di INNER JOIN devices d ON (di.deviceid = d.deviceid) INNER JOIN users u ON di.userid = u.guid WHERE di.edata ilike '%$displayName%' ORDER BY di.creationtime ASC, di.eaction ASC; select * from tmp;" | less
@@ -3281,6 +3220,7 @@ function whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe {
 	fi
 	eContinue;
 }
+
 
 
 ##################################################################################################
@@ -3389,26 +3329,26 @@ while [ "$1" != "" ]; do
 
 	--autoUpdate | -au ) dsappSwitch=1
 		if [ "$autoUpdate" = "true" ];then
-			pushConf "autoUpdate" false
+			sed -i "s|autoUpdate=true|autoUpdate=false|g" $dsappconfFile;
 			echo "Setting dsapp autoUpdate: false"
 		else
-			pushConf "autoUpdate" true
+			sed -i "s|autoUpdate=false|autoUpdate=true|g" $dsappconfFile;
 			echo "Setting dsapp autoUpdate: true"
 		fi
 		;;
 
 	--debug ) dsappSwitch=1
 		if [ "$debug" = "true" ];then
-			pushConf "debug" false
+			sed -i "s|debug=true|debug=false|g" $dsappconfFile;
 			echo "Setting dsapp log debug: false"
 		else
-			pushConf "autoUpdate" true
+			sed -i "s|debug=false|debug=true|g" $dsappconfFile;
 			echo "Setting dsapp log debug: true"
 		fi
 		;;
 
 	--changeHost | -ch ) dsappSwitch=1
-		datasyncBanner;
+		clear
 
 		# Makes sure version is 2.0 +
 		if [ $dsVersion -lt $dsVersionCompare ]; then
@@ -3526,15 +3466,10 @@ if [ -z "$1" ];then
 	announceNewFeature
 fi
 
-# Turn off announce new feature after first prompt
-pushConf "newFeature" false
-
-# Update dsappVersion file
-echo $dsappversion > $dsappConf/dsappVersion
-
 while :
 do
- datasyncBanner;
+ clear
+ datasyncBanner
 cd $cPWD;
  echo -e "\t1. Logs"
  echo -e "\t2. Register & Update"
@@ -3559,7 +3494,8 @@ cd $cPWD;
 ##################################################################################################
   1)	while :
 		do
-		  datasyncBanner;
+		  clear;
+		  datasyncBanner
 			cd $cPWD;
 			echo -e "\t1. Upload logs"
 			echo -e "\t2. Set logs to defaults"
@@ -3575,7 +3511,7 @@ cd $cPWD;
 			;;
 
 	  2) #Set logs to default
-		datasyncBanner;
+		clear;
 		if askYesOrNo $"Permission to restart Mobility?"; then
 			echo -e "\nConfigured logs to defaults...";
 
@@ -3583,7 +3519,9 @@ cd $cPWD;
 			sed -i "s|<verbose>.*</verbose>|<verbose>off</verbose>|g" `find $dirEtcMobility/ -name *.xml`;
 			
 			printf "\nRestarting Mobility.\n";
-			rcDS restart;
+			progressDot & progressTask=$!; trap "kill $progressTask 2>/dev/null" EXIT;
+			rcDS stop silent; rcDS start silent;
+			kill $progressTask; wait $progressTask 2>/dev/null; printf '\n';
 
 			echo "Logs have been set to defaults."
 			eContinue;
@@ -3591,7 +3529,7 @@ cd $cPWD;
 		;;
 			
 	  3) #Set logs to diagnostic / debug
-		datasyncBanner; 
+		clear; 
 		if askYesOrNo $"Permission to restart Mobility?"; then
 			echo -e "\nConfigured logs to diagnostic/debug...";
 
@@ -3600,7 +3538,9 @@ cd $cPWD;
 			sed -i "s|<failures>.*</failures>|<failures>on</failures>|g" `find find $dirEtcMobility/ -name *.xml`;	
 			
 			printf "\nRestarting Mobility.\n";
-			rcDS restart;
+			progressDot & progressTask=$!; trap "kill $progressTask 2>/dev/null" EXIT;
+			rcDS stop silent; rcDS start silent;
+			kill $progressTask; wait $progressTask 2>/dev/null; printf '\n';
 
 			echo "Logs have been set to diagnostic/debug."
 			eContinue;
@@ -3608,119 +3548,116 @@ cd $cPWD;
 		;;
 
 	  4) # Log capture
-		datasyncBanner;
-		echo -e "The variable search string is a key word, used to search through the Mobility logs. Enter a string before starting your test.\n" | fold -s
+		clear;
+		echo -e "The variable search string is a key word, used to search through the Mobility logs. Enter a string before starting your test."
 		read -ep "Variable search string: " sString;
-		if [ -n "$sString" ];then
-			rm -f $log/connectors/*.log;
-			rm -f $log/syncengine/engine.log;
-			logPath=$log/connectors/
-			echo -e "\n"
-			read -p "Press [Enter] when test was completed..."
+		rm -f $log/connectors/*.log;
+		rm -f $log/syncengine/engine.log;
+		logPath=$log/connectors/
+		echo -e "\n"
+		read -p "Press [Enter] when test was completed..."
 
-			echo -e "\nProcessing..."
-			echo "String Search------------------" > $dsapptmp/usrInfo.log;
-			echo $sString >> $dsapptmp/usrInfo.log;
-			echo -e "\nRPM Versions------------------" >> $dsapptmp/usrInfo.log;
-			rpm -qa |grep -i datasync >> $dsapptmp/usrInfo.log;
-			echo -e "\nOS Versions-------------------" >> $dsapptmp/usrInfo.log;
-			cat /etc/*release >> $dsapptmp/usrInfo.log;
-			sleep 15;
+		echo -e "\nProcessing..."
+		echo "String Search------------------" > $dsapptmp/usrInfo.log;
+		echo $sString >> $dsapptmp/usrInfo.log;
+		echo -e "\nRPM Versions------------------" >> $dsapptmp/usrInfo.log;
+		rpm -qa |grep -i datasync >> $dsapptmp/usrInfo.log;
+		echo -e "\nOS Versions-------------------" >> $dsapptmp/usrInfo.log;
+		cat /etc/*release >> $dsapptmp/usrInfo.log;
+		sleep 15;
 
-			cp $log/connectors/*.log $dsapptmp 2>/dev/null;
-			cp $log/syncengine/engine.log $dsapptmp 2>/dev/null;
-			cd $dsapptmp; 
-			logCount=false;
+		cp $log/connectors/*.log $dsapptmp 2>/dev/null;
+		cp $log/syncengine/engine.log $dsapptmp 2>/dev/null;
+		cd $dsapptmp; 
+		logCount=false;
 
-			if [ -f $gAlog ];then
-			echo -e "GroupWise AppInterface:"
-			logResult=`cat $gAlog | grep -i $sString 2>/dev/null`;
-			if [ ! -z "$logResult" ];then
-				echo $logResult;
-			else 
-				echo "No result found in log."
-			fi
-			logCount=true;
-			fi
+		if [ -f $gAlog ];then
+		echo -e "GroupWise AppInterface:"
+		logResult=`cat $gAlog | grep -i $sString 2>/dev/null`;
+		if [ ! -z "$logResult" ];then
+			echo $logResult;
+		else 
+			echo "No result found in log."
+		fi
+		logCount=true;
+		fi
 
-			if [ -f $glog ];then
-			echo -e "\nGroupWise engine:"
-			logResult=`cat $glog | grep -i $sString 2>/dev/null`;
-			if [ ! -z "$logResult" ];then
-				echo $logResult;
-			else 
-				echo "No result found in log."
-			fi
-			logCount=true;
-			fi
+		if [ -f $glog ];then
+		echo -e "\nGroupWise engine:"
+		logResult=`cat $glog | grep -i $sString 2>/dev/null`;
+		if [ ! -z "$logResult" ];then
+			echo $logResult;
+		else 
+			echo "No result found in log."
+		fi
+		logCount=true;
+		fi
 
-			if [ -f $log/syncengine/engine.log ];then
-			echo -e "\nSyncEngine:"
-			logResult=`cat $log/syncengine/engine.log | grep -i $sString 2>/dev/null`;
-			if [ ! -z "$logResult" ];then
-				echo $logResult;
-			else 
-				echo "No result found in log."
-			fi
-			logCount=true;
-			fi
+		if [ -f $log/syncengine/engine.log ];then
+		echo -e "\nSyncEngine:"
+		logResult=`cat $log/syncengine/engine.log | grep -i $sString 2>/dev/null`;
+		if [ ! -z "$logResult" ];then
+			echo $logResult;
+		else 
+			echo "No result found in log."
+		fi
+		logCount=true;
+		fi
 
-			if [ -f $mlog ];then
-			echo -e "\nMobility engine:"
-			logResult=`cat $mlog | grep -i $sString 2>/dev/null`;
-			if [ ! -z "$logResult" ];then
-				echo $logResult;
-			else 
-				echo "No result found in log."
-			fi
-			logCount=true;
-			fi
+		if [ -f $mlog ];then
+		echo -e "\nMobility engine:"
+		logResult=`cat $mlog | grep -i $sString 2>/dev/null`;
+		if [ ! -z "$logResult" ];then
+			echo $logResult;
+		else 
+			echo "No result found in log."
+		fi
+		logCount=true;
+		fi
 
-			if [ -f $mAlog ];then
-			echo -e "\nMobility AppInterface:"
-			logResult=`cat $mAlog | grep -m 2 -i $sString 2>/dev/null`;
-			if [ ! -z "$logResult" ];then
-				echo $logResult;
-			else 
-				echo "No result found in log."
-			fi
-			logCount=true;
-			fi
+		if [ -f $mAlog ];then
+		echo -e "\nMobility AppInterface:"
+		logResult=`cat $mAlog | grep -m 2 -i $sString 2>/dev/null`;
+		if [ ! -z "$logResult" ];then
+			echo $logResult;
+		else 
+			echo "No result found in log."
+		fi
+		logCount=true;
+		fi
 
-			if [ $logCount == true ];then
-				printf "\n"
-			if askYesOrNo $"Do you want to upload the logs to Novell?"; then
-				echo -e "Connecting to ftp..."
-				netcat -z -w 5 ftp.novell.com 21;
-				if [ $? -ne 1 ]; then
-				read -ep "SR#: " srn;
-				d=`date +%m-%d-%y_%H%M%S`
-				tar -czf $srn"_"$d.tgz *.log 2>/dev/null;
-				echo -e "\n$dsapptmp/$srn"_"$d.tgz\n"
-				cd $dsapptmp/
-				ftp ftp.novell.com -a <<EOF
-					cd incoming
-					bin
-					ha
-					put $srn"_"$d.tgz
+		if [ $logCount == true ];then
+			printf "\n"
+		if askYesOrNo $"Do you want to upload the logs to Novell?"; then
+			echo -e "Connecting to ftp..."
+			netcat -z -w 5 ftp.novell.com 21;
+			if [ $? -ne 1 ]; then
+			read -ep "SR#: " srn;
+			d=`date +%m-%d-%y_%H%M%S`
+			tar -czf $srn"_"$d.tgz *.log 2>/dev/null;
+			echo -e "\n$dsapptmp/$srn"_"$d.tgz\n"
+			cd $dsapptmp/
+			ftp ftp.novell.com -a <<EOF
+				cd incoming
+				bin
+				ha
+				put $srn"_"$d.tgz
 EOF
-				echo -e "\n\n\nUploaded to Novell with filename: $srn"_"$d.tgz\n"
-				else
-					echo -e "Failed FTP: host (connection) might have problems\n"
-				fi
-			fi
-				echo -e "\nLogs can be found at $dsapptmp/"
+			echo -e "\n\n\nUploaded to Novell with filename: $srn"_"$d.tgz\n"
 			else
-				echo "No activity found in logs."
+				echo -e "Failed FTP: host (connection) might have problems\n"
 			fi
-		else echo -e "\nInvalid input"
+		fi
+			echo -e "\nLogs can be found at $dsapptmp/"
+		else
+			echo "No activity found in logs."
 		fi
 		eContinue;
 	     ;;
 
-	   5) 	datasyncBanner; #Remove log archive
-			askYesOrNo $"Permission to clean log archives?" cleanLog;
-			echo;eContinue;
+	   5) 	clear; #Remove log archive
+			ask $"Permission to clean log archives?" cleanLog;
+			read -p "Press [Enter] when completed..."
 			;;
 
 
@@ -3743,7 +3680,8 @@ EOF
 		else
 		while :
 		do
-		 datasyncBanner;
+		 clear;
+		 datasyncBanner
 		cd $cPWD;
 		echo -e "\t1. Register Mobility"
 		echo -e "\t2. Update Mobility"
@@ -3759,7 +3697,8 @@ EOF
 			2) # Update Mobility submenu
 				while :
 				do
-					datasyncBanner;
+					clear;
+					datasyncBanner
 					echo -e "\t1. Update with Novell Update Channel"
 					echo -e "\t2. Update with Local ISO"
 					echo -e "\t3. Update with Novell FTP"
@@ -3770,7 +3709,7 @@ EOF
 					case $opt in
 
 						1) # Update DataSync using Novell Update Channel
-							datasyncBanner;
+							clear;
 							echo -e "\n"
 							zService=`zypper ls |grep -iwo nu_novell_com | head -1`;
 							if [ "$zService" = "nu_novell_com" ]; then
@@ -3787,68 +3726,43 @@ EOF
 							;;
 
 						2) #Update Datasync using local ISO
-							datasyncBanner;
+							clear;
 							if askYesOrNo $"Permission to restart Mobility when applying update?"; then
-								#Get Directory
-								while [ ! -d "$path" ]; do
-									read -ep "Enter full path to the directory of ISO file: " path;
-									if [ ! -d "$path" ]; then
-										echo "Invalid directory entered. Please try again.";
-									fi
-									if [ -d "$path" ]; then
-										ls "$path"/novell*mobility*.iso &>/dev/null;
-										if [ $? -ne "0" ]; then
-										echo "No mobility ISO found at this path.";
-										path="";
-										fi
-									fi
-								done
-								cd "$path";
-
-								#Get File
-								# Check if multiple ISO found
-								if [ `ls novell*mobility*.iso | wc -w` -gt 1 ];then
-									isoArray=($(ls novell*mobility*.iso))
-									while true;
-									do
-										datasyncBanner;
-										echo -e "Multiple ISOs found"
-										echo -e "Input what ISO to apply\n";
-										# Loop through array to print all available selections.
-										for ((i=0;i<`echo ${#isoArray[@]}`;i++))
-										do
-											echo "$i." ${isoArray[$i]};
-										done;
-										echo -n -e "q. quit\n\nSelection: ";
-										read opt;
-										isoName=`echo ${isoArray[$opt]}`
-										if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
-											updateQuit=true
-											break;
-										elif [[ $opt =~ ^[0-9]$ ]] && [ $opt -lt `echo ${#isoArray[@]}` ];then
-											updateQuit=false
-											break;
-										fi
-									done
-								else
-									isoName=`ls novell*mobility*.iso`
-									updateQuit=false
-								fi
-
-								if (! $updateQuit);then
-									# Confirm to update with the following ISO
-									echo
-									if askYesOrNo "Update to $isoName?";then
-										#zypper update process
-										zypper rr mobility 2>/dev/null;
-										zypper addrepo 'iso:///?iso='$isoName'&url=file://'"$path"'' mobility;
-										dsUpdate mobility;
-									fi
-									path="";
-									isoName="";
-								fi
+							#Get Directory
+							while [ ! -d "$path" ]; do
+							read -ep "Enter full path to the directory of ISO file: " path;
+							if [ ! -d "$path" ]; then
+							echo "Invalid directory entered. Please try again.";
 							fi
-							echo
+							echo $path
+							if [ -d "$path" ]; then
+							ls "$path"/novell*mobility*.iso &>/dev/null;
+							if [ $? -ne "0" ]; then
+							echo "No mobility ISO found at this path.";
+							path="";
+							fi
+							fi
+							done
+							cd "$path";
+
+							#Get File
+							while [ ! -f "${PWD}/$isoName" ]; do
+							echo -e "\n";
+							ls novell*mobility*.iso;
+							read -ep "Enter ISO to use for update: " isoName;
+							if [ ! -f "${PWD}/$isoName" ]; then
+							echo "Invalid file entered. Please try again.";
+							fi
+							done
+
+							#zypper update process
+							zypper rr mobility 2>/dev/null;
+							zypper addrepo 'iso:///?iso='$isoName'&url=file://'"$path"'' mobility;
+							dsUpdate mobility;
+							
+							path="";
+							isoName="";
+							fi
 							eContinue;
 							;;
 
@@ -3864,15 +3778,15 @@ EOF
 
 			3) # Apply FTF / Patch Files
 			   # Menu-requirements: ftp connection to Novell
-				datasyncBanner;
-				if (! checkFTP);then
-					echo "Unable to connect to ftp://ftp.novell.com";
-					eContinue
-					break;
-				else
+				clear
+				if [ $(checkFTP) -ne 0 ];
+					then error "Unable to connect to ftp://ftp.novell.com";
+				fi
+
 				while :
 				do
-					datasyncBanner;
+					clear;
+					datasyncBanner
 					echo -e "\t1. Show Applied Patches"
 					echo -e "\n\t2. Fix slow startup\n\t\t(GMS 2.0.1.53 only) - TID 7014819, Bug 870939"
 					echo -e "\t3. Fix LG Optimus fwd attachment encoded\n\t\t(GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
@@ -3894,7 +3808,7 @@ EOF
 						#		Note: Please make sure these ftpFiles are available on Novell's FTP by placing them in //tharris7.lab.novell.com/outgoing
 
 						1) # Show current FTF Patch level
-							datasyncBanner;
+							clear; echo; 
 							
 							if [ -e "$dsappConf/patchlevel" ]; then
 								cat "$dsappConf/patchlevel"
@@ -3919,12 +3833,11 @@ EOF
 							;;
 
 				/q | q | 0) break;;
-						*) ;;
+				*) ;;
 
-					esac
-					done
-				fi
-					;;
+				esac
+				done
+				;;
 
 			  /q | q | 0) break;;
 			  *) ;;
@@ -3938,15 +3851,17 @@ EOF
 #	Database Menu
 #
 ##################################################################################################
-   3) datasyncBanner;
-	echo -e "The database menu will require Mobility to be stopped."
-	if askYesOrNo $"Stop Mobility now?"; then
+   3) clear; 
+	echo -e "\nPerforming maintenance will require Mobility services to be unavailable\n"
+	if askYesOrNo $"Permission to stop Mobility?"; then
 		echo "Stopping Mobility..."
 		rcDS stop;
 		while :
 		do
-		datasyncBanner;
+		clear
 		cd $cPWD;
+
+		datasyncBanner
 		echo -e "\t1. Vacuum Databases"
 		echo -e "\t2. Re-Index Databases"
 		echo -e "\n\t3. Back up Databases"
@@ -3960,32 +3875,95 @@ EOF
 		a=true;
 		dbStatus=false;
 		case $opt in
-		 1) datasyncBanner; #Vacuum Database
-				echo -e "\nThe amount of time this takes can vary depending on the last time it was completed. It is recommended that this be run every 6 months.\n" | fold -s
+		 1) clear; #Vacuum Database
+				echo -e "\nThe amount of time this takes can vary depending on the last time it was completed.\nIt is recommended that this be run every 6 months.\n"	
 			if askYesOrNo $"Do you want to continue?"; then
 			vacuumDB;
 			echo -e "\nDone.\n"
 			fi
-			echo; eContinue;
+			eContinue;
 		;;
 
-		 2) datasyncBanner; #Index Database
-			echo -e "\nThe amount of time this takes can vary depending on the last time it was completed. It is recommended that this be run after a database vacuum.\n" | fold -s
+		 2) clear; #Index Database
+			echo -e "\nThe amount of time this takes can vary depending on the last time it was completed.\nIt is recommended that this be run after a database vacuum.\n"	
 			if askYesOrNo $"Do you want to continue?"; then
 				indexDB;
 			echo -e "\nDone.\n"
 			fi
-			echo; eContinue;
+			eContinue;
 		;;
 
-		3) backupDatabase;
+		3) clear; #Back up database
+			time=`date +%m.%d.%y`;
+			read -ep "Enter the full path to place back up files. (ie. /root/backup): " path;
+			if [ -d $path ];then
+			cd $path;
+			pg_dump -U $dbUsername -f ${PWD}"/mobility.BAK_"$time mobility;
+			pg_dump -U $dbUsername -f ${PWD}"/datasync.BAK_"$time datasync;
+			echo -e "\nFiles located in "${PWD}"/";
+			else 
+				echo "Invalid path.";
+			fi
+			eContinue;
 		;;
 
-		4) restoreDatabase
+		4) #Restore Database
+			restore4() {	
+				clear;
+				read -ep "Enter the full path to backup files (ie. /root/backup): " path;
+				if [ -d $path ];then
+					cd $path;
+					echo -e "Listing backup files...";
+					ls *.BAK_* 2>/dev/null;
+					if [ $? -eq 0 ]; then
+						read -ep "Enter the date on backup file to use (ie. 01.01.12): " bakFile;
+						dsFile=$path'datasync.BAK_'$bakFile;
+						moFile=$path'mobility.BAK_'$bakFile;
+						if [ -f $dsFile -a -f $moFile ];then
+							echo -e "\nBack up files.\n"$path"datasync.BAK_"$bakFile"\n"$path"mobility.BAK_"$bakFile;
+
+							if askYesOrNo $"Are these the backups you want to restore?"; then
+								echo -e "Restoring backup will first remove old databases.";
+								dropdb -U $dbUsername -i datasync;
+								dropdb -U $dbUsername -i mobility;
+								echo -e "\nCreating empty databases...";
+								createdb -U $dbUsername datasync;
+								createdb -U $dbUsername mobility;
+								read -p "Restoring databases [OK]"
+								psql -U $dbUsername datasync < $path"datasync.BAK_"$bakFile;
+								psql -U $dbUsername mobility < $path"mobility.BAK_"$bakFile;
+								echo -e "\nRestore complete.";
+							fi
+						else
+							while true; do
+							read -p "Invalid file. Try again? [y|n]: " yn;
+								case $yn in
+								[Yy]* ) restore4;break;;
+								[Nn]* ) break;;
+								*) echo "Please answer y or n.";;
+								esac
+						     	done 
+						fi
+					else 
+						while true; do
+						read -p "No backup files found. Try again? [y|n]: " yn;
+							case $yn in
+							[Yy]* ) restore4;break;;
+							[Nn]* ) break;;
+							*) echo "Please answer y or n.";;
+							esac
+					     	done 
+					fi
+				else echo "Invalid path.";
+				fi
+			}
+
+			restore4;
+			eContinue;
 		;;
 
 		5) # Fix Global Address Book (GAL)
-			datasyncBanner;
+			clear; echo
 			if askYesOrNo $"Do you want to remove the Global Address Book (GAL)?"; then
 			echo -e "Removing GAL..."
 			psql -U $dbUsername mobility << EOF
@@ -4011,7 +3989,7 @@ EOF
 			   #Cleans everything up except users and starts fresh.
 			   while :
 		do
-		 datasyncBanner;
+		 clear;
 		cd $cPWD;
 		echo -e "1. Clean up and start over (Except Users)"
 		echo -e "2. Clean up and start over (Everything)"
@@ -4022,7 +4000,7 @@ EOF
 		case $opt in
 
 			1) 
-			datasyncBanner;
+			clear;
 			if askYesOrNo $"Clean up and start over (Except Users)?"; then
 				dumpTable "datasync" "targets";
 				if [ "$?" -eq 0 ]; then
@@ -4039,7 +4017,7 @@ EOF
 
 			2) #Deletes everything in the database except targets and membershipCache. Removes all attachments
 			   #Cleans everything up except users and starts fresh.
-			datasyncBanner;
+			clear;
 			if askYesOrNo $"Clean up and start over (Everything)?"; then
 				cuso 'create'
 			fi
@@ -4047,7 +4025,7 @@ EOF
 		;;
 
 			3) 
-			datasyncBanner;
+			clear;
 			echo -e "Please run the uninstall.sh script first in "$dirOptMobility;
 			if askYesOrNo $"Uninstall Mobility?"; then
 				cuso 'uninstall';
@@ -4061,7 +4039,7 @@ EOF
 	done
 	;; 
 
-	  /q | q | 0) datasyncBanner; echo -e "\nStarting Mobility..."; rcDS start; break;;
+	  /q | q | 0) clear; echo -e "\nStarting Mobility..."; rcDS start; break;;
 	  *) ;;
 	esac
 	done
@@ -4090,8 +4068,7 @@ do
     case $opt in
 
     1) # Self-Signed Certificate
-        datasyncBanner; 
-        echo -e "\nNote: The following will create a CSR, private key and generate a self-signed certificate.\n" | fold -s
+        clear; echo -e "\nNote: The following will create a CSR, private key and generate a self-signed certificate.\n"
         createCSRKey;
         signCert;
         createPEM;
@@ -4099,19 +4076,19 @@ do
         ;;
 
     2) # CSR/KEY
-        datasyncBanner;
+        clear;
         createCSRKey;
         echo; eContinue;
         ;;
 
     3) # Create PEM
-        datasyncBanner;
+        clear;
         createPEM;
         configureMobility;
         ;;
 
     4) # Verify Certificates: Private Key, CSR, Public Certificate
-        datasyncBanner;
+        clear;
         verify;
         ;;
 
@@ -4130,7 +4107,8 @@ done
 	5)
 		while :
 		do
-  		datasyncBanner;
+  		clear;
+  		datasyncBanner
  	echo -e "\t1. Monitor user sync options..."
  	echo -e "\t2. GroupWise checks options..."
  	echo -e "\t3. Remove & reinitialize users options..."
@@ -4148,7 +4126,8 @@ done
 		1) # Monitor User Sync (submenu)
 			while :
 			do
-				datasyncBanner;
+				clear;
+				datasyncBanner
 				echo -e "\t1. Monitor User Sync State (Mobility)"
 		 		echo -e "\t2. Monitor User Sync GW/MC Count (Sync-Validate)"
 
@@ -4162,8 +4141,8 @@ done
 						;;
 
 					2) # Check Sync Count
-						verifyUser vuid;
-						if [ $? -ne 3 ] ; then
+						verifyUser vuid; verifyReturnNum=$?
+						if [ $verifyReturnNum -ne 3 ] ; then
 							echo -e "\nCat result:"
 								cat $mAlog | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid | tail
 							echo ""
@@ -4182,7 +4161,8 @@ done
 		2) # GroupWise Checks... (submenu)
 			while :
 			do
-				datasyncBanner;
+				clear;
+				datasyncBanner
 				echo -e "\t1. Check GroupWise Folder Structure"
 		 		echo -e "\t2. Remote GWCheck DELDUPFOLDERS (beta)"
 
@@ -4192,16 +4172,16 @@ done
 				case $opt in
 
 					1) # Check GroupWise Folder Structure
-						datasyncBanner;
-						verifyUser vuid;
-						if [ $? -ne 3 ] ; then
+						clear;
+						verifyUser vuid; verifyReturnNum=$?
+						if [ $verifyReturnNum -ne 3 ] ; then
 							checkGroupWise
 						fi
 						eContinue;
 						;;
 
 					2) # gwCheck
-						datasyncBanner;
+						clear;
 						read -p "userID: " vuid
 						soapLogin
 						if [ -n "$soapSession" ]; then
@@ -4219,7 +4199,8 @@ done
 		3) # Remove & Reinit Users... (submenu)
 			while :
 			do
-				datasyncBanner;
+				clear;
+				datasyncBanner
 				echo -e "\t1. Force remove user/group db references"
 				echo -e "\t2. Remove user/group (restarts configengine)"
 				echo -e "\t3. Remove disabled users & fix referenceCount"
@@ -4244,7 +4225,7 @@ done
 	     			4) # Reinitialze user (set state to 7 Re-Init)
 						setUserState 7;;
 
-					5) datasyncBanner; #Re-initialize all users
+					5) clear; #Re-initialize all users
 						reinitAllUsers;;
 
 			/q | q | 0)break;;
@@ -4254,7 +4235,7 @@ done
 			;; 
 
 		4) # User Authentication
-			datasyncBanner;
+			clear;
 			function ifReturn {
 				if [ $? -eq 0 ]; then
 					echo -e "$1"
@@ -4263,23 +4244,23 @@ done
 
 				echo -e "\nCheck for User Authentication Problems\n"
 				# Confirm user exists in database
-				verifyUser vuid "noReturn";
-					if [ $? -ne 3 ] ; then
+				verifyUser vuid; verifyReturnNum=$?
+					if [ $verifyReturnNum -ne 3 ] ; then
 						echo -e "\nChecking log files..."
 						err=true
 						# User locked/expired/disabled - "authentication problem"
-						if (grep -i "$vuid" $mAlog | grep -i "authentication problem" > /dev/null); then
+						if (grep -i "$uid" $mAlog | grep -i "authentication problem" > /dev/null); then
 							err=false
-							errDate=`grep -i "$vuid" $mAlog | grep -i "authentication problem" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
-							ifReturn $"User $vuid has an authentication problem. $erDate\nThe user is locked, expired, and/or disabled.\n\n\tCheck the following in ConsoleOne:\n\t\t1. Properites of the User\n\t\t2. Restrictions Tab\n\t\t3. Password Restrictions, Login Restrictions, Intruder Lockout\n"
+							errDate=`grep -i "$uid" $mAlog | grep -i "authentication problem" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
+							ifReturn $"User $uid has an authentication problem. $erDate\nThe user is locked, expired, and/or disabled.\n\n\tCheck the following in ConsoleOne:\n\t\t1. Properites of the User\n\t\t2. Restrictions Tab\n\t\t3. Password Restrictions, Login Restrictions, Intruder Lockout\n"
 						fi
 
 						# Incorrect Password - "Failed to Authenticate user <userID(FDN)>"
-						if (grep -i "$vuid" $mAlog | grep -i "Failed to Authenticate user" > /dev/null); then
+						if (grep -i "$uid" $mAlog | grep -i "Failed to Authenticate user" > /dev/null); then
 							err=false
-							errDate=`grep -i "$vuid" $mAlog | grep -i "Failed to Authenticate user" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
+							errDate=`grep -i "$uid" $mAlog | grep -i "Failed to Authenticate user" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
 							if [ $? -eq 0 ]; then
-								echo -e "User $vuid has an authentication problem. $errDate\nThe password is incorrect.\n"
+								echo -e "User $uid has an authentication problem. $errDate\nThe password is incorrect.\n"
 								cMobilityAuth="\n\tTo Change Mobility Connector Authentication Type:\n\t\t1. Mobility WebAdmin (serverIP:8120)\n\t\t2. Mobility Connector\n\t\t3. Authentication Type\n"
 								grep -i "<authentication>ldap</authentication>" $mconf > /dev/null
 									ifReturn $"\tMobility Connector is set to use LDAP Authentication (eDirectory pass)\n\tPassword can be changed in ConsoleOne by the following:\n\t\t1. Properites of the User\n\t\t2. Restrictions Tab | Password Restrictions\n\t\t3. Change Password $cMobilityAuth\n"
@@ -4289,11 +4270,11 @@ done
 						fi
 
 						# Password Expired - "Password expired for user <userID(FDN)> - returning failed authentication"
-						if (grep -i "$vuid" $mAlog | grep -i "expired for user" > /dev/null); then
+						if (grep -i "$uid" $mAlog | grep -i "expired for user" > /dev/null); then
 							err=false
-							errDate=`grep -i "$vuid" $mAlog | grep -i "expired for user" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
+							errDate=`grep -i "$uid" $mAlog | grep -i "expired for user" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
 							if [ $? -eq 0 ]; then
-								echo -e "User $vuid has an authentication problem. $errDate\nThe account is expired.\n"
+								echo -e "User $uid has an authentication problem. $errDate\nThe account is expired.\n"
 								grep -i "<authentication>ldap</authentication>" $mconf > /dev/null
 									ifReturn $"\tChange user's expiration date:\n\t\t1. Properties of user\n\t\t2. Restrictions tab | Login Restrictions\n\t\t3. Expiration Date\n"
 								grep -i "<authentication>groupwise</authentication>" $mconf > /dev/null
@@ -4302,24 +4283,24 @@ done
 						fi
 
 						# Initial Sync Problem - "Connection Blocked - user <userID(FDN)> initial sync"
-						if (grep -i "$vuid" $mAlog | grep -i "Connection Blocked" | grep -i "initial sync" > /dev/null); then
+						if (grep -i "$uid" $mAlog | grep -i "Connection Blocked" | grep -i "initial sync" > /dev/null); then
 							err=false
-							errDate=`grep -i "$vuid" $mAlog | grep -i "Connection Blocked" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
-							ifReturn $"User Connection for $vuid has been blocked. $errDate\nThe user either initial sync has not yet finished, or has failed. Visit WebAdmin Mobility Monitor\n"
+							errDate=`grep -i "$uid" $mAlog | grep -i "Connection Blocked" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
+							ifReturn $"User Connection for $uid has been blocked. $errDate\nThe user either initial sync has not yet finished, or has failed. Visit WebAdmin Mobility Monitor\n"
 						fi
 
 						# Communication - "Can't contact LDAP server"
-						if (grep -i "$vuid" $mAlog | grep -i "Can't contact LDAP server" > /dev/null); then
+						if (grep -i "$uid" $mAlog | grep -i "Can't contact LDAP server" > /dev/null); then
 							err=false
-							errDate=`grep -i "$vuid" $mAlog | grep -i "Can't contact LDAP server" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
+							errDate=`grep -i "$uid" $mAlog | grep -i "Can't contact LDAP server" | cut -d" " -f1,2 | tail -1 | cut -d "." -f1`
 							ifReturn $"Mobility cannot contact LDAP server. $errDate\n Check LDAP settings in WebAdmin.\n"
 						fi
 
 						if ($err); then
 							echo -e "No Problems Detected.\n"
 						fi
+						eContinue;
 					fi
-				eContinue;
 			;;
 
 		5) #Calls changeAppName function to change users app names
@@ -4338,8 +4319,8 @@ done
 			;;
 
 		9) #Device Info
-			clear;
-			echo -e "\nBelow is a list of users and devices. For more details about each device (i.e. OS version), look up what is in the description column. For an iOS device, there could be a listing of Apple-iPhone3C1/902.176. Use the following website, http://enterpriseios.com/wiki/UserAgent to convert to an Apple product, iOS Version and Build.\n" | fold -s
+			clear; 
+			echo -e "\nBelow is a list of users and devices. For more details about each device (i.e. OS version), look up what is in the description column. For an iOS device, there could be a listing of Apple-iPhone3C1/902.176. Use the following website, http://enterpriseios.com/wiki/UserAgent to convert to an Apple product, iOS Version and Build.\n"
 			mpsql << EOF
 			select u.userid, description, identifierstring, devicetype from devices d INNER JOIN users u ON d.userid = u.guid;
 EOF
@@ -4360,7 +4341,8 @@ EOF
 	6) # Queries
 		while :
 		do
-		datasyncBanner;
+		clear;
+		datasyncBanner
 		 echo -e "\t1. General Health Check (beta)"
 		 echo -e "\t2. Nightly Maintenance Check"
 		 echo -e "\n\t3. Show Sync Status"
@@ -4377,30 +4359,30 @@ EOF
 				;;
 
 			2) # Nightly Maintenance Check
-				datasyncBanner;
+				clear
 				checkNightlyMaintenance
 				eContinue;
 				;;
 
-			3)  datasyncBanner;
+			3)  clear;
 				showStatus
 				eContinue;
 				;;
 
 			4) # Mobility syncevents
-				datasyncBanner;
+				clear
 				psql -U $dbUsername mobility -c "select DISTINCT  u.userid AS "FDN", count(eventid) as "events", se.userid FROM syncevents se INNER JOIN users u ON se.userid = u.guid GROUP BY u.userid, se.userid ORDER BY events DESC;"
 				eContinue;
 				;;
 
 			5) # Mobility attachments
-				datasyncBanner;
+				clear
 				psql -U $dbUsername mobility -c "select DISTINCT u.userid AS fdn, ROUND(SUM(filesize)/1024/1024::numeric,4) AS \"MB\",  am.userid from attachments a INNER JOIN attachmentmaps am ON a.attachmentid = am.attachmentid INNER JOIN users u ON am.userid = u.guid WHERE a.filestoreid != '0' GROUP BY u.userid, am.userid ORDER BY \"MB\" DESC;"
 				eContinue;
 				;;
 
 			6) # Mobility attachments over X days
-				datasyncBanner;
+				clear
 				attachmentLog='/tmp/dsapp-attachment.log'
 				oldAttachments='/tmp/dsapp-oldAttachments'
 				rm $attachmentLog 2>/dev/null; 
@@ -4439,7 +4421,7 @@ EOF
 				echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
 					echo "Files older than the above tolerance: "$n >> $attachmentLog
 					cat $oldAttachments >> $attachmentLog;
-				datasyncBanner;
+				clear
 				echo -e "\nNumber of attachments older than $d days:"
 				echo -e "\nMobility: "$n"\n"
 				if [ $n -gt 0 ]; then 
@@ -4519,7 +4501,7 @@ EOF
 			7) # Watch psql command
 				q=false
 				while :
-				do datasyncBanner;
+				do clear
 					echo -e "\n\t1. DataSync"
 					echo -e "\t2. Mobility"
 					echo -e "\n\t0. Back"
@@ -4527,9 +4509,9 @@ EOF
 					read opt
 					case $opt in
 						1) database='datasync'
-							datasyncBanner; break;;
+							clear; break;;
 						2) database='mobility' 
-							datasyncBanner; break;;
+							clear; break;;
 						/q | q | 0) q=true; break;;
 						*) ;;
 					esac
@@ -4551,14 +4533,15 @@ EOF
 			done
 			;; 
 
+	ru+) clear;
+  		removeUser;
+		;;
+
 # # # # # # # # # # # # # # # # # # # # # #
 
   /q | q | 0) 
 				clear
 				echo "Bye $USER"
-				if($pgpass);then
-					rm ~/.pgpass
-				fi
 				exit 0;;
   *) ;;
 
