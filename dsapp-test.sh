@@ -1145,7 +1145,7 @@ function mCleanup { # Requires userID passed in. # IF 2nd variable passed in. Wi
 	psql -U $dbUsername mobility -c "delete from attachmentmaps where userid='$uGuid';";
 
 	# Get filestoreIDs that are safe to delete
-	echo -e "Building list of safe to remove attachments\nPlease wait."
+	echo -e "\nBuilding list of safe to remove attachments\nPlease wait.\n"
 	local fileID=`psql -U $dbUsername mobility -t -c "SELECT filestoreid FROM attachments LEFT OUTER JOIN attachmentmaps ON attachments.attachmentid=attachmentmaps.attachmentid WHERE attachmentmaps.attachmentid IS NULL;" | sed 's/^ *//' | sed 's/ *$//'`
 	# Log into mobility database, and clean tables with users guid
 	psql -U $dbUsername mobility <<EOF
