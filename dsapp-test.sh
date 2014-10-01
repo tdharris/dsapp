@@ -8,14 +8,69 @@
 #
 ##################################################################################################
 
+dsappversion='199'
+
 ##################################################################################################
-#
+#	Set up banner logo
+##################################################################################################
+function datasyncBanner {
+s="$(cat <<EOF                                                        
+         _                       
+      __| |___  __ _ _ __  _ __  
+     / _' / __|/ _' | '_ \\| '_ \\ 
+    | (_| \__ | (_| | |_) | |_) |
+     \__,_|___/\__,_| .__/| .__/ 
+                    |_|   |_|                                          
+EOF
+)"
+
+	clear; echo -e "$s\n\t\t\t      v$dsappversion\n"
+}
+
+##################################################################################################
+#	Start up Checks
+##################################################################################################
+
+	function trapCall {
+		clear;
+		rm -f /opt/novell/datasync/tools/dsapp/tmp/* 2>/dev/null
+		echo "Bye $USER"
+		exit 1;
+	}
+	# Trap ^Cctrl c
+	trap trapCall INT
+
+	# Make sure user is root
+	if [ "$(id -u)" != "0" ];then
+		datasyncBanner;
+		read -p "Please login as root to run this script."; 
+		exit 1;
+	fi
+
+	#Check and set force to true
+	if [ "$1" == "--force" ] || [ "$1" == "-f" ] || [ "$1" == "?" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ] || [ "$1" == "-db" ] || [ "$1" == "--database" ] || [ "$1" == "-in" ] || [ "$1" == "--install" ];then
+		forceMode=1;
+		if [[ "$forceMode" -eq "1" ]];then
+			datasyncBanner;
+			echo -e "Running force mode. Some options may not work properly.\n"
+			read -p "Press [Enter] to continue"
+		fi
+	fi
+
+	# Check for Mobility installed.
+	if [[ "$forceMode" -ne "1" ]];then
+		dsInstalled=`chkconfig |grep -iom 1 datasync`;
+		if [ "$dsInstalled" != "datasync" ];then
+			read -p "Mobility is not installed on this server."
+			exit 1;
+		fi
+	fi
+
+##################################################################################################
 #	Declaration of Variables
-#
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='199'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -127,17 +182,30 @@
 	  done
 	}
 
+	datasyncBanner; echo "Loading Menu..."
 	ldapAddress=`xmlpath 'connector/settings/custom/ldapAddress' < $mconf`
 	ldapPort=`xmlpath 'connector/settings/custom/ldapPort' < $mconf`
+	ldapSecure=`xmlpath 'config/configengine/ldap/secure' < $ceconf`
 	mPort=`xmlpath 'connector/settings/custom/listenPort' < $mconf`
+	mSecure=`xmlpath 'connector/settings/custom/ssl' < $mconf`
 	mlistenAddress=`xmlpath 'connector/settings/custom/listenAddress' < $mconf`
+	sListenAddress=`xmlpath 'connector/settings/custom/listeningLocation' < $gconf`
+	gListenAddress=`xmlpath 'connector/settings/custom/soapServer' < $gconf | grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}'`
 	trustedName=`xmlpath 'connector/settings/custom/trustedAppName' < $gconf`
-	glistenAddress=`xmlpath 'connector/settings/custom/listeningLocation' < $gconf`
 	gPort=`xmlpath 'connector/settings/custom/port' < $gconf`
+	sPort=`xmlpath 'connector/settings/custom/soapServer' < $gconf | rev | cut -f1 -d ':' | cut -f2 -d '/' | rev`
+	sSecure=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f1 -d ':'`
 	wPort=`xmlpath 'config/server/port' < $wconf`
 	ldapAdmin=`xmlpath 'config/configengine/ldap/login/dn' < $ceconf`
 	authentication=`xmlpath 'config/configengine/source/authentication' < $ceconf`
 	provisioning=`xmlpath 'config/configengine/source/provisioning' < $ceconf`
+	galUserName=`xmlpath 'connector/settings/custom/galUserName' < $mconf`
+	groupContainer=`xmlpath 'config/configengine/ldap/groupContainer' < $ceconf`
+	userContainer=`xmlpath 'config/configengine/ldap/userContainer' < $ceconf`
+	mAttachSize=`xmlpath 'connector/settings/custom/attachmentMaxSize' < $mconf`
+	gAttachSize=`xmlpath 'connector/settings/custom/attachmentMaxSize' < $gconf`
+	webAdmins=`xmlpath 'config/configengine/ldap/admins/dn' < $ceconf`
+
 
 	# Global variable for verifyUser
 	vuid="";
@@ -259,31 +327,13 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 	#Getting Present Working Directory
 	cPWD=${PWD};
 
-	#Make sure user is root
-	if [ "$(id -u)" != "0" ];then
-		read -p "Please login as root to run this script."; 
-		exit 1;
-	fi
-
 	# Check dsapp logging file
 	if [ ! -f "$dsappLog" ]; then
 		touch "$dsappLog"
 	fi
 
-	#Check for Mobility installed.
-	if [[ "$forceMode" -ne "1" ]];then
-		dsInstalled=`chkconfig |grep -iom 1 datasync`;
-		if [ "$dsInstalled" != "datasync" ];then
-			log_error "[Initialization] Failed Mobility Product check!"
-			read -p "Mobility is not installed on this server."
-			exit 1;
-		fi
-	fi
-
-	#Check and set force to true
-	if [ "$1" == "--force" ] || [ "$1" == "-f" ] || [ "$1" == "?" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ] || [ "$1" == "-db" ] || [ "$1" == "--database" ];then
+	if [[ $forceMode -eq 1 ]];then
 		log_debug "[Initialization] Launching dsapp with --force..."
-		forceMode=1;
 	fi
 
 function pushConf {
@@ -321,7 +371,7 @@ fi
 function askYesOrNo {
 		REPLY=""
 		while [ -z "$REPLY" ] ; do
-			read -ep "$1 $YES_NO_PROMPT" REPLY
+			read -ep "$1 $YES_NO_PROMPT" -n1 REPLY
 			REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
 			log "[askYesOrNo] $1 $REPLY"
 			case $REPLY in
@@ -644,7 +694,7 @@ if ($decodeProblem);then echo -e "\nPossible hostname change";eContinue;fi
 log "[Init] dsapp v$dsappversion | Mobility version: $mobilityVersion"
 log_debug "[Init] dsHostname: $dsHostname"
 log_debug "[Init] ldapAddress: $ldapAddress:$ldapPort"
-log_debug "[Init] GroupWise-Agent: $glistenAddress:$gPort | Mobility-Agent: $mlistenAddress:$mPort"
+log_debug "[Init] GroupWise-Agent: $sListenAddress:$gPort | Mobility-Agent: $mlistenAddress:$mPort"
 
 log_debug "[Init] [checkDBPass] $dbUsername:$dbPassword"
 log_debug "[Init] [getTrustedAppKey] $trustedName:$trustedAppKey"
@@ -655,6 +705,20 @@ log_debug "[Init] [getldapPassword] $ldapAdmin:$ldapPassword"
 #	Declaration of Functions
 #
 ##################################################################################################
+		
+	function promptVerifyPath {
+		while [ true ];do
+    		read -ep "$1" path;
+	        if [ ! -d "$path" ]; then
+	            if askYesOrNo $"Path does not exist, would you like to create it now?"; then
+	                mkdir -p $path;
+	                break;
+	            fi
+	        else break;
+	        fi
+	    done
+	    eval "$2='$path'"
+	}
 
 	function getLogs {
 		datasyncBanner;
@@ -1626,24 +1690,6 @@ function dpsql {
 	psql -U $dbUsername datasync
 }
 
-function datasyncBanner {
-s="$(cat <<EOF                                                        
-         _                       
-      __| |___  __ _ _ __  _ __  
-     / _' / __|/ _' | '_ \\| '_ \\ 
-    | (_| \__ | (_| | |_) | |_) |
-     \__,_|___/\__,_| .__/| .__/ 
-                    |_|   |_|                                          
-EOF
-)"
-
-	clear; echo -e "$s\n\t\t\t      v$dsappversion\n"
-
-	if [ $dsappForce ];then
-		echo -e "  Running --force. Some functions may not work properly.\n"
-	fi
-}
-
 function whatDeviceDeleted {
 datasyncBanner;
 verifyUser vuid;
@@ -1658,7 +1704,7 @@ if [ $? -ne 3 ] ; then
 	done
 
 	if [ -z "$deletions" ]; then
-		echo "Noting found."
+		echo "Nothing found."
 	fi
 	
 	echo
@@ -2211,7 +2257,7 @@ function patchEm {
 
 function backupDatabase {
 	datasyncBanner; #Back up database
-	time=`date +%m.%d.%y-%s`;
+	local time=`date +%m.%d.%y-%s`;
 	read -ep "Enter the full path to place back up files. (ie. /root/backup): " path;
 	if [ -d "$path" ] && [ -n "$path" ];then
 	echo -e "\nDumping databases..."
@@ -2527,7 +2573,7 @@ function ghc_checkServices {
 		else echo -e "\nConnection successful on port $mPort" >> $ghcLog
 		fi
 
-		netcat -z -w 2 $glistenAddress $gPort >> $ghcLog 2>&1
+		netcat -z -w 2 $sListenAddress $gPort >> $ghcLog 2>&1
 		if [ $? -ne 0 ]; then
 			gstatus=false
 			echo "Connection refused on port $gPort" >> $ghcLog
@@ -3004,18 +3050,27 @@ function ghc_checkUpdateSH {
 	problem=false
 	# Any logging info >>$ghcLog
 
-	ghc_dbVersion=`psql -U $dbUsername datasync -t -c "select service_version from services;" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
-	echo "Service version: $ghc_dbVersion" >>$ghcLog
-	echo -e "RPM version: $mobilityVersion" >>$ghcLog
-	if [[ $ghc_dbVersion != "$mobilityVersion" ]]; then
+	if [ $dsVersion -gt $dsVersionCompare ]; then
+		ghc_dbVersion=`psql -U $dbUsername datasync -t -c "select service_version from services;" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
+		echo "Service version: $ghc_dbVersion" >>$ghcLog
+		echo -e "RPM version: $mobilityVersion" >>$ghcLog
+		if [[ $ghc_dbVersion != "$mobilityVersion" ]]; then
+			problem=true
+			echo -e "Version mismatch between database and rpms.\n\nSOLUTION: Please run $dirOptMobility/update.sh to update the database." >>$ghcLog
+		else echo "Database schema up to date." >>$ghcLog
+		fi
+	else
 		problem=true
-		echo -e "Version mismatch between database and rpms.\n\nSOLUTION: Please run $dirOptMobility/update.sh to update the database." >>$ghcLog
-	else echo "Database schema up to date." >>$ghcLog
+		warn=true
+		echo -e "Unable to check database schema version." >> $ghcLog
 	fi
 
 	# Return either pass/fail, 0 indicates pass.
 	if ($problem); then
-		passFail 1
+		if ($warn); then
+			passFail 2
+		else passFail 1
+		fi
 	else passFail 0
 	fi
 	
@@ -3303,6 +3358,264 @@ function whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe {
 	eContinue;
 }
 
+function dumpSettings {
+	local dumpPath
+	local time=`date +%m.%d.%y-%s`;
+	if askYesOrNo "Dump install settings to file?";then
+		promptVerifyPath "Path to save file: " dumpPath
+		local dumpFile=$(readlink -m "$dumpPath/mobilitySettings.conf")
+		# local notification="$(echo "cat /config/configengine/notification"| xmllint --nocdata --shell $ceconf | sed '1d;$d')" 
+
+		# Dumping all install variables neatly into dumpFile
+		echo -e "\nDumping install settings to file..."
+		echo -e "\n###########################################################\n# LDAP Settings\n###########################################################\n\n# LDAP IP: $ldapAddress\n# LDAP port: $ldapPort\n# LDAP Secure: $ldapSecure\n# LDAP Admin: $ldapAdmin\n# LDAP Password: $ldapPassword" > $dumpFile
+		while IFS= read -r line; do echo -e "# User Container: $line" >> $dumpFile;done <<< "$userContainer"; while IFS= read -r line; do echo -e "# Group Container: $line" >> $dumpFile; done <<< "$groupContainer"
+		echo -e "\n###########################################################\n# Database Settings\n###########################################################\n\n# Database Username: $dbUsername\n# Database Password: $dbPassword" >> $dumpFile
+		echo -e "\n###########################################################\n# Trusted App Settings\n###########################################################\n\n# Trusted Application Name: $trustedName\n# Trusted Application Key: $trustedAppKey">> $dumpFile
+		echo -e "\n###########################################################\n# GroupWise Settings\n###########################################################\n\n# GroupWise IP: $sListenAddress\n# SOAP Port: $sPort">> $dumpFile; if [ "$sSecure" = "https" ];then echo -e "# SOAP Secure: yes" >>$dumpFile; else echo -e "# SOAP Secure: no" >>$dumpFile; fi
+		echo -e "\n###########################################################\n# Device Settings\n###########################################################\n\n# Device Port: $mPort">> $dumpFile; if [ $mSecure -eq 1 ];then echo -e "# Device Secure: true" >>$dumpFile; else echo -e "# Device Secure: false" >>$dumpFile; fi
+		echo -e "\n###########################################################\n# GMS Settings\n###########################################################\n\n# Server Listen Addresss: $sListenAddress\n# GroupWise Connector Port: $gPort\n# GroupWise Address book user: $galUserName\n# GroupWise Attachment Limit: $gAttachSize KB\n# Mobility Attachment Limit: $mAttachSize KB">> $dumpFile
+		echo -e "\n###########################################################\n# XML Settings $ceconf\n###########################################################\n" >> $dumpFile; 
+		while IFS= read -r line; do echo -e "# Web Admins: $line" >> $dumpFile;done <<< "$webAdmins"
+		# echo >> $dumpFile; while IFS= read -r line; do echo "$line" >> $dumpFile; done <<< "$notification"
+
+		# Dumping variable names/values into file to be sourced in later
+		echo -e "\n###########################################################\n# Source install variables\n###########################################################\n\nldapAddress=\"$ldapAddress\"\nldapPort=\"$ldapPort\"\nldapSecure=\"$ldapSecure\"\nldapAdmin=\"$ldapAdmin\"\nldapPassword=\"$ldapPassword\"" >> $dumpFile
+		echo -en "userContainer=\"" >> $dumpFile; while IFS= read -r line; do echo -en "$line " >> $dumpFile; done <<< "$userContainer"; sed -i 's/ *$//' $dumpFile; echo '"' >> $dumpFile;
+		echo -en "groupContainer=\"" >> $dumpFile; while IFS= read -r line; do echo -en "$line " >> $dumpFile; done <<< "$groupContainer"; sed -i 's/ *$//' $dumpFile; echo '"' >> $dumpFile;
+		echo -e "dbUsername=\"$dbUsername\"\ndbPassword=\"$dbPassword\"\ntrustedName=\"$trustedName\"\ntrustedAppKey=\"$trustedAppKey\"\ngListenAddress=\"$gListenAddress\"\nsPort=\"$sPort\"" >>$dumpFile; 
+		if [ "$sSecure" = "https" ];then echo -e "sSecure=\"yes\"" >>$dumpFile; else echo -e "sSecure=\"no\"" >>$dumpFile; fi
+		echo -e "sListenAddress=\"$sListenAddress\"\nmPort=\"$mPort\"" >> $dumpFile
+		if [ $mSecure -eq 1 ];then echo -e "mSecure=\"true\"" >>$dumpFile; else echo -e "mSecure=\"false\"" >>$dumpFile; fi
+		echo -e "gPort=\"$gPort\"\ngalUserName=\"$galUserName\"\ngAttachSize=\"$gAttachSize\"\nmAttachSize=\"$mAttachSize\"" >>$dumpFile;
+		echo -en "webAdmins=\"" >> $dumpFile; while IFS= read -r line; do echo -en "$line " >> $dumpFile; done <<< "$webAdmins"; sed -i 's/ *$//' $dumpFile; echo '"' >> $dumpFile;
+		echo -e "Successfully saved settings to $dumpFile"
+
+		# Dumping certificate
+		echo -e "\nGetting server certificates..."
+		cp $dirVarMobility/device/mobility.pem $dumpPath/
+		cp $dirVarMobility/webadmin/server.pem $dumpPath/
+
+		# Tar up dumpFile and mobility.pem
+		cd $dumpPath;
+		tar czf mobility_install-$time.tgz mobilitySettings.conf mobility.pem server.pem 2>/dev/null
+		echo -e "\nDump install settings complete..."
+		echo -n "Saved to: "; readlink -m "$dumpPath/mobility_install-$time.tgz"
+		rm -f mobilitySettings.conf mobility.pem server.pem
+
+		echo;eContinue;
+	fi
+}
+
+function installMobility { # $1 = repository name
+	datasyncBanner;
+	local dumpFile path quit
+	if askYesOrNo "Install mobility?";then
+		# Get Directory
+		while [ ! -d "$path" ]; do
+			read -ep "Enter full path to the directory of install dump: " path;
+			if [ ! -d "$path" ]; then
+				echo "Invalid directory entered. Please try again.";
+			fi
+			if [ -d "$path" ]; then
+				ls "$path"/mobility_install-*.tgz &>/dev/null;
+				if [ $? -ne "0" ]; then
+				echo "No mobility install dump found at this path.";
+				path="";
+				fi
+			fi
+		done
+		cd "$path";
+		local dumpPath=$PWD
+
+		# Get File
+		# Check if multiple ISO found
+		if [ `ls mobility_install-*.tgz | wc -w` -gt 1 ];then
+			installArray=($(ls mobility_install-*.tgz))
+			while true;
+			do
+				datasyncBanner;
+				echo -e "Multiple install dumps found"
+				echo -e "Input what dump to install\n";
+				# Loop through array to print all available selections.
+				for ((i=0;i<`echo ${#installArray[@]}`;i++))
+				do
+					echo "$i." ${installArray[$i]};
+				done;
+				echo -n -e "q. quit\n\nSelection: ";
+				read opt;
+				dumpFile=`echo ${installArray[$opt]}`
+				if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
+					quit=true
+					return 1
+				elif [[ $opt =~ ^[0-9]$ ]] && [ $opt -lt `echo ${#installArray[@]}` ];then
+					quit=false
+					break;
+				fi
+			done
+		else
+			dumpFile=`ls mobility_install-*.tgz`
+			quit=false
+		fi	
+	else return 1
+	fi
+
+	# Quit out of function if quit = true
+	if ($quit);then
+		return 1
+	fi
+
+	# Source in configuration file
+	tar zxf $dumpFile; source mobilitySettings.conf
+	rm -f mobilitySettings.conf
+
+	local setupDir="$dirOptMobility/syncengine/connectors/mobility/cli"
+	local keyFile="$dsappConf/$trustedName.key"; echo "$trustedAppKey" > $keyFile;
+
+	# If IP and sListenAddress do not match, prompt to use server IP for sListenAddress
+	local IP=`/sbin/ip -o -4 addr list | grep eth | awk '{print $4}' | cut -d/ -f1`
+	# Check if multiple IPs found
+		if [ `echo $IP | wc -w` -gt 1 ];then
+			ipArray=($IP)
+			while true;
+			do
+				datasyncBanner;
+				echo -e "Multiple IPs found"
+				echo -e "Input what IPs to use\n";
+				# Loop through array to print all available selections.
+				for ((i=0;i<`echo ${#ipArray[@]}`;i++))
+				do
+					echo "$i." ${ipArray[$i]};
+				done;
+				echo -n -e "q. quit\n\nSelection: ";
+				read opt;
+				IP=`echo ${ipArray[$opt]}`
+				if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
+					quit=true
+					return 1
+				elif [[ $opt =~ ^[0-9]$ ]] && [ $opt -lt `echo ${#ipArray[@]}` ];then
+					quit=false
+					break;
+				fi
+			done
+		elif [ "$sListenAddress" != "$IP" ];then
+			echo "Dump IP: $sListenAddress does not match server IP: $IP";
+			if askYesOrNo "Use server IP?";then
+				sListenAddress=$IP
+				quit=false
+			elif askYesOrNo "Continue install with IP: $sListenAddress";then
+				quit=false
+			else
+				return 1
+			fi
+		fi
+
+	# Quit out of function if quit = true
+	if ($quit);then
+		return 1
+	fi
+
+	# TODO : Is it possible to add multiple user/group containers, and webadmins?
+	# Create local variables for python installs
+	local setup1="postgres_setup_1.sh"
+	local setup2="odbc_setup_2.pyc"
+	local setup3="mobility_setup_3.pyc --dbpass $dbPassword --ldapgroup`for item in ${groupContainer}; do echo -n " $item"; done` --ldapuser`for item in ${userContainer}; do echo -n " $item"; done` --ldapadmin $ldapAdmin --ldappass $ldapPassword --ldaphost $ldapAddress --ldapport $ldapPort --ldapsecure $ldapSecure --webadmin`for item in ${webAdmins}; do echo -n " $item"; done`"
+	local setup4="enable_setup_4.sh"
+	local setup5="mobility_setup_5.pyc --galuser $galUserName --block false --selfsigned true --path '' --lport $mPort --secure $mSecure"
+	local setup6="groupwise_setup_6.pyc --keypath $keyFile --lport $gPort --lip $sListenAddress --version '802' --soap $gListenAddress --key $trustedName --sport $sPort --psecure $sSecure"
+	local setup7="start_mobility.pyc"
+
+	# Create Repo
+	datasyncBanner;
+	echo "Dump Settings: $dumpFile"
+	if askYesOrNo $"Install mobility with selected dump file?"; then
+		# Get Directory
+		path=""
+		while [ ! -d "$path" ]; do
+			datasyncBanner;
+			read -ep "Enter full path to the directory of ISO file: " path;
+			if [ ! -d "$path" ]; then
+				echo "Invalid directory entered. Please try again.";
+			fi
+			if [ -d "$path" ]; then
+				ls "$path"/novell*mobility*.iso &>/dev/null;
+				if [ $? -ne "0" ]; then
+				echo "No mobility ISO found at this path.";
+				path="";
+				fi
+			fi
+		done
+		cd "$path";
+
+		# Get File
+		# Check if multiple ISO found
+		if [ `ls novell*mobility*.iso | wc -w` -gt 1 ];then
+			isoArray=($(ls novell*mobility*.iso))
+			while true;
+			do
+				datasyncBanner;
+				echo -e "Multiple ISOs found"
+				echo -e "Input what ISO to apply\n";
+				# Loop through array to print all available selections.
+				for ((i=0;i<`echo ${#isoArray[@]}`;i++))
+				do
+					echo "$i." ${isoArray[$i]};
+				done;
+				echo -n -e "q. quit\n\nSelection: ";
+				read opt;
+				isoName=`echo ${isoArray[$opt]}`
+				if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
+					quit=true
+					break;
+				elif [[ $opt =~ ^[0-9]$ ]] && [ $opt -lt `echo ${#isoArray[@]}` ];then
+					quit=false
+					break;
+				fi
+			done
+		else
+			isoName=`ls novell*mobility*.iso`
+			quit=false
+		fi
+
+		if (! $quit);then
+			# Confirm to install with the following ISO
+			echo
+			if askYesOrNo "Install $isoName?";then
+				# zypper install process
+				# Remove old repo if exists
+				zypper rr mobility 2>/dev/null;
+				zypper ar -c -f -t yast2 'iso:///?iso='$isoName'&url=file://'"$path"'' $1;
+
+				# Refresh Repo
+				zypper --gpg-auto-import-keys ref -f $1
+
+				# Install packages.
+				# TODO : Test code to make sure works for existing installs
+				# local packages=`zypper info -t pattern \`zypper -x pt --repo $1 | grep "pattern name=" | cut -f2 -d '"'\` | cut -f2- -d '|' | grep  "| package |" | awk '{print $1}'`
+				zypper --non-interactive install -t pattern `zypper -x pt --repo $1 | grep "pattern name=" | cut -f2 -d '"'`
+
+				# Run each python file with each setup
+				$setupDir/$setup1; python $setupDir/$setup2; python $setupDir/$setup3; $setupDir/$setup4; python $setupDir/$setup5; python $setupDir/$setup6; python $setupDir/$setup7
+				
+				# Copy in old certificates
+				echo
+				cd $dumpPath
+				if askYesOrNo "Apply dump install certificates?";then
+					cp mobility.pem $dirVarMobility/device/
+					cp server.pem $dirVarMobility/webadmin/
+				fi
+				rm -f mobility.pem server.pem
+
+				echo -e "Mobility `cat $dirOptMobility/version` install complete"
+			fi
+			path="";
+			isoName="";
+		fi
+	fi
+
+	echo; eContinue;
+}
+
 
 ##################################################################################################
 #	
@@ -3314,7 +3627,7 @@ dbMaintenace=false
 while [ "$1" != "" ]; do
 	case $1 in #Start of Case
 
-	--help | '?' | -h) dsappSwitch=1
+	--help | '?' | -h) dsappSwitch=1; clear
 		echo -e "dsapp options:";
 		echo -e "      \t--version\tReport dsapp version"
 		echo -e "      \t--debug\t\tToggles dsapp log debug level [$debug]"
@@ -3331,6 +3644,7 @@ while [ "$1" != "" ]; do
 		echo -e "  -d  \t--devices\tPrint a list of all devices with count"
 		echo -e "  -db \t--database\tChange database password"
 		echo -e "  -ch \t--changeHost\tSet previous hostname to fix encryption"
+		echo -e "  -in \t--install\tInstall Mobility (requires previous dump file)"
 	;;
 
 	--version | version) dsappSwitch=1
@@ -3372,6 +3686,10 @@ while [ "$1" != "" ]; do
 
 	--status | -s) dsappSwitch=1
 		showStatus
+	;;
+
+	--install | -in) dsappSwitch=1
+		installMobility mobility;
 	;;
 
 	-u | --users) dsappSwitch=1
@@ -3537,8 +3855,8 @@ fi
 
 #Window Size check
 if [ `tput lines` -lt '24' ] && [ `tput cols` -lt '85' ];then
-	echo -e "Terminal window to small. Please resize."
-	eContinue;
+	echo -e "Terminal window to small [`tput cols` x `tput lines`]\nPlease resize window to [80 x 24] or greater."
+	echo; eContinue;
 	exit 1;
 fi
 
@@ -3564,13 +3882,18 @@ cd $cPWD;
  echo -e "\n\t5. User Issues"
  echo -e "\t6. Checks & Queries"
  echo -e "\n\t0. Quit"
- echo -n -e "\n\tSelection: "
- read opt
+ echo -n -e "\n\tSelection: "; tput sc
+ echo -e "\n\n\n    Disclaimer: This tool is not supported by Novell.\n    Use at your own discretion."
+ tput rc; read opt;
  a=true;
  case $opt in
 
  db+) clear; ###Log into Database### --Not on Menu--
 	dpsql;
+	;;
+
+ ds+) datasyncBanner;
+	dumpSettings;
 	;;
 
 ##################################################################################################
@@ -4578,7 +4901,7 @@ EOF
 				clear
 				echo "Bye $USER"
 				if($pgpass);then
-					rm ~/.pgpass
+					rm -f ~/.pgpass
 				fi
 				exit 0;;
   *) ;;
