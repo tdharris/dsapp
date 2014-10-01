@@ -15,7 +15,7 @@
 ##################################################################################################
 
 	# Assign folder variables
-	dsappversion='199'
+	dsappversion='198'
 	dsappDirectory="/opt/novell/datasync/tools/dsapp"
 	dsappConf="$dsappDirectory/conf"
 	dsappLogs="$dsappDirectory/logs"
@@ -482,7 +482,7 @@ function autoUpdateDsapp {
 	# Get & Decode dbpass
 	function getDBPassword {
 		#Grabbing password from configengine.xml
-		dbPassword=`xmlpath 'config/configengine/database/password' < $ceconf`
+		dbPassword=`sed -n "/<database>/,/<\/database>/p" $ceconf | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
 		if [[ $(isStringProtected database $ceconf) -eq 1 ]];then
 			dbPassword=$(decodeString $dbPassword "Database")
 		fi
@@ -491,7 +491,7 @@ function autoUpdateDsapp {
 			local var=`grep "Database" $dsapptmp/error`
 			if [ -n "$var" ];then echo -e "Encryption on Database wrong.";
 				decodeProblem=true;
-			fi;
+			fi
 		fi
 	}
 
@@ -521,7 +521,7 @@ fi
 
 	# Get & decode trustedAppKey
 	function getTrustedAppKey {
-		trustedAppKey=`xmlpath 'connector/settings/custom/trustedAppKey' < $gconf`
+		trustedAppKey=`cat $gconf | grep -i trustedAppKey | sed 's/<[^>]*[>]//g' | tr -d ' '`
 		if [[ $(isStringProtected protected $gconf) -eq 1 ]];then
 			trustedAppKey=$(decodeString $trustedAppKey "Trusted Application")
 		fi
@@ -537,7 +537,7 @@ fi
 	# Get & decode ldapLogin password
 	function getldapPassword {
 		# Keeping protected for General Health Check Log
-		protectedldapPassword=`xmlpath 'config/configengine/ldap/login/password' < $ceconf`
+		protectedldapPassword=`sed -n "/<login>/,/<\/login>/p" $ceconf | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
 		ldapPassword="$protectedldapPassword"
 		if [[ $(isStringProtected login $ceconf) -eq 1 ]];then
 			ldapPassword=$(decodeString $ldapPassword "LDAP")
@@ -1123,7 +1123,7 @@ function removeUser {
 	echo;eContinue;
 }
 
-function mCleanup { # Requires userID passed in. # IF 2nd variable passed in. Will skip attachment build list
+function mCleanup { # Requires userID passed in.
 	echo -e "\nCleaning up mobility database"
 
 	# Get users mobility guid
@@ -1145,8 +1145,8 @@ function mCleanup { # Requires userID passed in. # IF 2nd variable passed in. Wi
 	psql -U $dbUsername mobility -c "delete from attachmentmaps where userid='$uGuid';";
 
 	# Get filestoreIDs that are safe to delete
-	echo -e "\nBuilding list of safe to remove attachments\nPlease wait.\n"
-	local fileID=`psql -U $dbUsername mobility -t -c "SELECT filestoreid FROM attachments LEFT OUTER JOIN attachmentmaps ON attachments.attachmentid=attachmentmaps.attachmentid WHERE attachmentmaps.attachmentid IS NULL;" | sed 's/^ *//' | sed 's/ *$//'`
+	local fileID=`psql -U $dbUsername mobility -t -c "select filestoreid from attachments where attachmentid not in (select attachmentid from attachmentmaps);" | sed 's/^ *//' | sed 's/ *$//'`
+
 	# Log into mobility database, and clean tables with users guid
 	psql -U $dbUsername mobility <<EOF
 	delete from deviceimages where userid='$uGuid';
@@ -3898,6 +3898,7 @@ EOF
 					echo -e "\n\t2. Fix slow startup\n\t\t(GMS 2.0.1.53 only) - TID 7014819, Bug 870939"
 					echo -e "\t3. Fix LG Optimus fwd attachment encoded\n\t\t(GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
 					echo -e "\t4. Fix Sony Xperia Z unable to see mails in Inbox\n\t\t(GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698"
+					echo -e "\t5. Log in to the web admin using either the GW or LDAP userid\n\t\t(GMS 2.0.1.53 only) - TID 7015622, Bug 895165"
 
 			 		echo -e "\n\t0. Back"
 				 	echo -n -e "\n\tSelection: "
@@ -3937,6 +3938,11 @@ EOF
 						4) # Fix Sony Xperia Z unable to see mails in Inbox (GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698
 							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/sync.pyc" )
 							patchEm "861830-868698.zip" "20153"
+							;;
+
+						5) # Log in to the web admin using either the GW connector username or the LDAP username (GMS 2.0.1.53 only) - TID 7015622, Bug 895165
+							patchFiles=( "/opt/novell/datasync/common/lib/datasync/auth/ldap_driver.pyc" "/opt/novell/datasync/configengine/lib/configengine/__init__.pyc" )
+							patchEm "895165.zip" "20153"
 							;;
 
 				/q | q | 0) break;;
