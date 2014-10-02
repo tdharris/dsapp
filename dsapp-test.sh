@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='199'
+dsappversion='200'
 
 ##################################################################################################
 #	Set up banner logo
@@ -50,7 +50,7 @@ EOF
 	#Check and set force to true
 	if [ "$1" == "--force" ] || [ "$1" == "-f" ] || [ "$1" == "?" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ] || [ "$1" == "-db" ] || [ "$1" == "--database" ] || [ "$1" == "-in" ] || [ "$1" == "--install" ];then
 		forceMode=1;
-		if [[ "$forceMode" -eq "1" ]];then
+		if [[ "$forceMode" -eq "1" && ( "$1" = "-f" || "$1" = "--force" ) ]];then
 			datasyncBanner;
 			echo -e "Running force mode. Some options may not work properly.\n"
 			read -p "Press [Enter] to continue"
@@ -58,10 +58,18 @@ EOF
 	fi
 
 	# Check for Mobility installed.
+	dsInstalled=`chkconfig | grep -iom 1 datasync`;
+	if [ "$dsInstalled" != "datasync" ];then
+		dsInstalledCheck=false
+	else
+		dsInstalledCheck=true
+	fi
+	
 	if [[ "$forceMode" -ne "1" ]];then
-		dsInstalled=`chkconfig |grep -iom 1 datasync`;
-		if [ "$dsInstalled" != "datasync" ];then
-			read -p "Mobility is not installed on this server."
+		if (! $dsInstalledCheck);then
+			datasyncBanner;
+			read -p "Mobility is not installed."
+			clear;
 			exit 1;
 		fi
 	fi
@@ -93,8 +101,10 @@ EOF
 	mkdir -p $dsapplib 2>/dev/null;
 
 	# Version
-	version="/opt/novell/datasync/version"
-	mobilityVersion=`cat $version`
+	if ($dsInstalledCheck);then
+		version="/opt/novell/datasync/version"
+		mobilityVersion=`cat $version`
+	fi
 	serverinfo="/etc/*release"
 	rpminfo="datasync"
 	dsapp_tar="dsapp.tgz"
@@ -181,30 +191,33 @@ EOF
 	    [[ "${path[@]}" == "$expr" ]] && echo "$data"
 	  done
 	}
-
-	datasyncBanner; echo "Loading Menu..."
-	ldapAddress=`xmlpath 'connector/settings/custom/ldapAddress' < $mconf`
-	ldapPort=`xmlpath 'connector/settings/custom/ldapPort' < $mconf`
-	ldapSecure=`xmlpath 'config/configengine/ldap/secure' < $ceconf`
-	mPort=`xmlpath 'connector/settings/custom/listenPort' < $mconf`
-	mSecure=`xmlpath 'connector/settings/custom/ssl' < $mconf`
-	mlistenAddress=`xmlpath 'connector/settings/custom/listenAddress' < $mconf`
-	sListenAddress=`xmlpath 'connector/settings/custom/listeningLocation' < $gconf`
-	gListenAddress=`xmlpath 'connector/settings/custom/soapServer' < $gconf | grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}'`
-	trustedName=`xmlpath 'connector/settings/custom/trustedAppName' < $gconf`
-	gPort=`xmlpath 'connector/settings/custom/port' < $gconf`
-	sPort=`xmlpath 'connector/settings/custom/soapServer' < $gconf | rev | cut -f1 -d ':' | cut -f2 -d '/' | rev`
-	sSecure=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f1 -d ':'`
-	wPort=`xmlpath 'config/server/port' < $wconf`
-	ldapAdmin=`xmlpath 'config/configengine/ldap/login/dn' < $ceconf`
-	authentication=`xmlpath 'config/configengine/source/authentication' < $ceconf`
-	provisioning=`xmlpath 'config/configengine/source/provisioning' < $ceconf`
-	galUserName=`xmlpath 'connector/settings/custom/galUserName' < $mconf`
-	groupContainer=`xmlpath 'config/configengine/ldap/groupContainer' < $ceconf`
-	userContainer=`xmlpath 'config/configengine/ldap/userContainer' < $ceconf`
-	mAttachSize=`xmlpath 'connector/settings/custom/attachmentMaxSize' < $mconf`
-	gAttachSize=`xmlpath 'connector/settings/custom/attachmentMaxSize' < $gconf`
-	webAdmins=`xmlpath 'config/configengine/ldap/admins/dn' < $ceconf`
+	if [ -z "$1" ];then
+		datasyncBanner; echo "Loading Menu..."; else clear;
+	fi
+	if ($dsInstalledCheck);then
+		ldapAddress=`xmlpath 'connector/settings/custom/ldapAddress' < $mconf`
+		ldapPort=`xmlpath 'connector/settings/custom/ldapPort' < $mconf`
+		ldapSecure=`xmlpath 'config/configengine/ldap/secure' < $ceconf`
+		mPort=`xmlpath 'connector/settings/custom/listenPort' < $mconf`
+		mSecure=`xmlpath 'connector/settings/custom/ssl' < $mconf`
+		mlistenAddress=`xmlpath 'connector/settings/custom/listenAddress' < $mconf`
+		sListenAddress=`xmlpath 'connector/settings/custom/listeningLocation' < $gconf`
+		gListenAddress=`xmlpath 'connector/settings/custom/soapServer' < $gconf | grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}'`
+		trustedName=`xmlpath 'connector/settings/custom/trustedAppName' < $gconf`
+		gPort=`xmlpath 'connector/settings/custom/port' < $gconf`
+		sPort=`xmlpath 'connector/settings/custom/soapServer' < $gconf | rev | cut -f1 -d ':' | cut -f2 -d '/' | rev`
+		sSecure=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f1 -d ':'`
+		wPort=`xmlpath 'config/server/port' < $wconf`
+		ldapAdmin=`xmlpath 'config/configengine/ldap/login/dn' < $ceconf`
+		authentication=`xmlpath 'config/configengine/source/authentication' < $ceconf`
+		provisioning=`xmlpath 'config/configengine/source/provisioning' < $ceconf`
+		galUserName=`xmlpath 'connector/settings/custom/galUserName' < $mconf`
+		groupContainer=`xmlpath 'config/configengine/ldap/groupContainer' < $ceconf`
+		userContainer=`xmlpath 'config/configengine/ldap/userContainer' < $ceconf`
+		mAttachSize=`xmlpath 'connector/settings/custom/attachmentMaxSize' < $mconf`
+		gAttachSize=`xmlpath 'connector/settings/custom/attachmentMaxSize' < $gconf`
+		webAdmins=`xmlpath 'config/configengine/ldap/admins/dn' < $ceconf`
+	fi
 
 
 	# Global variable for verifyUser
@@ -390,7 +403,12 @@ YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
 NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
 
 function eContinue {
-	read -p "Press [Enter] to continue"
+	local reply="."
+	echo -n "Press [Enter] to continue"
+	while [ -n "$reply" ];do
+		read -n1 -s reply;
+	done
+	clear;
 }
 
 
@@ -449,40 +467,39 @@ function updateDsapp {
 		fi
 	else log_error "$header Failed to download and extract ftp://ftp.novell.com/outgoing/$dsapp_tar"
 	fi
-
 }
 
 function autoUpdateDsapp {
 
-		# Variable declared above autoUpdate=true
-		if ($autoUpdate); then
+	# Variable declared above autoUpdate=true
+	if ($autoUpdate); then
 
-			log_debug "[Init] autoUpdateDsapp ($autoUpdate)..."
-			# Check FTP connectivity
-			if (checkFTP);then
+		log_debug "[Init] autoUpdateDsapp ($autoUpdate)..."
+		# Check FTP connectivity
+		if (checkFTP);then
 
-				# Fetch online dsapp and store to memory, check version
-				publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp-version.info | grep -m1 dsappversion= | cut -f2 -d "'"`
-				log_debug "[Init] [autoUpdateDsapp] publicVersion: $publicVersion, currentVersion: $dsappversion"
-				# publicVersion=`curl -s ftp://ftp.novell.com/outgoing/$dsapp_tar | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
+			# Fetch online dsapp and store to memory, check version
+			publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp-version.info | grep -m1 dsappversion= | cut -f2 -d "'"`
+			log_debug "[Init] [autoUpdateDsapp] publicVersion: $publicVersion, currentVersion: $dsappversion"
+			# publicVersion=`curl -s ftp://ftp.novell.com/outgoing/$dsapp_tar | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
 
-				# Download if newer version is available
-				if [ "$dsappversion" -ne "$publicVersion" ];then
-						clear;
-						echo -e "\nChecking for new dsapp..."
-						echo -e "v$dsappversion (v$publicVersion available)"
-						updateDsapp
-				fi
-
+			# Download if newer version is available
+			if [ "$dsappversion" -ne "$publicVersion" ];then
+					clear;
+					echo -e "\nChecking for new dsapp..."
+					echo -e "v$dsappversion (v$publicVersion available)"
+					updateDsapp
 			fi
-			
 		fi
+	fi
 }
 
 	#Get datasync version.
 	function getDSVersion {
-		dsVersion=`cat $version | cut -c1-7 | tr -d '.'`
-		dsVersionCompare='2000'
+		if ($dsInstalledCheck);then
+			dsVersion=`cat $version | cut -c1-7 | tr -d '.'`
+			dsVersionCompare='2000'
+		fi
 	}
 	getDSVersion;
 
@@ -673,10 +690,12 @@ fi
 ##################################################################################################
 	function setVariables {
 		# Depends on version 1.0 or 2.0
-		if [ $dsVersion -gt $dsVersionCompare ]; then
-			declareVariables2
-		else
-			declareVariables1
+		if ($dsInstalledCheck);then
+			if [ $dsVersion -gt $dsVersionCompare ]; then
+				declareVariables2
+			else
+				declareVariables1
+			fi
 		fi
 	}
 	setVariables;
@@ -953,18 +972,6 @@ function createDatabases {
 		fi
 	}
 
-	function progressDot {
-		while [ true ];
-		do
-			for ((i=0; i <10; i++));
-			do
-			printf ".";
-			sleep .5;
-			done
-			printf "\r           \r";
-		done
-	}
-
 	function rcDS {
 		if [ "$1" = "start" ] && [ "$2" = "" ]; then
 			$rcScript start;
@@ -1074,18 +1081,29 @@ function createDatabases {
 		fi
 	}
 
-	function verifyUser { # Can have 2 variables passed in. 1 to be assigned uid
-		datasyncBanner;
-		read -ep "UserID: " uid;
+	function verifyUser { # Can have 2 variables passed in.
+	# $1 to be assigned uid
+	# If $2 = noReturn. Won't check DBs for user
+		uid=""
 		while [ -z "$uid" ]; do
-			if askYesOrNo $"Invalid Entry... try again?"; then
-			    read -ep "UserID: " uid;
-			else
-				return 3;
+			datasyncBanner;
+			echo -e "\nEnter 'q' to cancel"
+			read -ep "UserID: " uid;
+			if [ -z "$uid" ];then
+				if ! askYesOrNo $"No input. Try again?"; then
+			    	return 3;
+				fi
 			fi
 		done
 
+		# Return 3 if user input is q | Q
+		if [[ "$uid" = "q" || "$uid" = "Q" ]];then
+				datasyncBanner;
+				return 3;
+		fi
+
 		if [ -n "$uid" ];then
+			datasyncBanner;
 			# Calculate verifyCount based on where user was found
 			local verifyCount=3;
 			# 3 = no user found ; 1 = datasync only ; 2 = mobility only ; 0 = both database
@@ -2146,7 +2164,9 @@ EOF
 #
 ##################################################################################################
 function getExactMobilityVersion {
-	daVersion=`cat /opt/novell/datasync/version | tr -d '.'`
+	if [ -f "/opt/novell/datasync/version" ];then
+		daVersion=`cat /opt/novell/datasync/version | tr -d '.'`
+	fi
 }
 
 function ftfPatchlevel {
@@ -2299,7 +2319,7 @@ function restoreDatabase {
 						echo "$i." ${bakArray[$i]};
 					done;
 					echo -n -e "q. quit\n\nSelection: ";
-					read opt;
+					read -n1 opt;
 					mobileBackup=`echo ${bakArray[$opt]}`
 					if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
 						break;
@@ -2329,7 +2349,7 @@ function restoreDatabase {
 						echo "$i." ${bakArray[$i]};
 					done;
 					echo -n -e "q. quit\n\nSelection: ";
-					read opt;
+					read -n1 opt;
 					datasyncBackup=`echo ${bakArray[$opt]}`
 					if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
 						break;
@@ -3349,7 +3369,7 @@ EOF
 
 function whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe {
 	datasyncBanner;
-	read -p "Item name (subject, folder, contact, calendar): " displayName
+	read -ep "Item name (subject, folder, contact, calendar): " displayName
 	echo $displayName
 	if [[ -n "$displayName" ]]; then
 		psql -U $dbUsername mobility -t -c "drop table if exists tmp; select (xpath('./DisplayName/text()', di.edata::xml)) AS displayname,di.eclass,di.eaction,di.statedata,d.identifierstring,d.devicetype,d.description,di.creationtime INTO tmp from deviceimages di INNER JOIN devices d ON (di.deviceid = d.deviceid) INNER JOIN users u ON di.userid = u.guid WHERE di.edata ilike '%$displayName%' ORDER BY di.creationtime ASC, di.eaction ASC; select * from tmp;" | less
@@ -3359,6 +3379,7 @@ function whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe {
 }
 
 function dumpSettings {
+	datasyncBanner;
 	local dumpPath
 	local time=`date +%m.%d.%y-%s`;
 	if askYesOrNo "Dump install settings to file?";then
@@ -3443,7 +3464,7 @@ function installMobility { # $1 = repository name
 					echo "$i." ${installArray[$i]};
 				done;
 				echo -n -e "q. quit\n\nSelection: ";
-				read opt;
+				read -n1 opt;
 				dumpFile=`echo ${installArray[$opt]}`
 				if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
 					quit=true
@@ -3488,7 +3509,7 @@ function installMobility { # $1 = repository name
 					echo "$i." ${ipArray[$i]};
 				done;
 				echo -n -e "q. quit\n\nSelection: ";
-				read opt;
+				read -n1 opt;
 				IP=`echo ${ipArray[$opt]}`
 				if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
 					quit=true
@@ -3562,7 +3583,7 @@ function installMobility { # $1 = repository name
 					echo "$i." ${isoArray[$i]};
 				done;
 				echo -n -e "q. quit\n\nSelection: ";
-				read opt;
+				read -n1 opt;
 				isoName=`echo ${isoArray[$opt]}`
 				if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
 					quit=true
@@ -3631,6 +3652,7 @@ while [ "$1" != "" ]; do
 		echo -e "dsapp options:";
 		echo -e "      \t--version\tReport dsapp version"
 		echo -e "      \t--debug\t\tToggles dsapp log debug level [$debug]"
+		echo -e "      \t--bug\t\tReport a issue for dsapp"
 		echo -e "  -au \t--autoUpdate\tToggles dsapp autoUpdate [$autoUpdate]"
 		echo -e "  -ghc\t--gHealthCheck\tGeneral Health Check"
 		echo -e "  -f  \t--force\t\tForce runs dsapp"
@@ -3644,7 +3666,7 @@ while [ "$1" != "" ]; do
 		echo -e "  -d  \t--devices\tPrint a list of all devices with count"
 		echo -e "  -db \t--database\tChange database password"
 		echo -e "  -ch \t--changeHost\tSet previous hostname to fix encryption"
-		echo -e "  -in \t--install\tInstall Mobility (requires previous dump file)"
+		echo -e "  -in \t--install\tDump / Install Mobility Menu"
 	;;
 
 	--version | version) dsappSwitch=1
@@ -3660,6 +3682,15 @@ while [ "$1" != "" ]; do
 		rcDS stop
 		vacuumDB;
 	;;
+
+	--bug) dsappSwtich=1
+		datasyncBanner;
+		echo -e "Report issues to: https://github.com/tdharris/dsapp/issues"
+		echo -e "Please describe the issue in detail.\n\nInclude some of the following if possible:\nLine number\nOutput on screen\nFunction name\nScreenshots"
+		echo -e "\nThanks from,\nTyler Harris\nShane Nielson"
+		echo; eContinue;
+		exit 0;
+		;;
 
 	--index | -i) dsappSwitch=1
 		dbMaintenace=true
@@ -3689,8 +3720,26 @@ while [ "$1" != "" ]; do
 	;;
 
 	--install | -in) dsappSwitch=1
-		installMobility mobility;
-	;;
+		while :
+		do
+			clear;
+			datasyncBanner
+			echo -e "\t1. Dump install settings"
+	 		echo -e "\t2. Install Mobility"
+	 		echo -e "\n\t0. Quit"
+		 	echo -n -e "\n\tSelection: "
+		 	read -n1 opt;
+			case $opt in
+			1) dumpSettings;
+				;;
+			2) installMobility mobility;
+				;;
+
+		/q | q | 0)clear;echo "Bye $USER";break;;
+			*) ;;
+			esac
+		done
+		;; 
 
 	-u | --users) dsappSwitch=1
 		if [ -f ./db.log ];then
@@ -3883,17 +3932,13 @@ cd $cPWD;
  echo -e "\t6. Checks & Queries"
  echo -e "\n\t0. Quit"
  echo -n -e "\n\tSelection: "; tput sc
- echo -e "\n\n\n    Disclaimer: This tool is not supported by Novell.\n    Use at your own discretion."
- tput rc; read opt;
+ echo -e "\n\n\n\tDisclaimer: Use at your own discretion, not supported by Novell.\n\tHow to report a issue: dsapp --bug"
+ tput rc; read -n1 opt;
  a=true;
  case $opt in
 
  db+) clear; ###Log into Database### --Not on Menu--
 	dpsql;
-	;;
-
- ds+) datasyncBanner;
-	dumpSettings;
 	;;
 
 ##################################################################################################
@@ -3912,7 +3957,7 @@ cd $cPWD;
 		 	echo -e "\n\t5. Remove log archives"
 			echo -e "\n\t0. Back"
 		 	echo -n -e "\n\tSelection: "
-		 	read opt;
+		 	read -n1 opt;
 			case $opt in
 	  1) # Upload logs
 			getLogs	
@@ -4094,7 +4139,7 @@ EOF
 		echo -e "\t3. Apply FTF / Patch Files"
 		echo -e "\n\t0. Back"
  		echo -n -e "\n\tSelection: "
- 		read opt
+ 		read -n1 opt
 		case $opt in
 
 			1) registerDS
@@ -4110,7 +4155,7 @@ EOF
 
 			 		echo -e "\n\t0. Back"
 				 	echo -n -e "\n\tSelection: "
-				 	read opt;
+				 	read -n1 opt;
 					case $opt in
 
 						1) # Update DataSync using Novell Update Channel
@@ -4164,7 +4209,7 @@ EOF
 											echo "$i." ${isoArray[$i]};
 										done;
 										echo -n -e "q. quit\n\nSelection: ";
-										read opt;
+										read -n1 opt;
 										isoName=`echo ${isoArray[$opt]}`
 										if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
 											updateQuit=true
@@ -4225,7 +4270,7 @@ EOF
 
 			 		echo -e "\n\t0. Back"
 				 	echo -n -e "\n\tSelection: "
-				 	read opt;
+				 	read -n1 opt;
 					case $opt in
 						
 						#	patchEm will only work given the following conditions are met: 
@@ -4306,7 +4351,7 @@ EOF
 		echo -e "\n\t7. CUSO Clean-Up Start-Over"
 		echo -e "\n\t0. Back -- Start Mobility"
 		echo -n -e "\n\tSelection: "
-		read opt
+		read -n1 opt
 		a=true;
 		dbStatus=false;
 		case $opt in
@@ -4368,7 +4413,7 @@ EOF
 		echo -e "\n3. Uninstall Mobility"
 		echo -e "\n0. Back"
  		echo -n -e "\nSelection: "
- 		read opt
+ 		read -n1 opt
 		case $opt in
 
 			1) 
@@ -4435,7 +4480,7 @@ do
     echo -e "\n\t4. Verify certificate/key pair"
     echo -e "\n\t0. Back"
     echo -n -e "\n\tSelection: "
-    read opt
+    read -n1 opt
     a=true;
     case $opt in
 
@@ -4492,7 +4537,7 @@ done
  	echo -e "\t9. List all devices from db"
 	echo -e "\n\t0. Back"
  	echo -n -e "\n\tSelection: "
- 	read opt;
+ 	read -n1 opt;
 	case $opt in
 			
 		1) # Monitor User Sync (submenu)
@@ -4504,7 +4549,7 @@ done
 
 		 		echo -e "\n\t0. Back"
 			 	echo -n -e "\n\tSelection: "
-			 	read opt;
+			 	read -n1 opt;
 				case $opt in
 
 					1) # Monitor User Sync State
@@ -4538,7 +4583,7 @@ done
 
 		 		echo -e "\n\t0. Back"
 			 	echo -n -e "\n\tSelection: "
-			 	read opt;
+			 	read -n1 opt;
 				case $opt in
 
 					1) # Check GroupWise Folder Structure
@@ -4578,7 +4623,7 @@ done
 
 		 		echo -e "\n\t0. Back"
 			 	echo -n -e "\n\tSelection: "
-			 	read opt;
+			 	read -n1 opt;
 				case $opt in
 
 					1) # Force remove user/group db references
@@ -4720,7 +4765,7 @@ EOF
 		 echo -e "\t7. Watch psql command (CAUTION)"
 		 echo -e "\n\t0. Back"
 		 echo -n -e "\n\tSelection: "
-		 read opt
+		 read -n1 opt
 		 case $opt in
 		 	1) # General Health Check
 				generalHealthCheck
@@ -4874,7 +4919,7 @@ EOF
 					echo -e "\t2. Mobility"
 					echo -e "\n\t0. Back"
 					echo -n -e "\n\tDatabase: "
-					read opt
+					read -n1 opt
 					case $opt in
 						1) database='datasync'
 							datasyncBanner; break;;
@@ -4928,7 +4973,7 @@ EOF
 
 #  		echo -e "\n\t0. Back"
 # 	 	echo -n -e "\n\tSelection: "
-# 	 	read opt;
+# 	 	read -n1 opt;
 # 		case $opt in
 
 # 			1) #
