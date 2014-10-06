@@ -34,6 +34,7 @@ EOF
 	function trapCall {
 		clear;
 		rm -f /opt/novell/datasync/tools/dsapp/tmp/* 2>/dev/null
+		reset;
 		echo "Bye $USER"
 		exit 1;
 	}
@@ -47,7 +48,42 @@ EOF
 		exit 1;
 	fi
 
-	#Check and set force to true
+	function eContinue {
+	local reply="."
+	echo -n "Press [Enter] to continue"
+	while [ -n "$reply" ];do
+		read -n1 -s reply;
+	done
+	clear;
+	}
+
+	# Window Size check
+	if [ `tput lines` -lt '24' ] && [ `tput cols` -lt '85' ];then
+		echo -e "Terminal window to small [`tput cols` x `tput lines`]\nPlease resize window to [80 x 24] or greater."
+		echo; eContinue;
+		exit 1;
+	fi
+
+	# Make sure switch passed in, is valid.
+	switchArray=('-h' '--help' '--version' '--debug' '--bug' '-au' '--autoUpdate' '-ghc' '--gHealthCheck' '-f' '--force' '-ul' '--uploadLogs' '-c' '--check' '-s' '--status' '-up' '--update' '-v' '--vacuum' '-i' '--index' '-u' '--users' '-d' '--devices' '-db' '--database' '-ch' '--changeHost' '-in' '--install')
+	switchCheck="$@"
+	switchError=false
+	while IFS= read -r line
+	do
+		for word in $line
+		do
+			switchFound=`echo ${switchArray[@]} | grep -w -- "$word"`
+			if [ -z "$switchFound" ];then
+				echo "dsapp: '"$word"' is not a valid command. See '--help'."
+				switchError=true
+			fi
+		done
+	done <<< "$switchCheck"
+	if ($switchError);then
+		exit 1;
+	fi
+
+	# Check and set force to true
 	if [ "$1" == "--force" ] || [ "$1" == "-f" ] || [ "$1" == "?" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ] || [ "$1" == "-db" ] || [ "$1" == "--database" ] || [ "$1" == "-in" ] || [ "$1" == "--install" ];then
 		forceMode=1;
 		if [[ "$forceMode" -eq "1" && ( "$1" = "-f" || "$1" = "--force" ) ]];then
@@ -57,6 +93,7 @@ EOF
 		fi
 	fi
 
+	function checkInstall {
 	# Check for Mobility installed.
 	dsInstalled=`chkconfig | grep -iom 1 datasync`;
 	if [ "$dsInstalled" != "datasync" ];then
@@ -64,6 +101,8 @@ EOF
 	else
 		dsInstalledCheck=true
 	fi
+	}
+	checkInstall;
 	
 	if [[ "$forceMode" -ne "1" ]];then
 		if (! $dsInstalledCheck);then
@@ -170,12 +209,26 @@ EOF
 	dsappLog="$dsappLogs/dsapp.log"
 	ghcLog="$dsappLogs/generalHealthCheck.log"
 
+	function setXML {
+	# $1 = XML file
+	# $2 = path to node (/config/configengine/source/provisioning)
+	# $3 = New value
+
+	# Example: setXML "$ceconf" '/config/configengine/source/provisioning' 'groupwise'
+	xmllint --shell $1 <<EOF >/dev/null
+		cd $2
+		set $3
+		save
+		quit
+EOF
+	xmllint --format $1 --output $1
+	}
+
 	# Fetch variables from confs
 	function xmlpath() {
 	  local expr="${1//\// }"
 	  local path=()
 	  local chunk tag data
-
 	  while IFS='' read -r -d '<' chunk; do
 	    IFS='>' read -r tag data <<< "$chunk"
 
@@ -191,6 +244,7 @@ EOF
 	    [[ "${path[@]}" == "$expr" ]] && echo "$data"
 	  done
 	}
+
 	if [ -z "$1" ];then
 		datasyncBanner; echo "Loading Menu..."; else clear;
 	fi
@@ -209,8 +263,8 @@ EOF
 		sSecure=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f1 -d ':'`
 		wPort=`xmlpath 'config/server/port' < $wconf`
 		ldapAdmin=`xmlpath 'config/configengine/ldap/login/dn' < $ceconf`
-		authentication=`xmlpath 'config/configengine/source/authentication' < $ceconf`
 		provisioning=`xmlpath 'config/configengine/source/provisioning' < $ceconf`
+		authentication=`xmlpath 'config/configengine/source/authentication' < $ceconf`
 		galUserName=`xmlpath 'connector/settings/custom/galUserName' < $mconf`
 		groupContainer=`xmlpath 'config/configengine/ldap/groupContainer' < $ceconf`
 		userContainer=`xmlpath 'config/configengine/ldap/userContainer' < $ceconf`
@@ -382,6 +436,9 @@ fi
 }
 
 function askYesOrNo {
+	# If $2 = "skip" Will default return 0;
+	if [ "$2" = "skip" ];then return 0; fi
+
 		REPLY=""
 		while [ -z "$REPLY" ] ; do
 			read -ep "$1 $YES_NO_PROMPT" -n1 REPLY
@@ -401,15 +458,6 @@ NO_STRING=$"n"
 YES_NO_PROMPT=$"[y/n]: "
 YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
 NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
-
-function eContinue {
-	local reply="."
-	echo -n "Press [Enter] to continue"
-	while [ -n "$reply" ];do
-		read -n1 -s reply;
-	done
-	clear;
-}
 
 
 # Toggle announceNewFeature to true
@@ -529,8 +577,9 @@ function autoUpdateDsapp {
 	}
 
 	function decodeString {
-		decodeVar1=`echo "$1" | base64 -d`;
-		decodeVar2=`echo "$decodeVar1" | openssl enc -aes-256-cbc -base64 -k $dsHostname -d 2>>$dsapptmp/error`;
+		local decodeVar1=`echo "$1" | base64 -d`;
+		local decodeVar2=`echo "$decodeVar1" | openssl enc -aes-256-cbc -base64 -k $dsHostname -d 2>>$dsapptmp/error`;
+
 		if [ -f "$dsapptmp/error" ];then
 			local var=`grep "bad decrypt" $dsapptmp/error`
 			if [ -n "$var" ];then
@@ -541,16 +590,17 @@ function autoUpdateDsapp {
 	}
 
 	function isStringProtected {
-		# $1=tags (i.e. <database> "database"); $2=filename
+		# $1 = xml path
+		# $2 = file to check
 		# This will echo 1 if it is protected
-		echo $(sed -n "/<$1>/,/<\/$1>/p" $2 | grep "<protected>" | cut -f2 -d '>' | cut -f1 -d '<')
+		echo "cat $1" | xmllint --shell $2 | sed '1d;$d' | grep -i "<protected>" | grep -o '[0-9]*'
 	}
 
 	# Get & Decode dbpass
 	function getDBPassword {
 		#Grabbing password from configengine.xml
-		dbPassword=`sed -n "/<database>/,/<\/database>/p" $ceconf | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
-		if [[ $(isStringProtected database $ceconf) -eq 1 ]];then
+		dbPassword=`xmlpath 'config/configengine/database/password' < $ceconf`
+		if [[ $(isStringProtected /config/configengine/database $ceconf) -eq 1 ]];then
 			dbPassword=$(decodeString $dbPassword "Database")
 		fi
 
@@ -562,34 +612,10 @@ function autoUpdateDsapp {
 		fi
 	}
 
-if [[ "$forceMode" -ne "1" ]];then
-	#Database .pgpass file / version check.
-	if [ $dsVersion -gt $dsVersionCompare ];then
-		#Log into database or create .pgpass file to login.
-		dbRunning=`rcpostgresql status`;
-		if [ $? -eq '0' ];then
-			if [ $(checkDBPass) -eq 1 ];then
-				getDBPassword;
-				#Creating new .pgpass file
-				echo "*:*:*:*:"$dbPassword > /root/.pgpass;
-				chmod 0600 /root/.pgpass;
-			fi
-		else
-			read -p "Postgresql is not running";exit 1;
-		fi
-
-	else
-		getDBPassword;
-		#Creating new .pgpass file
-		echo "*:*:*:*:"$dbPassword > /root/.pgpass;
-		chmod 0600 /root/.pgpass;
-	fi
-fi
-
 	# Get & decode trustedAppKey
 	function getTrustedAppKey {
-		trustedAppKey=`cat $gconf | grep -i trustedAppKey | sed 's/<[^>]*[>]//g' | tr -d ' '`
-		if [[ $(isStringProtected protected $gconf) -eq 1 ]];then
+		trustedAppKey=`xmlpath 'connector/settings/custom/trustedAppKey' < $gconf`
+		if [[ $(isStringProtected /connector/settings/custom $gconf) -eq 1 ]];then
 			trustedAppKey=$(decodeString $trustedAppKey "Trusted Application")
 		fi
 
@@ -604,9 +630,9 @@ fi
 	# Get & decode ldapLogin password
 	function getldapPassword {
 		# Keeping protected for General Health Check Log
-		protectedldapPassword=`sed -n "/<login>/,/<\/login>/p" $ceconf | grep "<password>" | cut -f2 -d '>' | cut -f1 -d '<'`
+		protectedldapPassword=`xmlpath 'config/configengine/ldap/login/password' < $ceconf`
 		ldapPassword="$protectedldapPassword"
-		if [[ $(isStringProtected login $ceconf) -eq 1 ]];then
+		if [[ $(isStringProtected /config/configengine/ldap/login $ceconf) -eq 1 ]];then
 			ldapPassword=$(decodeString $ldapPassword "LDAP")
 		fi
 
@@ -618,22 +644,86 @@ fi
 		fi
 	}
 
+	function getsmtpPassword {
+		smtpPassword=`xmlpath 'config/configengine/notification/smtpPassword' < $ceconf`
+		if [[ $(isStringProtected /config/configengine/notification $ceconf) -eq 1 ]];then
+			smtpPassword=$(decodeString $smtpPassword "SMTP")
+		fi
+
+		if [ -f "$dsapptmp/error" ];then
+			local var=`grep "SMTP" $dsapptmp/error`
+			if [ -n "$var" ];then echo -e "Encryption on SMTP wrong.";
+				decodeProblem=true;
+			fi
+		fi
+	}
+
+	function createPGPASS {
+		getDBPassword;
+		#Creating new .pgpass file
+		echo "*:*:*:*:"$dbPassword > /root/.pgpass;
+		chmod 0600 /root/.pgpass;
+	}
+
+	function checkPGPASS {
+		#Database .pgpass file / version check.
+		if [ $dsVersion -gt $dsVersionCompare ];then
+		#Log into database or create .pgpass file to login.
+		dbRunning=`rcpostgresql status`;
+		if [ $? -eq '0' ];then
+			if [ $(checkDBPass) -eq 1 ];then
+				createPGPASS;
+			fi
+			else
+				read -p "Postgresql is not running";exit 1;
+			fi
+		else
+			createPGPASS;
+		fi
+	}
+
+	if [[ "$forceMode" -ne "1" ]];then
+		checkPGPASS;
+	fi
+
+	function backupConf { # $1 = function name calling this function.
+	local now=$(date '+%X_%F')
+		mkdir -p $dsappBackup/$1/$now/
+		cp $ceconf $econf $dsappBackup/$1/$now/
+		mkdir -p $dsappBackup/$1/$now/gConnector/
+		cp $gconf $dsappBackup/$1/$now/gConnector/
+		mkdir -p $dsappBackup/$1/$now/mConnector/
+		cp $mconf $dsappBackup/$1/$now/mConnector/
+
+		echo -e "\nBackup of configuration files at $dsappBackup/$1/$now"
+	}
+
 	# Compare dsHostname hostname, with server hostname
 	function checkHostname {
+		local lineNumber
 	if [ -n "$1" ];then
 		local skip="true";
 			echo "$1" > $dsappConf/dsHostname.conf;
 			dsHostname=`cat $dsappConf/dsHostname.conf`
-	else local skip="false";
+			local var="skip"
+	else local skip="false"; local var="";
 	fi
 
 	if [[ "$dsHostname" != `hostname -f` ]] || [ "$skip" = "true" ];then 
-		if(! $skip);then echo "Hostname differs from last time dsapp ran.";fi
-		if askYesOrNo "Update configuration files";then
+		if(! $skip);then echo -e "\nHostname differs from last time dsapp ran.";fi
+		if askYesOrNo "Reconfigure Mobility encryption using [$dsHostname]:" "$var";then
 			rm -f $dsapptmp/error
+			decodeProblem=false
 			getDBPassword;
 			getTrustedAppKey;
 			getldapPassword;
+			if [ $dsVersion -gt $dsVersionCompare ]; then
+				getsmtpPassword;
+			fi
+			if ($decodeProblem);then
+				echo -e "\nUnable to reconfigure encryption... Aborting reconfigure.";
+				return 1;
+			fi
 
 			# Setting dsHostname to new hostname
 			echo `hostname -f` > $dsappConf/dsHostname.conf
@@ -643,33 +733,40 @@ fi
 			dbPassword=$(encodeString $dbPassword)
 			trustedAppKey=$(encodeString $trustedAppKey)
 			ldapPassword=$(encodeString $ldapPassword)
+			smtpPassword=$(encodeString $smtpPassword)
 
 			# Backup all configuration files
 			backupConf "checkHostname"		
 
 			# Setting database password in multiple files
-			if [[ $(isStringProtected database $ceconf) -eq 1 ]];then
-				lineNumber=`grep "database" -A 7 -n $ceconf | grep password | cut -d '-' -f1`
+			if [[ $(isStringProtected /config/configengine/database $ceconf) -eq 1 ]];then
+				lineNumber=`cat --number $ceconf | sed -n "/<database>/,/<\/database>/p" | grep -i password | awk '{print $1}'`
 				sed -i ""$lineNumber"s|<password>.*</password>|<password>"$dbPassword"</password>|g" $ceconf
 			fi
 
-			if [[ $(isStringProtected database $econf) -eq 1 ]];then
+			if [[ $(isStringProtected /engine/settings/database $econf) -eq 1 ]];then
 				sed -i "s|<password>.*</password>|<password>"$dbPassword"</password>|g" $econf
 			fi
 
-			if [[ $(isStringProtected protected $mconf) -eq 1 ]];then
+			if [[ $(isStringProtected /connector/settings/custom $mconf) -eq 1 ]];then
 				sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$dbPassword"</dbpass>|g" $mconf
 			fi
 
 			# Setting TrustedAppKey with new hostname encoding
-			if [[ $(isStringProtected protected $gconf) -eq 1 ]];then
+			if [[ $(isStringProtected /connector/settings/custom $gconf) -eq 1 ]];then
 				sed -i "s|<trustedAppKey>.*</trustedAppKey>|<trustedAppKey>"$trustedAppKey"</trustedAppKey>|g" $gconf
 			fi
 
 			# Setting ldapPassword with new hostname encoding
-			if [[ $(isStringProtected login $ceconf) -eq 1 ]];then
-				lineNumber=`grep -i "<login>" -A 4 -n $ceconf | grep password | cut -d '-' -f1`
+			if [[ $(isStringProtected /config/configengine/ldap/login $ceconf) -eq 1 ]];then
+				lineNumber=`cat --number $ceconf | sed -n "/<ldap>/,/<\/ldap>/p" | grep -i password | awk '{print $1}'`
 				sed -i ""$lineNumber"s|<password>.*</password>|<password>"$ldapPassword"</password>|g" $ceconf
+			fi
+
+			# Setting smtp password with new encoding
+			if [[ $(isStringProtected /config/configengine/notification $ceconf) -eq 1 ]];then
+				lineNumber=`cat --number $ceconf | sed -n "/<notification>/,/<\/notification>/p" | grep -i password | awk '{print $1}'`
+				sed -i ""$lineNumber"s|<smtpPassword>>.*</smtpPassword>>|<smtpPassword>>"$smtpPassword"</smtpPassword>>|g" $ceconf
 			fi
 
 			echo -e "\nConfiguration files updated.\nPlease restart Mobility."
@@ -689,7 +786,7 @@ fi
 #	Initialize Variables
 ##################################################################################################
 	function setVariables {
-		# Depends on version 1.0 or 2.0
+		# Depends on version 1.x or 2.x
 		if ($dsInstalledCheck);then
 			if [ $dsVersion -gt $dsVersionCompare ]; then
 				declareVariables2
@@ -703,12 +800,17 @@ fi
 # Things to run in initialization
 decodeProblem=false
 dsappLogRotate;
-getldapPassword;
-getTrustedAppKey;
-getDBPassword;
-checkHostname;
+if [ "$1" != "-ch" ] && [ "$1" != "--changeHost" ] && [ "$1" != "-h" ] && [ "$1" != "--help" ];then
+	getldapPassword;
+	getTrustedAppKey;
+	getDBPassword;
+	if [ $dsVersion -gt $dsVersionCompare ]; then
+		getsmtpPassword;
+	fi
+	checkHostname;
 
-if ($decodeProblem);then echo -e "\nPossible hostname change";eContinue;fi
+	if ($decodeProblem);then echo -e "\nPossible hostname change";eContinue;fi
+fi
 
 log "[Init] dsapp v$dsappversion | Mobility version: $mobilityVersion"
 log_debug "[Init] dsHostname: $dsHostname"
@@ -718,6 +820,7 @@ log_debug "[Init] GroupWise-Agent: $sListenAddress:$gPort | Mobility-Agent: $mli
 log_debug "[Init] [checkDBPass] $dbUsername:$dbPassword"
 log_debug "[Init] [getTrustedAppKey] $trustedName:$trustedAppKey"
 log_debug "[Init] [getldapPassword] $ldapAdmin:$ldapPassword"
+log_debug "[Init] [getsmtpPassword] $smtpPassword"
 
 ##################################################################################################
 #
@@ -1745,6 +1848,7 @@ EOF
 }
 
 function changeDBPass {
+	local lineNumber input
 	datasyncBanner;
 	read -p "Enter new database password: " input
 	if [ -z "$input" ];then
@@ -1752,28 +1856,28 @@ function changeDBPass {
 		exit 1
 	fi
 	#Get Encrypted password from user input
-	inputEncrpt=$(encodeString $input)
+	local inputEncrpt=$(encodeString $input)
 
 	# Backup conf files
 	backupConf "changeDBPass";
 
 	echo "Changing database password"
 	su postgres -c "psql -c \"ALTER USER datasync_user WITH password '"$input"';\"" &>/dev/null
-	lineNumber=`grep "database" -A 7 -n $ceconf | grep password | cut -d '-' -f1`
+	lineNumber=`cat --number $ceconf | sed -n "/<database>/,/<\/database>/p" | grep -i password | awk '{print $1}'`
 
-	if [[ $(isStringProtected database $ceconf) -eq 1 ]];then
+	if [[ $(isStringProtected /config/configengine/database $ceconf) -eq 1 ]];then
 		sed -i ""$lineNumber"s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $ceconf
 	else
 		sed -i ""$lineNumber"s|<password>.*</password>|<password>"$input"</password>|g" $ceconf
 	fi
 
-	if [[ $(isStringProtected database $econf) -eq 1 ]];then
+	if [[ $(isStringProtected /engine/settings/database $econf) -eq 1 ]];then
 		sed -i "s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $econf
 	else
 		sed -i "s|<password>.*</password>|<password>"$input"</password>|g" $econf
 	fi
 
-	if [[ $(isStringProtected protected $mconf) -eq 1 ]];then
+	if [[ $(isStringProtected /connector/settings/custom $mconf) -eq 1 ]];then
 		sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$inputEncrpt"</dbpass>|g" $mconf
 	else
 		sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$input"</dbpass>|g" $mconf
@@ -2027,12 +2131,15 @@ function verify {
 }
 
 function dumpTable {
+	# $1 = database name
+	# $2 - Table name
+	# $3 - Path to store file
 	if [ -f "$dsappConf/$2.sql" ];then
 		echo -e "\n$2.sql dump already exists. Created" `date -r $dsappConf/$2.sql`
 		if askYesOrNo "Overwrite ../conf/$2.sql dump?"; then
 			echo "Moving ../conf/$2.sql to ../tmp/$2.sql"
 			mv $dsappConf/$2.sql $dsapptmp/$2.sql
-			 pg_dump -U $dbUsername $1 -D -a -t \"$2\" > $dsappConf/$2.sql;
+			 pg_dump -U $dbUsername $1 -D -a -t \"$2\" > $3/$2.sql;
 			 vReturn="$?";
 
 			 if [[ "$vReturn" -eq "1" ]];then
@@ -2043,7 +2150,7 @@ function dumpTable {
 			 fi
 		fi
 	else
-		pg_dump -U $dbUsername $1 -D -a -t \"$2\" > $dsappConf/$2.sql;
+		pg_dump -U $dbUsername $1 -D -a -t \"$2\" > $3/$2.sql;
 			 vReturn="$?";
 
 			 if [[ "$vReturn" -eq "1" ]];then
@@ -2526,18 +2633,6 @@ function empty {
     fi
 
     [[ $( echo "" ) ]]
-}
-
-function backupConf { # $1 = function name calling this function.
-	local now=$(date '+%X_%F')
-		mkdir -p $dsappBackup/$1/$now/
-		cp $ceconf $econf $dsappBackup/$1/$now/
-		mkdir -p $dsappBackup/$1/$now/gConnector/
-		cp $gconf $dsappBackup/$1/$now/gConnector/
-		mkdir -p $dsappBackup/$1/$now/mConnector/
-		cp $mconf $dsappBackup/$1/$now/mConnector/
-
-		echo "Backup of configuration files at $dsappBackup/$1/$now"
 }
 
 # Check Functions/Modules
@@ -3385,7 +3480,11 @@ function dumpSettings {
 	if askYesOrNo "Dump install settings to file?";then
 		promptVerifyPath "Path to save file: " dumpPath
 		local dumpFile=$(readlink -m "$dumpPath/mobilitySettings.conf")
-		# local notification="$(echo "cat /config/configengine/notification"| xmllint --nocdata --shell $ceconf | sed '1d;$d')" 
+
+		# Get old XML settings to dump into new install XML
+		local xmlNotification=`echo "cat /config/configengine/notification"| xmllint --shell $ceconf | sed '1d;$d' | sed '1d;$d' | tr -d " \t\n\r"`
+		local xmlLDAP=`echo "cat /config/configengine/ldap"| xmllint --shell $ceconf | sed '1d;$d' | sed '1d;$d' | tr -d " \t\n\r"`
+
 
 		# Dumping all install variables neatly into dumpFile
 		echo -e "\nDumping install settings to file..."
@@ -3393,12 +3492,10 @@ function dumpSettings {
 		while IFS= read -r line; do echo -e "# User Container: $line" >> $dumpFile;done <<< "$userContainer"; while IFS= read -r line; do echo -e "# Group Container: $line" >> $dumpFile; done <<< "$groupContainer"
 		echo -e "\n###########################################################\n# Database Settings\n###########################################################\n\n# Database Username: $dbUsername\n# Database Password: $dbPassword" >> $dumpFile
 		echo -e "\n###########################################################\n# Trusted App Settings\n###########################################################\n\n# Trusted Application Name: $trustedName\n# Trusted Application Key: $trustedAppKey">> $dumpFile
-		echo -e "\n###########################################################\n# GroupWise Settings\n###########################################################\n\n# GroupWise IP: $sListenAddress\n# SOAP Port: $sPort">> $dumpFile; if [ "$sSecure" = "https" ];then echo -e "# SOAP Secure: yes" >>$dumpFile; else echo -e "# SOAP Secure: no" >>$dumpFile; fi
+		echo -e "\n###########################################################\n# GroupWise Settings\n###########################################################\n\n# GroupWise IP: $gListenAddress\n# SOAP Port: $sPort">> $dumpFile; if [ "$sSecure" = "https" ];then echo -e "# SOAP Secure: yes" >>$dumpFile; else echo -e "# SOAP Secure: no" >>$dumpFile; fi
 		echo -e "\n###########################################################\n# Device Settings\n###########################################################\n\n# Device Port: $mPort">> $dumpFile; if [ $mSecure -eq 1 ];then echo -e "# Device Secure: true" >>$dumpFile; else echo -e "# Device Secure: false" >>$dumpFile; fi
-		echo -e "\n###########################################################\n# GMS Settings\n###########################################################\n\n# Server Listen Addresss: $sListenAddress\n# GroupWise Connector Port: $gPort\n# GroupWise Address book user: $galUserName\n# GroupWise Attachment Limit: $gAttachSize KB\n# Mobility Attachment Limit: $mAttachSize KB">> $dumpFile
-		echo -e "\n###########################################################\n# XML Settings $ceconf\n###########################################################\n" >> $dumpFile; 
+		echo -e "\n###########################################################\n# GMS Settings\n###########################################################\n\n# Server Listen Addresss: $sListenAddress\n# GroupWise Connector Port: $gPort\n# GroupWise Address book user: $galUserName\n# GroupWise Attachment Limit: $gAttachSize KB\n# Mobility Attachment Limit: $mAttachSize KB\n# Provisioning: $provisioning\n# Authentication: $authentication">> $dumpFile
 		while IFS= read -r line; do echo -e "# Web Admins: $line" >> $dumpFile;done <<< "$webAdmins"
-		# echo >> $dumpFile; while IFS= read -r line; do echo "$line" >> $dumpFile; done <<< "$notification"
 
 		# Dumping variable names/values into file to be sourced in later
 		echo -e "\n###########################################################\n# Source install variables\n###########################################################\n\nldapAddress=\"$ldapAddress\"\nldapPort=\"$ldapPort\"\nldapSecure=\"$ldapSecure\"\nldapAdmin=\"$ldapAdmin\"\nldapPassword=\"$ldapPassword\"" >> $dumpFile
@@ -3410,7 +3507,13 @@ function dumpSettings {
 		if [ $mSecure -eq 1 ];then echo -e "mSecure=\"true\"" >>$dumpFile; else echo -e "mSecure=\"false\"" >>$dumpFile; fi
 		echo -e "gPort=\"$gPort\"\ngalUserName=\"$galUserName\"\ngAttachSize=\"$gAttachSize\"\nmAttachSize=\"$mAttachSize\"" >>$dumpFile;
 		echo -en "webAdmins=\"" >> $dumpFile; while IFS= read -r line; do echo -en "$line " >> $dumpFile; done <<< "$webAdmins"; sed -i 's/ *$//' $dumpFile; echo '"' >> $dumpFile;
+		echo -e "provisioning=\"$provisioning\"\nauthentication=\"$authentication\"\nsmtpPassword=\"$smtpPassword\"\n\nxmlNotification=\"$xmlNotification\"\nxmlLDAP=\"$xmlLDAP\"" >> $dumpFile;
 		echo -e "Successfully saved settings to $dumpFile"
+
+		# Dumping target, and membershipCache table
+		echo -e "\nGetting database tables..."
+		dumpTable "datasync" "targets" $dumpPath;
+		dumpTable datasync membershipCache $dumpPath;
 
 		# Dumping certificate
 		echo -e "\nGetting server certificates..."
@@ -3419,10 +3522,10 @@ function dumpSettings {
 
 		# Tar up dumpFile and mobility.pem
 		cd $dumpPath;
-		tar czf mobility_install-$time.tgz mobilitySettings.conf mobility.pem server.pem 2>/dev/null
+		tar czf mobility_install-$time.tgz mobilitySettings.conf mobility.pem server.pem targets.sql membershipCache.sql 2>/dev/null
 		echo -e "\nDump install settings complete..."
 		echo -n "Saved to: "; readlink -m "$dumpPath/mobility_install-$time.tgz"
-		rm -f mobilitySettings.conf mobility.pem server.pem
+		rm -f mobilitySettings.conf mobility.pem server.pem targets.sql membershipCache.sql
 
 		echo;eContinue;
 	fi
@@ -3520,8 +3623,8 @@ function installMobility { # $1 = repository name
 				fi
 			done
 		elif [ "$sListenAddress" != "$IP" ];then
-			echo "Dump IP: $sListenAddress does not match server IP: $IP";
-			if askYesOrNo "Use server IP?";then
+			echo "Dump IP [$sListenAddress] does not match server IP [$IP]";
+			if askYesOrNo "Use server IP [$IP]?";then
 				sListenAddress=$IP
 				quit=false
 			elif askYesOrNo "Continue install with IP: $sListenAddress";then
@@ -3611,21 +3714,59 @@ function installMobility { # $1 = repository name
 				zypper --gpg-auto-import-keys ref -f $1
 
 				# Install packages.
-				# TODO : Test code to make sure works for existing installs
 				# local packages=`zypper info -t pattern \`zypper -x pt --repo $1 | grep "pattern name=" | cut -f2 -d '"'\` | cut -f2- -d '|' | grep  "| package |" | awk '{print $1}'`
 				zypper --non-interactive install -t pattern `zypper -x pt --repo $1 | grep "pattern name=" | cut -f2 -d '"'`
 
 				# Run each python file with each setup
 				$setupDir/$setup1; python $setupDir/$setup2; python $setupDir/$setup3; $setupDir/$setup4; python $setupDir/$setup5; python $setupDir/$setup6; python $setupDir/$setup7
 				
+				# Set dsapp variables for new install
+				checkInstall;
+				setVariables;
+
+				# Kill / stop mobility
+				killall -9 python;
+				rcDS stop silent;
+
+				# Restoring configengine xml settings
+				setXML "$ceconf" '/config/configengine/source/provisioning' "$provisioning"
+				setXML "$ceconf" '/config/configengine/source/authentication' "$authentication"
+
+				# setXML "$ceconf" '/config/configengine/notification' "$xmlNotification"
+				awk '/<notification>/{p=1;print;print "'$xmlNotification'"}/<\/notification>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
+				if [ -n "$smtpPassword" ];then
+					if [[ $(isStringProtected /config/configengine/notification $ceconf) -eq 1 ]];then
+					smtpPassword=`encodeString "$smtpPassword"`
+					fi
+				fi
+
+				# setXML "$ceconf" '/config/configengine/ldap' "$xmlLDAP"
+				awk '/<ldap>/{p=1;print;print "'$xmlLDAP'"}/<\/ldap>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
+				if [[ $(isStringProtected /config/configengine/ldap/login $ceconf) -eq 1 ]];then
+					ldapPassword=`encodeString "$ldapPassword"`
+				fi
+				setXML "$ceconf" '/config/configengine/ldap/login/password' "$ldapPassword"
+				setXML "$mconf" '/connector/settings/custom/attachmentMaxSize' "$mAttachSize"
+				setXML "$gconf" '/connector/settings/custom/attachmentMaxSize' "$gAttachSize"
+
+
 				# Copy in old certificates
 				echo
 				cd $dumpPath
-				if askYesOrNo "Apply dump install certificates?";then
+				if askYesOrNo "Restore certificates from dump?";then
 					cp mobility.pem $dirVarMobility/device/
 					cp server.pem $dirVarMobility/webadmin/
 				fi
-				rm -f mobility.pem server.pem
+				if askYesOrNo "Restore users & groups from dump?";then
+					checkPGPASS;
+					psql -U $dbUsername datasync < targets.sql 2>/dev/null
+					psql -U $dbUsername datasync < membershipCache.sql 2>/dev/null
+				fi
+				rm -f mobility.pem server.pem targets.sql membershipCache.sql
+
+				if askYesOrNo "Start Mobility?";then
+					rcDS start;
+				fi
 
 				echo -e "Mobility `cat $dirOptMobility/version` install complete"
 			fi
@@ -3687,7 +3828,7 @@ while [ "$1" != "" ]; do
 		datasyncBanner;
 		echo -e "Report issues to: https://github.com/tdharris/dsapp/issues"
 		echo -e "Please describe the issue in detail.\n\nInclude some of the following if possible:\nLine number\nOutput on screen\nFunction name\nScreenshots"
-		echo -e "\nThanks from,\nTyler Harris\nShane Nielson"
+		echo -e "\nThanks you,\n\nShane Nielson\nTyler Harris"
 		echo; eContinue;
 		exit 0;
 		;;
@@ -3730,7 +3871,7 @@ while [ "$1" != "" ]; do
 		 	echo -n -e "\n\tSelection: "
 		 	read -n1 opt;
 			case $opt in
-			1) dumpSettings;
+			1) 	checkPGPASS;dumpSettings;
 				;;
 			2) installMobility mobility;
 				;;
@@ -3847,7 +3988,7 @@ while [ "$1" != "" ]; do
 		if [ -n "$domainVar" ];then echo -e "\nDomains:"; cat $dsapptmp/tmpdomain;fi
 		if [ -z "$hostNameVar" ] && [ -z "$domainVar" ];then printf "Could not find any results.\n\n";fi
 		echo -e "\nCurrent fqdn hostname:" `hostname -f`;
-		if [ -n "$hostNameVar" ];then printf "Possible last used hostname: "; printf `tac $dsapptmp/tmpHostname | sed -n 2p`;
+		if [ -n "$hostNameVar" ];then printf "Possible last used hostname: "; if [ `cat $dsapptmp/tmpHostname | wc -w` -lt 2 ];then printf `tac $dsapptmp/tmpHostname | sed -n 1p`; else printf `tac $dsapptmp/tmpHostname | sed -n 2p`; fi
 			if [ -n "$domainVar" ];then printf .; printf `tac $dsapptmp/tmpdomain | sed -n 1p`;fi
 			printf "\n\n";
 		fi
@@ -3857,7 +3998,7 @@ while [ "$1" != "" ]; do
 		do
 			read -p "Enter in last used fqdn hostname: " oldHostname;
 			if [ -n "$oldHostname" ];then
-				if askYesOrNo $"Set dsapp hostname to [$oldHostname]:";then
+				echo;if askYesOrNo $"Reconfigure Mobility encryption using [$oldHostname]:";then
 					checkHostname "$oldHostname"; break;
 				else
 					break
@@ -3884,7 +4025,7 @@ while [ "$1" != "" ]; do
 
 if [ -f ./db.log ];then
 	less db.log
-	rm db.log
+	rm -f db.log
 fi
 
 if ($dbMaintenace);then
@@ -3892,6 +4033,7 @@ if ($dbMaintenace);then
 fi
 
 if [ "$dsappSwitch" -eq "1" ];then
+	($pgpass) && rm -f ~/.pgpass;
 	exit 0;
 fi
 
@@ -3901,13 +4043,6 @@ fi
 #	Main Menu
 #
 ##################################################################################################
-
-#Window Size check
-if [ `tput lines` -lt '24' ] && [ `tput cols` -lt '85' ];then
-	echo -e "Terminal window to small [`tput cols` x `tput lines`]\nPlease resize window to [80 x 24] or greater."
-	echo; eContinue;
-	exit 1;
-fi
 
 if [ -z "$1" ];then
 	# Announce new Feature
@@ -3932,7 +4067,7 @@ cd $cPWD;
  echo -e "\t6. Checks & Queries"
  echo -e "\n\t0. Quit"
  echo -n -e "\n\tSelection: "; tput sc
- echo -e "\n\n\n\tDisclaimer: Use at your own discretion, not supported by Novell.\n\tHow to report a issue: dsapp --bug"
+ echo -e "\n\n\n\tDisclaimer: Use at your own discretion, not supported by Novell.\n\tReport issues with [dsapp --bug]"
  tput rc; read -n1 opt;
  a=true;
  case $opt in
@@ -4419,9 +4554,9 @@ EOF
 			1) 
 			datasyncBanner;
 			if askYesOrNo $"Clean up and start over (Except Users)?"; then
-				dumpTable "datasync" "targets";
+				dumpTable "datasync" "targets" $dsappConf;
 				if [ "$?" -eq 0 ]; then
-					dumpTable datasync membershipCache;
+					dumpTable datasync membershipCache $dsappConf;
 					if [ "$?" -eq 0 ]; then
 						cuso 'create' 'users';
 					else echo "Failed to dump membershipCache table."
@@ -4951,9 +5086,7 @@ EOF
   /q | q | 0) 
 				clear
 				echo "Bye $USER"
-				if($pgpass);then
-					rm -f ~/.pgpass
-				fi
+				($pgpass) && rm -f ~/.pgpass;
 				exit 0;;
   *) ;;
 
