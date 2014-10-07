@@ -842,6 +842,32 @@ log_debug "[Init] [getsmtpPassword] $smtpPassword"
 	    eval "$2='$path'"
 	}
 
+	function checkYaST {
+		# Check if YaST is running
+		local yastRun=`ps aux | grep -i yast | awk '{print $2}' | sed '$d'`
+		if [ -n "$yastRun" ];then
+			echo -e "\nYaST is running. Close YaST before proceeding"
+			if askYesOrNo "Do you want close YaST now?";then
+				kill $yastRun
+				sleep 1;
+				yastRun=`ps aux | grep -i yast | awk '{print $2}' | sed '$d'`
+				if [ -n "$yastRun" ];then
+					if askYesOrNo "Unable to close YaST. Force close YaST?";then
+						kill -9 $yastRun
+					else return 1;
+					fi
+				fi
+			else return 1;
+			fi
+		fi
+		yastRun=`ps aux | grep -i yast | awk '{print $2}' | sed '$d'`
+		if [ -n "$yastRun" ];then
+			echo -e "YaST could not be closed. Aborting install"
+			return 1;
+		else return 0;
+		fi
+	}
+
 	function getLogs {
 		datasyncBanner;
 		rm -r $dsappupload/* 2>/dev/null
@@ -3535,6 +3561,13 @@ function installMobility { # $1 = repository name
 	datasyncBanner;
 	local dumpFile path quit
 	if askYesOrNo "Install mobility?";then
+
+		# Check if Yast is running.
+		checkYaST;
+		if [ $? -eq 1 ];then
+			eContinue;
+			exit 1;
+		fi
 		# Get Directory
 		while [ ! -d "$path" ]; do
 			read -ep "Enter full path to the directory of install dump: " path;
@@ -3643,9 +3676,11 @@ function installMobility { # $1 = repository name
 	# Create local variables for python installs
 	local setup1="postgres_setup_1.sh"
 	local setup2="odbc_setup_2.pyc"
-	local setup3="mobility_setup_3.pyc --dbpass $dbPassword --ldapgroup`for item in ${groupContainer}; do echo -n " $item"; done` --ldapuser`for item in ${userContainer}; do echo -n " $item"; done` --ldapadmin $ldapAdmin --ldappass $ldapPassword --ldaphost $ldapAddress --ldapport $ldapPort --ldapsecure $ldapSecure --webadmin`for item in ${webAdmins}; do echo -n " $item"; done`"
+	# local setup3="mobility_setup_3.pyc --dbpass $dbPassword --ldapgroup`for item in ${groupContainer}; do echo -n " $item"; done` --ldapuser`for item in ${userContainer}; do echo -n " $item"; done` --ldapadmin $ldapAdmin --ldappass $ldapPassword --ldaphost $ldapAddress --ldapport $ldapPort --ldapsecure $ldapSecure --webadmin`for item in ${webAdmins}; do echo -n " $item"; done`"
+	local setup3="mobility_setup_3.pyc --provision 'groupwise' --dbpass $dbPassword"
 	local setup4="enable_setup_4.sh"
-	local setup5="mobility_setup_5.pyc --galuser $galUserName --block false --selfsigned true --path '' --lport $mPort --secure $mSecure"
+	# local setup5="mobility_setup_5.pyc --galuser $galUserName --block false --selfsigned true --path '' --lport $mPort --secure $mSecure"
+	local setup5="mobility_setup_5.pyc --provision 'groupwise' --galuser $galUserName --block false --selfsigned true --path '' --lport $mPort --secure $mSecure"
 	local setup6="groupwise_setup_6.pyc --keypath $keyFile --lport $gPort --lip $sListenAddress --version '802' --soap $gListenAddress --key $trustedName --sport $sPort --psecure $sSecure"
 	local setup7="start_mobility.pyc"
 
@@ -4260,208 +4295,204 @@ EOF
 #	Update / Register Menu
 #
 ##################################################################################################
-   2) ps -ef | grep -v grep | grep "y2control*" >/dev/null
-		if [ $? -ne 1 ]; then
-		echo "Please close YaST before continuing.";
-		eContinue;
-		else
-		while :
-		do
-		 datasyncBanner;
-		cd $cPWD;
-		echo -e "\t1. Register Mobility"
-		echo -e "\t2. Update Mobility"
-		echo -e "\t3. Apply FTF / Patch Files"
-		echo -e "\n\t0. Back"
- 		echo -n -e "\n\tSelection: "
- 		read -n1 opt
-		case $opt in
+   2) 
+	while :
+	do
+	datasyncBanner;
+	cd $cPWD;
+	echo -e "\t1. Register Mobility"
+	echo -e "\t2. Update Mobility"
+	echo -e "\t3. Apply FTF / Patch Files"
+	echo -e "\n\t0. Back"
+	echo -n -e "\n\tSelection: "
+	read -n1 opt
+	case $opt in
 
-			1) registerDS
-				;;
+		1) registerDS
+			;;
 
-			2) # Update Mobility submenu
-				while :
-				do
-					datasyncBanner;
-					echo -e "\t1. Update with Novell Update Channel"
-					echo -e "\t2. Update with Local ISO"
-					echo -e "\t3. Update with Novell FTP"
+		2) checkYaST; if [ $? -eq 1 ];then eContinue; break; fi
+		# Update Mobility submenu
+			while :
+			do
+				datasyncBanner;
+				echo -e "\t1. Update with Novell Update Channel"
+				echo -e "\t2. Update with Local ISO"
+				echo -e "\t3. Update with Novell FTP"
 
-			 		echo -e "\n\t0. Back"
-				 	echo -n -e "\n\tSelection: "
-				 	read -n1 opt;
-					case $opt in
+		 		echo -e "\n\t0. Back"
+			 	echo -n -e "\n\tSelection: "
+			 	read -n1 opt;
+				case $opt in
 
-						1) # Update DataSync using Novell Update Channel
-							datasyncBanner;
-							echo -e "\n"
-							zService=`zypper ls |grep -iwo nu_novell_com | head -1`;
-							if [ "$zService" = "nu_novell_com" ]; then
-								if askYesOrNo $"Permission to restart Mobility when applying update?"; then
-								#Get the Correct Novell Update Channel
-								echo -e "\n"
-								nuc=`zypper lr | grep nu_novell_com | sed -e "s/.*nu_novell_com://;s/| Mobility.*//"`;
-								dsUpdate $nuc;
-								fi
-							else
-								echo "Please register Mobility to use this function."
-							fi
-							eContinue;
-							;;
-
-						2) #Update Datasync using local ISO
-							datasyncBanner;
+					1) # Update DataSync using Novell Update Channel
+						datasyncBanner;
+						echo -e "\n"
+						zService=`zypper ls |grep -iwo nu_novell_com | head -1`;
+						if [ "$zService" = "nu_novell_com" ]; then
 							if askYesOrNo $"Permission to restart Mobility when applying update?"; then
-								#Get Directory
-								while [ ! -d "$path" ]; do
-									read -ep "Enter full path to the directory of ISO file: " path;
-									if [ ! -d "$path" ]; then
-										echo "Invalid directory entered. Please try again.";
+							#Get the Correct Novell Update Channel
+							echo -e "\n"
+							nuc=`zypper lr | grep nu_novell_com | sed -e "s/.*nu_novell_com://;s/| Mobility.*//"`;
+							dsUpdate $nuc;
+							fi
+						else
+							echo "Please register Mobility to use this function."
+						fi
+						eContinue;
+						;;
+
+					2) #Update Datasync using local ISO
+						datasyncBanner;
+						if askYesOrNo $"Permission to restart Mobility when applying update?"; then
+							#Get Directory
+							while [ ! -d "$path" ]; do
+								read -ep "Enter full path to the directory of ISO file: " path;
+								if [ ! -d "$path" ]; then
+									echo "Invalid directory entered. Please try again.";
+								fi
+								if [ -d "$path" ]; then
+									ls "$path"/novell*mobility*.iso &>/dev/null;
+									if [ $? -ne "0" ]; then
+									echo "No mobility ISO found at this path.";
+									path="";
 									fi
-									if [ -d "$path" ]; then
-										ls "$path"/novell*mobility*.iso &>/dev/null;
-										if [ $? -ne "0" ]; then
-										echo "No mobility ISO found at this path.";
-										path="";
-										fi
+								fi
+							done
+							cd "$path";
+
+							#Get File
+							# Check if multiple ISO found
+							if [ `ls novell*mobility*.iso | wc -w` -gt 1 ];then
+								isoArray=($(ls novell*mobility*.iso))
+								while true;
+								do
+									datasyncBanner;
+									echo -e "Multiple ISOs found"
+									echo -e "Input what ISO to apply\n";
+									# Loop through array to print all available selections.
+									for ((i=0;i<`echo ${#isoArray[@]}`;i++))
+									do
+										echo "$i." ${isoArray[$i]};
+									done;
+									echo -n -e "q. quit\n\nSelection: ";
+									read -n1 opt;
+									isoName=`echo ${isoArray[$opt]}`
+									if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
+										updateQuit=true
+										break;
+									elif [[ $opt =~ ^[0-9]$ ]] && [ $opt -lt `echo ${#isoArray[@]}` ];then
+										updateQuit=false
+										break;
 									fi
 								done
-								cd "$path";
-
-								#Get File
-								# Check if multiple ISO found
-								if [ `ls novell*mobility*.iso | wc -w` -gt 1 ];then
-									isoArray=($(ls novell*mobility*.iso))
-									while true;
-									do
-										datasyncBanner;
-										echo -e "Multiple ISOs found"
-										echo -e "Input what ISO to apply\n";
-										# Loop through array to print all available selections.
-										for ((i=0;i<`echo ${#isoArray[@]}`;i++))
-										do
-											echo "$i." ${isoArray[$i]};
-										done;
-										echo -n -e "q. quit\n\nSelection: ";
-										read -n1 opt;
-										isoName=`echo ${isoArray[$opt]}`
-										if [ "$opt" = "q" ] || [ "$opt" = "Q" ];then
-											updateQuit=true
-											break;
-										elif [[ $opt =~ ^[0-9]$ ]] && [ $opt -lt `echo ${#isoArray[@]}` ];then
-											updateQuit=false
-											break;
-										fi
-									done
-								else
-									isoName=`ls novell*mobility*.iso`
-									updateQuit=false
-								fi
-
-								if (! $updateQuit);then
-									# Confirm to update with the following ISO
-									echo
-									if askYesOrNo "Update to $isoName?";then
-										#zypper update process
-										zypper rr mobility 2>/dev/null;
-										zypper addrepo 'iso:///?iso='$isoName'&url=file://'"$path"'' mobility;
-										dsUpdate mobility;
-									fi
-									path="";
-									isoName="";
-								fi
+							else
+								isoName=`ls novell*mobility*.iso`
+								updateQuit=false
 							fi
-							echo
-							eContinue;
-							;;
 
-						3) #Update Datasync FTP
-							updateMobilityFTP
-							;;
-
-				/q | q | 0)break;;
-				  *) ;;
-				esac
-				done
-				;; 
-
-			3) # Apply FTF / Patch Files
-			   # Menu-requirements: ftp connection to Novell
-				datasyncBanner;
-				if (! checkFTP);then
-					echo "Unable to connect to ftp://ftp.novell.com";
-					eContinue
-					break;
-				else
-				while :
-				do
-					datasyncBanner;
-					echo -e "\t1. Show Applied Patches"
-					echo -e "\n\t2. Fix slow startup\n\t\t(GMS 2.0.1.53 only) - TID 7014819, Bug 870939"
-					echo -e "\t3. Fix LG Optimus fwd attachment encoded\n\t\t(GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
-					echo -e "\t4. Fix Sony Xperia Z unable to see mails in Inbox\n\t\t(GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698"
-					echo -e "\t5. Log in to the web admin using either the GW or LDAP userid\n\t\t(GMS 2.0.1.53 only) - TID 7015622, Bug 895165"
-
-			 		echo -e "\n\t0. Back"
-				 	echo -n -e "\n\tSelection: "
-				 	read -n1 opt;
-					case $opt in
-						
-						#	patchEm will only work given the following conditions are met: 
-						#   	-Global variable patchFiles is defined prior to calling patchEm and that variable is an array of strings 
-						#			 that contain the full-path and filename of the file to be patched (ie /path/to/file1.pyc)
-						# 		-The patchEm function must receive two parameters: 1) the ftpfilename (ie bugX.zip), 2) the required version 
-						#			 of Mobility for the patch (removing all periods from the string, ie 20153 would be for GMS 2.0.1.53)
-						#		-The ftpFilename must be a compressed file of type: .tgz, .tar, .zip and nothing else.
-						# 		-The patch files must be at the root level of the compressed file, not underneath any subfolders
-						#	
-						#		Note: Please make sure these ftpFiles are available on Novell's FTP by placing them in //tharris7.lab.novell.com/outgoing
-
-						1) # Show current FTF Patch level
-							datasyncBanner;
-							
-							if [ -e "$dsappConf/patchlevel" ]; then
-								cat "$dsappConf/patchlevel"
-							else echo "No patches have been applied to this Mobility server."
+							if (! $updateQuit);then
+								# Confirm to update with the following ISO
+								echo
+								if askYesOrNo "Update to $isoName?";then
+									#zypper update process
+									zypper rr mobility 2>/dev/null;
+									zypper addrepo 'iso:///?iso='$isoName'&url=file://'"$path"'' mobility;
+									dsUpdate mobility;
+								fi
+								path="";
+								isoName="";
 							fi
-							echo; eContinue;
-							;;
+						fi
+						echo
+						eContinue;
+						;;
 
-						2) # Fix slow startup (GMS 2.0.1.53 only) - TID 7014819, Bug 870939
-							patchFiles=( "/opt/novell/datasync/syncengine/connectors/groupwise/lib/gwsoap.pyc" )
-							patchEm "870939.zip" "20153"
-							;;
+					3) #Update Datasync FTP
+						updateMobilityFTP
+						;;
 
-						3) # fixLGOptimusFwdAttachmentEncoded (GMS 2.0.1.53 only) - TID 7015238, Bug 882909
-							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/mobility_util.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/smartForward.pyc" )
-							patchEm "882909.zip" "20153"
-							;;
-
-						4) # Fix Sony Xperia Z unable to see mails in Inbox (GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698
-							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/sync.pyc" )
-							patchEm "861830-868698.zip" "20153"
-							;;
-
-						5) # Log in to the web admin using either the GW connector username or the LDAP username (GMS 2.0.1.53 only) - TID 7015622, Bug 895165
-							patchFiles=( "/opt/novell/datasync/common/lib/datasync/auth/ldap_driver.pyc" "/opt/novell/datasync/configengine/lib/configengine/__init__.pyc" )
-							patchEm "895165.zip" "20153"
-							;;
-
-				/q | q | 0) break;;
-						*) ;;
-
-					esac
-					done
-				fi
-					;;
-
-			  /q | q | 0) break;;
+			/q | q | 0)break;;
 			  *) ;;
 			esac
 			done
-		fi
-			;;
+			;; 
+
+		3) # Apply FTF / Patch Files
+		   # Menu-requirements: ftp connection to Novell
+			datasyncBanner;
+			if (! checkFTP);then
+				echo "Unable to connect to ftp://ftp.novell.com";
+				eContinue
+				break;
+			else
+			while :
+			do
+				datasyncBanner;
+				echo -e "\t1. Show Applied Patches"
+				echo -e "\n\t2. Fix slow startup\n\t\t(GMS 2.0.1.53 only) - TID 7014819, Bug 870939"
+				echo -e "\t3. Fix LG Optimus fwd attachment encoded\n\t\t(GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
+				echo -e "\t4. Fix Sony Xperia Z unable to see mails in Inbox\n\t\t(GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698"
+				echo -e "\t5. Log in to the web admin using either the GW or LDAP userid\n\t\t(GMS 2.0.1.53 only) - TID 7015622, Bug 895165"
+
+		 		echo -e "\n\t0. Back"
+			 	echo -n -e "\n\tSelection: "
+			 	read -n1 opt;
+				case $opt in
+					
+					#	patchEm will only work given the following conditions are met: 
+					#   	-Global variable patchFiles is defined prior to calling patchEm and that variable is an array of strings 
+					#			 that contain the full-path and filename of the file to be patched (ie /path/to/file1.pyc)
+					# 		-The patchEm function must receive two parameters: 1) the ftpfilename (ie bugX.zip), 2) the required version 
+					#			 of Mobility for the patch (removing all periods from the string, ie 20153 would be for GMS 2.0.1.53)
+					#		-The ftpFilename must be a compressed file of type: .tgz, .tar, .zip and nothing else.
+					# 		-The patch files must be at the root level of the compressed file, not underneath any subfolders
+					#	
+					#		Note: Please make sure these ftpFiles are available on Novell's FTP by placing them in //tharris7.lab.novell.com/outgoing
+
+					1) # Show current FTF Patch level
+						datasyncBanner;
+						
+						if [ -e "$dsappConf/patchlevel" ]; then
+							cat "$dsappConf/patchlevel"
+						else echo "No patches have been applied to this Mobility server."
+						fi
+						echo; eContinue;
+						;;
+
+					2) # Fix slow startup (GMS 2.0.1.53 only) - TID 7014819, Bug 870939
+						patchFiles=( "/opt/novell/datasync/syncengine/connectors/groupwise/lib/gwsoap.pyc" )
+						patchEm "870939.zip" "20153"
+						;;
+
+					3) # fixLGOptimusFwdAttachmentEncoded (GMS 2.0.1.53 only) - TID 7015238, Bug 882909
+						patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/mobility_util.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/smartForward.pyc" )
+						patchEm "882909.zip" "20153"
+						;;
+
+					4) # Fix Sony Xperia Z unable to see mails in Inbox (GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698
+						patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/sync.pyc" )
+						patchEm "861830-868698.zip" "20153"
+						;;
+
+					5) # Log in to the web admin using either the GW connector username or the LDAP username (GMS 2.0.1.53 only) - TID 7015622, Bug 895165
+						patchFiles=( "/opt/novell/datasync/common/lib/datasync/auth/ldap_driver.pyc" "/opt/novell/datasync/configengine/lib/configengine/__init__.pyc" )
+						patchEm "895165.zip" "20153"
+						;;
+
+			/q | q | 0) break;;
+					*) ;;
+
+				esac
+				done
+			fi
+				;;
+
+		  /q | q | 0) break;;
+		  *) ;;
+		esac
+		done
+		;;
 
 ##################################################################################################
 #	
