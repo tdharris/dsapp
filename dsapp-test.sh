@@ -711,7 +711,8 @@ function autoUpdateDsapp {
 
 	if [[ "$dsHostname" != `hostname -f` ]] || [ "$skip" = "true" ];then 
 		if(! $skip);then echo -e "\nHostname differs from last time dsapp ran.";fi
-		if askYesOrNo "Reconfigure Mobility encryption using [$dsHostname]:" "$var";then
+		echo -e "\nReconfigure Mobility password encryption";
+		if askYesOrNo "using [$dsHostname] to decrypt? " "$var";then
 			rm -f $dsapptmp/error
 			decodeProblem=false
 			getDBPassword;
@@ -4031,9 +4032,10 @@ while [ "$1" != "" ]; do
 		# Prompt user for pervious hostname
 		while true
 		do
-			read -p "Enter in last used fqdn hostname: " oldHostname;
+			read -p "Enter in last used hostname: " oldHostname;
 			if [ -n "$oldHostname" ];then
-				echo;if askYesOrNo $"Reconfigure Mobility encryption using [$oldHostname]:";then
+				echo -e "\nReconfigure Mobility password encryption";
+				if askYesOrNo $"using [$oldHostname] to decrypt? ";then
 					checkHostname "$oldHostname"; break;
 				else
 					break
