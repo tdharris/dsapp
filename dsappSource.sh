@@ -15,6 +15,13 @@ cd /usr/src/packages/SOURCES/
 cp $oldDir/dsapp-test.sh ./dsapp.sh
 cp $oldDir/filestoreIdToPath.pyc ./
 
+# Update the spec file version
+version=`cat dsapp.sh | grep -wm 1 "dsappversion" | cut -f2 -d"'"`;
+lineNumber=`grep -n -m1 "Release" /home/rpmbuild/rpmbuild/SPECS/dsapp.spec | cut -f1 -d ':'`
+releaseNumber=`grep -m1 "Release" /home/rpmbuild/rpmbuild/SPECS/dsapp.spec | awk '{print $2}'`
+sed -i ""$lineNumber"s|$releaseNumber|$version|g" /home/rpmbuild/rpmbuild/SPECS/dsapp.spec
+
+
 # build the package
 dos2unix /home/rpmbuild/rpmbuild/SPECS/${1}.spec
 su rpmbuild -c "rpmbuild -ba /home/rpmbuild/rpmbuild/SPECS/${1}.spec"

@@ -32,11 +32,6 @@ function incrementBuild {
 
 		lineNumber=`grep dsappversion= -n -m1 dsapp-rpm.sh | cut -f1 -d ':'`
 		sed -i ""$lineNumber"s|dsappversion='[0-9]*'|dsappversion='$version'|g" dsapp-rpm.sh
-
-		lineNumber=`grep -n -m1 "Release" /home/rpmbuild/rpmbuild/SPECS/dsapp.spec | cut -f1 -d ':'`
-		releaseNumber=`grep -m1 "Release" /home/rpmbuild/rpmbuild/SPECS/dsapp.spec | awk '{print $2}'`
-		newReleaseNumber=$((releaseNumber + 1))
-		sed -i ""$lineNumber"s|$releaseNumber|$newReleaseNumber|g" /home/rpmbuild/rpmbuild/SPECS/dsapp.spec
 	fi
 
 	echo -e $version"\n"

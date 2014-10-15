@@ -140,13 +140,21 @@ EOF
 	mkdir -p $dsapplib 2>/dev/null;
 
 	# Version
+	function getVersion {
 	if ($dsInstalledCheck);then
 		version="/opt/novell/datasync/version"
 		mobilityVersion=`cat $version`
 	fi
+	}
+	getVersion;
+
+	# Random Global Variables
 	serverinfo="/etc/*release"
 	rpminfo="datasync"
 	dsapp_tar="dsapp.tgz"
+	isNum='^[0-9]+$'
+	ds_20x='2000'
+	ds_21x='2100'
 
 	# Configuration Files
 	mconf="/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml"
@@ -546,7 +554,6 @@ function autoUpdateDsapp {
 	function getDSVersion {
 		if ($dsInstalledCheck);then
 			dsVersion=`cat $version | cut -c1-7 | tr -d '.'`
-			dsVersionCompare='2000'
 		fi
 	}
 	getDSVersion;
@@ -667,7 +674,7 @@ function autoUpdateDsapp {
 
 	function checkPGPASS {
 		#Database .pgpass file / version check.
-		if [ $dsVersion -gt $dsVersionCompare ];then
+		if [ $dsVersion -gt $ds_20x ];then
 		#Log into database or create .pgpass file to login.
 		dbRunning=`rcpostgresql status`;
 		if [ $? -eq '0' ];then
@@ -702,23 +709,23 @@ function autoUpdateDsapp {
 	function checkHostname {
 		local lineNumber
 	if [ -n "$1" ];then
-		local skip="true";
-			echo "$1" > $dsappConf/dsHostname.conf;
-			dsHostname=`cat $dsappConf/dsHostname.conf`
-			local var="skip"
-	else local skip="false"; local var="";
+		echo "$1" > $dsappConf/dsHostname.conf;
+		dsHostname=`cat $dsappConf/dsHostname.conf`
+		local var="skip"
+	else local var="";
 	fi
 
-	if [[ "$dsHostname" != `hostname -f` ]] || [ "$skip" = "true" ];then 
-		if(! $skip);then echo -e "\nHostname differs from last time dsapp ran.";fi
-		echo -e "\nReconfigure Mobility password encryption";
+	if [[ "$dsHostname" != `hostname -f` ]] || [ "$var" = "skip" ];then 
+		if [ "$var" != "skip" ];then echo -e "\nHostname differs from last time dsapp ran.";
+			echo -e "\nReconfigure Mobility password encryption";
+		fi
 		if askYesOrNo "using [$dsHostname] to decrypt? " "$var";then
 			rm -f $dsapptmp/error
 			decodeProblem=false
 			getDBPassword;
 			getTrustedAppKey;
 			getldapPassword;
-			if [ $dsVersion -gt $dsVersionCompare ]; then
+			if [ $dsVersion -gt $ds_20x ]; then
 				getsmtpPassword;
 			fi
 			if ($decodeProblem);then
@@ -789,7 +796,7 @@ fi
 	function setVariables {
 		# Depends on version 1.x or 2.x
 		if ($dsInstalledCheck);then
-			if [ $dsVersion -gt $dsVersionCompare ]; then
+			if [ $dsVersion -gt $ds_20x ]; then
 				declareVariables2
 			else
 				declareVariables1
@@ -805,7 +812,7 @@ if [ "$1" != "-ch" ] && [ "$1" != "--changeHost" ] && [ "$1" != "-h" ] && [ "$1"
 	getldapPassword;
 	getTrustedAppKey;
 	getDBPassword;
-	if [ $dsVersion -gt $dsVersionCompare ]; then
+	if [ $dsVersion -gt $ds_20x ]; then
 		getsmtpPassword;
 	fi
 	checkHostname;
@@ -959,7 +966,7 @@ function dropDatabases {
 	dropdb -U $dbUsername datasync;
 	echo -e "Dropping mobility database"
 	dropdb -U $dbUsername mobility;
-	if [ $dsVersion -gt $dsVersionCompare ];then
+	if [ $dsVersion -gt $ds_20x ];then
 		echo -e "Dropping dsmonitor database"
 		dropdb -U $dbUsername dsmonitor;
 	fi
@@ -985,7 +992,7 @@ function createDatabases {
 	PGPASSWORD="$dbPassword" psql -d "mobility" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/syncengine/connectors/mobility/mobility_pgsql.sql"
 	echo "extend schema mobility done.."
 	
-	if [ $dsVersion -gt $dsVersionCompare ];then
+	if [ $dsVersion -gt $ds_20x ];then
 		PGPASSWORD="$dbPassword" createdb "dsmonitor" -U $dbUsername
 		echo "create monitor database done.."
 		PGPASSWORD="$dbPassword" psql -d "dsmonitor" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/monitorengine/sql/monitor.sql"
@@ -1068,7 +1075,7 @@ function createDatabases {
 		echo -e "\nThe following will register your Mobility product with Novell, allowing you to use the Novell Update Channel to Install a Mobility Pack Update. If you have not already done so, obtain the Mobility Pack activation code from the Novell Customer Center:";
 		echo -e "\n\t1. Login to Customer Center at http://www.novell.com/center"
 		echo -e "\n\t2. Click My Products | Products"
-		if [ $dsVersion -gt $dsVersionCompare ];then
+		if [ $dsVersion -gt $ds_20x ];then
 			echo -e '\n\t3. Expand "GroupWise Mobility Server"'
 			echo -e '\n\t4. Look under "Novell GroupWise Mobility Server" and check for the "Code". It should be 14 alphanumeric characters.'
 		else
@@ -2567,6 +2574,7 @@ function generalHealthCheck {
 	ghc_checkServices
 	ghc_checkLDAP
 	ghc_checkPOA
+	ghc_checkTrustedApp
 	ghc_checkXML
 	ghc_checkPSQLConfig
 	ghc_checkRPMSave
@@ -2729,7 +2737,7 @@ function ghc_checkServices {
 	checkStatus webadmin
 	checkStatus connectors
 	checkStatus syncengine
-	if [ $dsVersion -gt $dsVersionCompare ]; then
+	if [ $dsVersion -gt $ds_20x ]; then
 		checkStatus monitorengine
 	fi
 	checkMobility
@@ -3192,7 +3200,7 @@ function ghc_checkUpdateSH {
 	problem=false
 	# Any logging info >>$ghcLog
 
-	if [ $dsVersion -gt $dsVersionCompare ]; then
+	if [ $dsVersion -gt $ds_20x ]; then
 		ghc_dbVersion=`psql -U $dbUsername datasync -t -c "select service_version from services;" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
 		echo "Service version: $ghc_dbVersion" >>$ghcLog
 		echo -e "RPM version: $mobilityVersion" >>$ghcLog
@@ -3367,7 +3375,7 @@ function ghc_checkUserFDN {
 
 function ghc_verifyDatabaseIntegrity {
 	# Display HealthCheck name to user and create section in logs
-	ghcNewHeader "Verifiying database integrity..."
+	ghcNewHeader "Verifiying databases integrity..."
 	problem=false
 	# Any logging info >>$ghcLog
 
@@ -3418,7 +3426,7 @@ function ghc_verifyDatabaseIntegrity {
 
 function ghc_verifyTargetsIntegrity {
 	# Display HealthCheck name to user and create section in logs
-	ghcNewHeader "Verifying integrity of targets table..."
+	ghcNewHeader "Verifying targets table integrity..."
 	problem=false
 	# Any logging info >>$ghcLog
 
@@ -3450,6 +3458,37 @@ function ghc_verifyTargetsIntegrity {
 		passFail 1
 	else 
 		echo -e "All users/groups on both connectors" >>$ghcLog;
+		passFail 0
+	fi
+}
+
+function ghc_checkTrustedApp {
+	# Display HealthCheck name to user and create section in logs
+	ghcNewHeader "Verifying Trusted Application..."
+	problem=false; warn=false
+	# Any logging info >>$ghcLog
+
+	if [ "$sSecure" = "http" ];then
+		local var=`python  /opt/novell/datasync/syncengine/connectors/mobility/cli/gw_login.pyc --gw=$sSecure://$gListenAddress:$sPort --appname=$trustedName --key=$trustedAppKey`
+	else
+		echo "Unable to verify trusted application." >>$ghcLog;
+		problem=true; warn=true;
+	fi
+
+	if [ "$var" = "true" ];then
+		echo "Trusted Application is valid" >>$ghcLog;
+	else
+		echo "Trusted Application is invalid" >>$ghcLog;
+		problem=true;
+	fi
+
+	# Return either pass/fail, 0 indicates pass.
+	if ($problem); then
+		if ($warn); then
+			passFail 2
+		else passFail 1
+		fi
+	else 
 		passFail 0
 	fi
 }
@@ -3511,7 +3550,9 @@ function dumpSettings {
 		# Get old XML settings to dump into new install XML
 		local xmlNotification=`echo "cat /config/configengine/notification"| xmllint --shell $ceconf | sed '1d;$d' | sed '1d;$d' | tr -d " \t\n\r"`
 		local xmlLDAP=`echo "cat /config/configengine/ldap"| xmllint --shell $ceconf | sed '1d;$d' | sed '1d;$d' | tr -d " \t\n\r"`
-
+		if [ $dsVersion -gt $ds_21x ];then
+			local xmlgwAdmins=`echo "cat /config/configengine/gw" | xmllint --shell $ceconf | sed '1d;$d' | sed '1d;$d' | tr -d " \t\n\r"`
+		fi
 
 		# Dumping all install variables neatly into dumpFile
 		echo -e "\nDumping install settings to file..."
@@ -3535,6 +3576,7 @@ function dumpSettings {
 		echo -e "gPort=\"$gPort\"\ngalUserName=\"$galUserName\"\ngAttachSize=\"$gAttachSize\"\nmAttachSize=\"$mAttachSize\"" >>$dumpFile;
 		echo -en "webAdmins=\"" >> $dumpFile; while IFS= read -r line; do echo -en "$line " >> $dumpFile; done <<< "$webAdmins"; sed -i 's/ *$//' $dumpFile; echo '"' >> $dumpFile;
 		echo -e "provisioning=\"$provisioning\"\nauthentication=\"$authentication\"\nsmtpPassword=\"$smtpPassword\"\n\nxmlNotification=\"$xmlNotification\"\nxmlLDAP=\"$xmlLDAP\"" >> $dumpFile;
+		if [ $dsVersion -gt $ds_21x ];then echo "xmlgwAdmins=\"$xmlgwAdmins\"" >> $dumpFile; fi
 		echo -e "Successfully saved settings to $dumpFile"
 
 		# Dumping target, and membershipCache table
@@ -3561,6 +3603,9 @@ function dumpSettings {
 function installMobility { # $1 = repository name
 	datasyncBanner;
 	local dumpFile path quit
+	# quitInstall function to quit during any 'q' input
+	quitInstall() { if [ "$1" = "q" ] || [ "$1" = "Q" ];then return 0; else return 1; fi }
+	echo -e "Install requires dumped mobility settings. After install completes, please verify all settings are correct.\n\nType 'q' during any prompt to quit.\n" | fold -s
 	if askYesOrNo "Install mobility?";then
 
 		# Check if Yast is running.
@@ -3572,6 +3617,7 @@ function installMobility { # $1 = repository name
 		# Get Directory
 		while [ ! -d "$path" ]; do
 			read -ep "Enter full path to the directory of install dump: " path;
+			if (quitInstall "$path");then return 1; fi
 			if [ ! -d "$path" ]; then
 				echo "Invalid directory entered. Please try again.";
 			fi
@@ -3673,7 +3719,6 @@ function installMobility { # $1 = repository name
 		return 1
 	fi
 
-	# TODO : Is it possible to add multiple user/group containers, and webadmins?
 	# Create local variables for python installs
 	local setup1="postgres_setup_1.sh"
 	local setup2="odbc_setup_2.pyc"
@@ -3694,6 +3739,7 @@ function installMobility { # $1 = repository name
 		while [ ! -d "$path" ]; do
 			datasyncBanner;
 			read -ep "Enter full path to the directory of ISO file: " path;
+			if (quitInstall "$path");then return 1; fi
 			if [ ! -d "$path" ]; then
 				echo "Invalid directory entered. Please try again.";
 			fi
@@ -3750,7 +3796,6 @@ function installMobility { # $1 = repository name
 				zypper --gpg-auto-import-keys ref -f $1
 
 				# Install packages.
-				# local packages=`zypper info -t pattern \`zypper -x pt --repo $1 | grep "pattern name=" | cut -f2 -d '"'\` | cut -f2- -d '|' | grep  "| package |" | awk '{print $1}'`
 				zypper --non-interactive install -t pattern `zypper -x pt --repo $1 | grep "pattern name=" | cut -f2 -d '"'`
 
 				# Run each python file with each setup
@@ -3758,32 +3803,47 @@ function installMobility { # $1 = repository name
 				
 				# Set dsapp variables for new install
 				checkInstall;
+				getVersion;
+				getDSVersion;
 				setVariables;
 
 				# Kill / stop mobility
 				killall -9 python;
 				rcDS stop silent;
 
-				# Restoring configengine xml settings
-				setXML "$ceconf" '/config/configengine/source/provisioning' "$provisioning"
-				setXML "$ceconf" '/config/configengine/source/authentication' "$authentication"
+				# Vacuum / index to set the table values
+				vacuumDB;
+				indexDB;
 
-				# setXML "$ceconf" '/config/configengine/notification' "$xmlNotification"
+				# Restore other configengine xml settings with awk as xmllint set has character limits
 				awk '/<notification>/{p=1;print;print "'$xmlNotification'"}/<\/notification>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
+				awk '/<ldap>/{p=1;print;print "'$xmlLDAP'"}/<\/ldap>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
+				if [ $dsVersion -gt $ds_21x ];then
+					awk '/<gw>/{p=1;print;print "'$xmlgwAdmins'"}/<\/gw>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
+				fi
+
+				# Get correct passwords encryption
 				if [ -n "$smtpPassword" ];then
 					if [[ $(isStringProtected /config/configengine/notification $ceconf) -eq 1 ]];then
 					smtpPassword=`encodeString "$smtpPassword"`
 					fi
 				fi
-
-				# setXML "$ceconf" '/config/configengine/ldap' "$xmlLDAP"
-				awk '/<ldap>/{p=1;print;print "'$xmlLDAP'"}/<\/ldap>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
 				if [[ $(isStringProtected /config/configengine/ldap/login $ceconf) -eq 1 ]];then
 					ldapPassword=`encodeString "$ldapPassword"`
 				fi
+
+				# Restoring configengine xml settings
+				setXML "$ceconf" '/config/configengine/source/provisioning' "$provisioning"
+				setXML "$ceconf" '/config/configengine/source/authentication' "$authentication"
 				setXML "$ceconf" '/config/configengine/ldap/login/password' "$ldapPassword"
 				setXML "$mconf" '/connector/settings/custom/attachmentMaxSize' "$mAttachSize"
 				setXML "$gconf" '/connector/settings/custom/attachmentMaxSize' "$gAttachSize"
+				setXML "$mconf" '/connector/settings/custom/ldapAddress' "$ldapAddress"
+				setXML "$mconf" '/connector/settings/custom/ldapPort' "$ldapPort"
+				setXML "$mconf" '/connector/settings/custom/ldapSSL' "$ldapSecure"
+				setXML "$mconf" '/connector/settings/custom/authentication' "$authentication"
+				setXML "$gconf" '/connector/settings/custom/port' "$gPort"
+				setXML "$mconf" '/connector/settings/custom/listenPort' "$mPort"
 
 
 				# Copy in old certificates
@@ -3804,7 +3864,7 @@ function installMobility { # $1 = repository name
 					rcDS start;
 				fi
 
-				echo -e "Mobility `cat $dirOptMobility/version` install complete"
+				echo -e "\nMobility `cat $dirOptMobility/version` install complete"
 			fi
 			path="";
 			isoName="";
@@ -3912,7 +3972,7 @@ while [ "$1" != "" ]; do
 			2) installMobility mobility;
 				;;
 
-		/q | q | 0)clear;echo "Bye $USER";break;;
+		/q | q | 0)clear;echo "Bye $USER";exit 0;;
 			*) ;;
 			esac
 		done
@@ -3976,7 +4036,7 @@ while [ "$1" != "" ]; do
 		datasyncBanner;
 
 		# Makes sure version is 2.0 +
-		if [ $dsVersion -lt $dsVersionCompare ]; then
+		if [ $dsVersion -lt $ds_20x ]; then
 			echo -e "Must be running version 2.0 or greater"
 			break;
 		fi
@@ -4060,7 +4120,7 @@ while [ "$1" != "" ]; do
 	shift;
 	done
 
-if [ -f ./db.log ];then
+if [ -f db.log ];then
 	less db.log
 	rm -f db.log
 fi
@@ -4104,7 +4164,7 @@ cd $cPWD;
  echo -e "\t6. Checks & Queries"
  echo -e "\n\t0. Quit"
  echo -n -e "\n\tSelection: "; tput sc
- echo -e "\n\n\n\tDisclaimer: Use at your own discretion, not supported by Novell.\n\tReport issues with [dsapp --bug]"
+ echo -e "\n\n\n\tDisclaimer: Use at your own discretion, not supported by Novell.\n\tSee [dsapp --bug] to report issues."
  tput rc; read -n1 opt;
  a=true;
  case $opt in
