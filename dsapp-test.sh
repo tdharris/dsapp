@@ -8,13 +8,13 @@
 #
 ##################################################################################################
 
-dsappversion='200'
+dsappversion='201'
 
 ##################################################################################################
 #	Set up banner logo
 ##################################################################################################
 function datasyncBanner {
-s="$(cat <<EOF                                                        
+s=`cat << "EOF"                                                       
          _                       
       __| |___  __ _ _ __  _ __  
      / _' / __|/ _' | '_ \\| '_ \\ 
@@ -22,7 +22,7 @@ s="$(cat <<EOF
      \__,_|___/\__,_| .__/| .__/ 
                     |_|   |_|                                          
 EOF
-)"
+`
 
 	clear; echo -e "$s\n\t\t\t      v$dsappversion\n"
 }
@@ -39,7 +39,7 @@ EOF
 		exit 1;
 	}
 	# Trap ^Cctrl c
-	trap trapCall INT
+	trap trapCall SIGINT
 
 	# Make sure user is root
 	if [ "$(id -u)" != "0" ];then
@@ -1343,7 +1343,7 @@ function removeUser {
 }
 
 function mCleanup { # Requires userID passed in.
-	echo -e "\nCleaning up mobility database"
+	echo -e "\nCleaning up mobility database:\n"
 
 	# Get users mobility guid
 	local uGuid=`psql -U $dbUsername mobility -t -c "select guid from users where userid ~* '($1[.|,].*)$' OR name ilike '$1' OR userid ilike '$1';" | sed 's/^ *//'| sed 's/ *$//'`
@@ -1364,8 +1364,8 @@ function mCleanup { # Requires userID passed in.
 	psql -U $dbUsername mobility -c "delete from attachmentmaps where userid='$uGuid';";
 
 	# Get filestoreIDs that are safe to delete
-	local fileID=`psql -U $dbUsername mobility -t -c "select filestoreid from attachments where attachmentid not in (select attachmentid from attachmentmaps);" | sed 's/^ *//' | sed 's/ *$//'`
-
+	local fileID=`psql -U $dbUsername mobility -t -c "SELECT filestoreid FROM attachments LEFT OUTER JOIN attachmentmaps ON attachments.attachmentid=attachmentmaps.attachmentid WHERE attachmentmaps.attachmentid IS NULL;" | sed 's/^ *//' | sed 's/ *$//'`
+	
 	# Log into mobility database, and clean tables with users guid
 	psql -U $dbUsername mobility <<EOF
 	delete from deviceimages where userid='$uGuid';
@@ -1385,7 +1385,7 @@ EOF
 
 	# While loop to delete all 'safe to delete' attachments from the file system
 	if [ -n "$fileID" ];then
-		echo -e "\nCleaning up attachments\nPlease wait."
+		echo -e "\nCleaning up `echo $fileID|wc -w` attachments\nPlease wait."
 		while IFS= read -r line
 		do
 			if [ -f "$mAttach`python $dsapplib/filestoreIdToPath.pyc $line`" ];then 
@@ -1396,7 +1396,7 @@ EOF
 }
 
 function dCleanup { # Requires userID passed in.
-	echo -e "\nCleaning up datasync database"
+	echo -e "\nCleaning up datasync database:\n"
 
 	# Get user dn from targets table;
 	local uUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where \"dn\" ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1';" | sed 's/^ *//' | sed 's/ *$//'`
@@ -1406,13 +1406,17 @@ function dCleanup { # Requires userID passed in.
 	local psqlAppNameM=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.mobility';"| sed 's/^ *//' | sed 's/ *$//'`
 	
 	# Get all creationEventIDs from objectMappins
+	echo "Building creationEventID list..."
 	local uEventID=`psql -U $dbUsername datasync -t -c "select \"objectID\",\"creationEventID\" from \"objectMappings\" where \"objectID\" ilike '%|$psqlAppNameG' OR \"objectID\" ilike '%|$psqlAppNameM' OR \"objectID\" ilike '%|$1';" | cut -f3 -d '|' | rev | cut -f1 -d '.' | rev`
 
 	# While loop to delete objectMappings
-	while IFS= read -r line
-	do
-		psql -U $dbUsername datasync -c "delete from \"objectMappings\" where \"creationEventID\" ilike '%.$line'" &>/dev/null
-	done <<< "$uEventID"
+	if [ `echo $uEventID |wc -w` -gt 0 ];then
+		echo -e "Cleaning `echo $uEventID | wc -w` objectMappings"
+		while IFS= read -r line
+		do
+			psql -U $dbUsername datasync -c "delete from \"objectMappings\" where \"creationEventID\" ilike '%.$line'" &>/dev/null
+		done <<< "$uEventID"
+	fi
 
 	# Delete objectMappings, cache, membershipCache, folderMappings, and targets from datasync DB
 	psql -U $dbUsername datasync <<EOF
@@ -4169,7 +4173,7 @@ cd $cPWD;
  a=true;
  case $opt in
 
- db+) clear; ###Log into Database### --Not on Menu--
+ d) clear; ###Log into Database### --Not on Menu--
 	dpsql;
 	;;
 
