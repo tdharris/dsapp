@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='201'
+dsappversion='202'
 
 ##################################################################################################
 #	Set up banner logo
@@ -1335,8 +1335,12 @@ function removeUser {
 		echo -e "\t--- CAUTION ---\n[Removes all reference of userID]\n"
 		verifyUser vuid "noReturn"
 		if [ $? -ne 3 ];then
-			if askYesOrNo $"Remove [$vuid] from databases?"; then
-				dCleanup "$vuid"; mCleanup "$vuid";
+			if askYesOrNo $"Remove [$vuid] from datasync databases?"; then
+				dCleanup "$vuid";
+				echo;
+			fi
+			if askYesOrNo $"Remove [$vuid] from mobility databases?"; then
+				mCleanup "$vuid";
 			fi
 		fi
 	echo;eContinue;
@@ -1411,7 +1415,7 @@ function dCleanup { # Requires userID passed in.
 
 	# While loop to delete objectMappings
 	if [ `echo $uEventID |wc -w` -gt 0 ];then
-		echo -e "Cleaning `echo $uEventID | wc -w` objectMappings"
+		echo -e "DELETE `echo $uEventID | wc -w`"
 		while IFS= read -r line
 		do
 			psql -U $dbUsername datasync -c "delete from \"objectMappings\" where \"creationEventID\" ilike '%.$line'" &>/dev/null
