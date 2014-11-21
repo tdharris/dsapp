@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='202'
+dsappversion='203'
 
 ##################################################################################################
 #	Set up banner logo
@@ -1958,8 +1958,8 @@ function changeAppName {
 				#Updates users application names with variable entries
 				psql -U $dbUsername	datasync -c "UPDATE targets set \"targetName\"='$mAppName' where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.mobility';"
 				psql -U $dbUsername	datasync -c "UPDATE targets set \"targetName\"='$gAppName' where dn ilike '%$vuid%' AND \"connectorID\"='default.pipeline1.groupwise';"
+				echo -e "\nRestart mobility to pick up changes."
 			fi
-			echo -e "\nRestart mobility to pick up changes."
 		else
 			echo -e "No application names found for user [$vuid]\n"
 		fi
@@ -2241,7 +2241,8 @@ function updateFDN {
 		verifyUser vuid;
 		if [ $? -ne 3 ] ; then
 			echo -e "\nSearching LDAP..."
-			userFilter="(&(!(objectClass=computer))(cn=$vuid)(|(objectClass=Person)(objectClass=orgPerson)(objectClass=inetOrgPerson)))"
+			local tempVUID=`echo $vuid | cut -f1 -d ',' | cut -f2 -d '='`
+			userFilter="(&(!(objectClass=computer))(cn=$tempVUID)(|(objectClass=Person)(objectClass=orgPerson)(objectClass=inetOrgPerson)))"
 			# Store baseDN in file to while loop it
 			grep "userContainer" -i $ceconf 2>/dev/null | cut -f2 -d '>' | cut -f1 -d '<' > $dsapptmp/tmpbaseDN;
 
@@ -2274,6 +2275,9 @@ function updateFDN {
 					fi
 				fi
 				done
+			elif [ $(cat $dsapptmp/tmpUserDN|wc -l) -eq 0 ];then
+				echo -e "\nUnable to detect FDN. GroupWise provisioned user.";
+				echo; eContinue; continue;
 			else
 				defaultuserDN=`cat $dsapptmp/tmpUserDN`
 				echo -e "$defaultuserDN\n\nPress [Enter] to take LDAP defaults."
@@ -2301,6 +2305,8 @@ EOF
 					echo -e "User FDN update complete\n\nRestart mobility to pick up changes."
 				fi
 			fi
+		else
+			echo "Unable to verify user on mobility."
 		fi
 	fi
 
