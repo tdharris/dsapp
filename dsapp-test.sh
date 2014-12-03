@@ -4182,8 +4182,6 @@ fi
 # Update dsappVersion file
 echo $dsappversion > $dsappConf/dsappVersion
 
-echo $#
-
 while :
 do
  datasyncBanner;
