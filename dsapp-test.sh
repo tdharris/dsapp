@@ -57,6 +57,18 @@ EOF
 	clear;
 	}
 
+	function eContinueTime {
+	local reply="."
+	echo -n "Press [Enter] to continue"
+	while [ -n "$reply" ];do
+		read -t5 -n1 -s reply;
+		if [ $? -eq 1 ];then
+			break;
+		fi
+	done
+	clear;
+	}
+
 	# Window Size check
 	if [ `tput lines` -lt '24' ] && [ `tput cols` -lt '85' ];then
 		echo -e "Terminal window to small [`tput cols` x `tput lines`]\nPlease resize window to [80 x 24] or greater."
@@ -510,7 +522,7 @@ function updateDsapp {
 		if [ $? -ne 0 ];then
 			log_error "$header $tmpVersion failed to update"
 			echo -e "$tmpVersion failed to update\n\nRun the following:\nrpm --force -ivh $tmpVersion\n"
-			eContinue
+			eContinue;
 		else
 			log_success "$header $tmpVersion successfully updated."
 			echo "$tmpVersion successfully updated."
@@ -518,8 +530,12 @@ function updateDsapp {
                 rm -f dsapp.sh
             fi
             rm -f $tmpVersion;
-			eContinue;
-			$dsappDirectory/dsapp.sh && exit 0
+			eContinueTime;
+			if [ $? -eq 0 ];then
+				$dsappDirectory/dsapp.sh && exit 0
+			else
+				exit 0;
+			fi
 		fi
 	else log_error "$header Failed to download and extract ftp://ftp.novell.com/outgoing/$dsapp_tar"
 	fi
@@ -1403,7 +1419,7 @@ function dCleanup { # Requires userID passed in.
 	echo -e "\nCleaning up datasync database:\n"
 
 	# Get user dn from targets table;
-	local uUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where \"dn\" ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1';" | sed 's/^ *//' | sed 's/ *$//'`
+	local uUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where (\"dn\" ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND disable='0';" | sed 's/^ *//' | sed 's/ *$//'`
 
 	# Get targetName from each connector
 	local psqlAppNameG=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.groupwise';"| sed 's/^ *//' | sed 's/ *$//'`
@@ -4158,13 +4174,15 @@ fi
 if [ -z "$1" ];then
 	# Announce new Feature
 	announceNewFeature
-fi
 
-# Turn off announce new feature after first prompt
-pushConf "newFeature" false
+	# Turn off announce new feature after first prompt
+	pushConf "newFeature" false
+fi
 
 # Update dsappVersion file
 echo $dsappversion > $dsappConf/dsappVersion
+
+echo $#
 
 while :
 do
