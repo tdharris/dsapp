@@ -1419,7 +1419,7 @@ function dCleanup { # Requires userID passed in.
 	echo -e "\nCleaning up datasync database:\n"
 
 	# Get user dn from targets table;
-	local uUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where (\"dn\" ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND disable='0';" | sed 's/^ *//' | sed 's/ *$//'`
+	local uUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where (\"dn\" ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND disabled='0';" | sed 's/^ *//' | sed 's/ *$//'`
 
 	# Get targetName from each connector
 	local psqlAppNameG=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.groupwise';"| sed 's/^ *//' | sed 's/ *$//'`
