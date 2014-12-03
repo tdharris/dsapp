@@ -77,7 +77,7 @@ EOF
 	fi
 
 	# Make sure switch passed in, is valid.
-	switchArray=('-h' '--help' '--version' '--debug' '--bug' '-au' '--autoUpdate' '-ghc' '--gHealthCheck' '-f' '--force' '-ul' '--uploadLogs' '-c' '--check' '-s' '--status' '-up' '--update' '-v' '--vacuum' '-i' '--index' '-u' '--users' '-d' '--devices' '-db' '--database' '-ch' '--changeHost' '-in' '--install')
+	switchArray=('-h' '--help' '--version' '--debug' '--bug' '-au' '--autoUpdate' '-ghc' '--gHealthCheck' '-f' '--force' '-ul' '--uploadLogs' '-c' '--check' '-s' '--status' '-up' '--update' '-v' '--vacuum' '-i' '--index' '-u' '--users' '-d' '--devices' '-db' '--database' '-ch' '--changeHost' '-re' '--restore')
 	switchCheck="$@"
 	switchError=false
 	while IFS= read -r line
@@ -96,7 +96,7 @@ EOF
 	fi
 
 	# Check and set force to true
-	if [ "$1" == "--force" ] || [ "$1" == "-f" ] || [ "$1" == "?" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ] || [ "$1" == "-db" ] || [ "$1" == "--database" ] || [ "$1" == "-in" ] || [ "$1" == "--install" ];then
+	if [ "$1" == "--force" ] || [ "$1" == "-f" ] || [ "$1" == "?" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ] || [ "$1" == "-db" ] || [ "$1" == "--database" ] || [ "$1" == "-re" ] || [ "$1" == "--restore" ];then
 		forceMode=1;
 		if [[ "$forceMode" -eq "1" && ( "$1" = "-f" || "$1" = "--force" ) ]];then
 			datasyncBanner;
@@ -3573,7 +3573,7 @@ function dumpSettings {
 	datasyncBanner;
 	local dumpPath
 	local time=`date +%m.%d.%y-%s`;
-	if askYesOrNo "Dump install settings to file?";then
+	if askYesOrNo "Backup configuration settings?";then
 		promptVerifyPath "Path to save file: " dumpPath
 		local dumpFile=$(readlink -m "$dumpPath/mobilitySettings.conf")
 
@@ -3585,7 +3585,7 @@ function dumpSettings {
 		fi
 
 		# Dumping all install variables neatly into dumpFile
-		echo -e "\nDumping install settings to file..."
+		echo -e "\nBacking up configuation settings to file..."
 		echo -e "\n###########################################################\n# LDAP Settings\n###########################################################\n\n# LDAP IP: $ldapAddress\n# LDAP port: $ldapPort\n# LDAP Secure: $ldapSecure\n# LDAP Admin: $ldapAdmin\n# LDAP Password: $ldapPassword" > $dumpFile
 		while IFS= read -r line; do echo -e "# User Container: $line" >> $dumpFile;done <<< "$userContainer"; while IFS= read -r line; do echo -e "# Group Container: $line" >> $dumpFile; done <<< "$groupContainer"
 		echo -e "\n###########################################################\n# Database Settings\n###########################################################\n\n# Database Username: $dbUsername\n# Database Password: $dbPassword" >> $dumpFile
@@ -3615,16 +3615,23 @@ function dumpSettings {
 		dumpTable datasync membershipCache $dumpPath;
 
 		# Dumping certificate
-		echo -e "\nGetting server certificates..."
+		echo -e "Getting server certificates..."
 		cp $dirVarMobility/device/mobility.pem $dumpPath/
 		cp $dirVarMobility/webadmin/server.pem $dumpPath/
 
+		# Copy all .xml files
+		echo -e "Getting XML files..."
+		find /etc/datasync/ -name *.xml | cpio -pdm $dumpPath/ 2>/dev/null
+
 		# Tar up dumpFile and mobility.pem
 		cd $dumpPath;
-		tar czf mobility_install-$time.tgz mobilitySettings.conf mobility.pem server.pem targets.sql membershipCache.sql 2>/dev/null
-		echo -e "\nDump install settings complete..."
+		mkdir mobility_install-$time
+		echo `hostname -f` > hostname.conf
+		mv -f * mobility_install-$time/ 2>/dev/null
+		tar czf mobility_install-$time.tgz mobility_install-$time/ 2>/dev/null
+		echo -e "\nBackup configuration settings complete..."
 		echo -n "Saved to: "; readlink -m "$dumpPath/mobility_install-$time.tgz"
-		rm -f mobilitySettings.conf mobility.pem server.pem targets.sql membershipCache.sql
+		rm -r mobility_install-$time/
 
 		echo;eContinue;
 	fi
@@ -3632,11 +3639,11 @@ function dumpSettings {
 
 function installMobility { # $1 = repository name
 	datasyncBanner;
-	local dumpFile path quit
+	local dumpFile path quit passProXML dbpassXML encdbPassword
 	# quitInstall function to quit during any 'q' input
 	quitInstall() { if [ "$1" = "q" ] || [ "$1" = "Q" ];then return 0; else return 1; fi }
-	echo -e "Install requires dumped mobility settings. After install completes, please verify all settings are correct.\n\nType 'q' during any prompt to quit.\n" | fold -s
-	if askYesOrNo "Install mobility?";then
+	echo -e "Restore requires backed up mobility settings. After restore completes, please verify all settings are correct.\n\nType 'q' during any prompt to quit.\n" | fold -s
+	if askYesOrNo "Restore configuration?";then
 
 		# Check if Yast is running.
 		checkYaST;
@@ -3646,7 +3653,7 @@ function installMobility { # $1 = repository name
 		fi
 		# Get Directory
 		while [ ! -d "$path" ]; do
-			read -ep "Enter full path to the directory of install dump: " path;
+			read -ep "Mobility backup configuration directory: " path;
 			if (quitInstall "$path");then return 1; fi
 			if [ ! -d "$path" ]; then
 				echo "Invalid directory entered. Please try again.";
@@ -3654,7 +3661,7 @@ function installMobility { # $1 = repository name
 			if [ -d "$path" ]; then
 				ls "$path"/mobility_install-*.tgz &>/dev/null;
 				if [ $? -ne "0" ]; then
-				echo "No mobility install dump found at this path.";
+				echo "No mobility backup configuration found at this path.";
 				path="";
 				fi
 			fi
@@ -3669,8 +3676,8 @@ function installMobility { # $1 = repository name
 			while true;
 			do
 				datasyncBanner;
-				echo -e "Multiple install dumps found"
-				echo -e "Input what dump to install\n";
+				echo -e "Multiple backup configurations found"
+				echo -e "Input what configuration to restore\n";
 				# Loop through array to print all available selections.
 				for ((i=0;i<`echo ${#installArray[@]}`;i++))
 				do
@@ -3699,9 +3706,11 @@ function installMobility { # $1 = repository name
 		return 1
 	fi
 
+	# Get restore folder name
+	local restoreFolder=`tar -tf $dumpFile | head -n1 | cut -f1 -d '/'`
+
 	# Source in configuration file
-	tar zxf $dumpFile; source mobilitySettings.conf
-	rm -f mobilitySettings.conf
+	tar zxf $dumpFile; source $restoreFolder/mobilitySettings.conf
 
 	local setupDir="$dirOptMobility/syncengine/connectors/mobility/cli"
 	local keyFile="$dsappConf/$trustedName.key"; echo "$trustedAppKey" > $keyFile;
@@ -3733,7 +3742,7 @@ function installMobility { # $1 = repository name
 				fi
 			done
 		elif [ "$sListenAddress" != "$IP" ];then
-			echo "Dump IP [$sListenAddress] does not match server IP [$IP]";
+			echo "Backup IP [$sListenAddress] does not match server IP [$IP]";
 			if askYesOrNo "Use server IP [$IP]?";then
 				sListenAddress=$IP
 				quit=false
@@ -3762,8 +3771,8 @@ function installMobility { # $1 = repository name
 
 	# Create Repo
 	datasyncBanner;
-	echo "Dump Settings: $dumpFile"
-	if askYesOrNo $"Install mobility with selected dump file?"; then
+	echo "Restore Settings: $dumpFile"
+	if askYesOrNo $"Install mobility with selected restore file?"; then
 		# Get Directory
 		path=""
 		while [ ! -d "$path" ]; do
@@ -3830,7 +3839,7 @@ function installMobility { # $1 = repository name
 
 				# Run each python file with each setup
 				$setupDir/$setup1; python $setupDir/$setup2; python $setupDir/$setup3; $setupDir/$setup4; python $setupDir/$setup5; python $setupDir/$setup6; python $setupDir/$setup7
-				
+
 				# Set dsapp variables for new install
 				checkInstall;
 				getVersion;
@@ -3840,10 +3849,6 @@ function installMobility { # $1 = repository name
 				# Kill / stop mobility
 				killall -9 python;
 				rcDS stop silent;
-
-				# Vacuum / index to set the table values
-				vacuumDB;
-				indexDB;
 
 				# Restore other configengine xml settings with awk as xmllint set has character limits
 				awk '/<notification>/{p=1;print;print "'$xmlNotification'"}/<\/notification>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
@@ -3855,45 +3860,69 @@ function installMobility { # $1 = repository name
 				# Get correct passwords encryption
 				if [ -n "$smtpPassword" ];then
 					if [[ $(isStringProtected /config/configengine/notification $ceconf) -eq 1 ]];then
-					smtpPassword=`encodeString "$smtpPassword"`
+						smtpPassword=`encodeString "$smtpPassword"`
 					fi
 				fi
 				if [[ $(isStringProtected /config/configengine/ldap/login $ceconf) -eq 1 ]];then
 					ldapPassword=`encodeString "$ldapPassword"`
 				fi
+				# Set trustedAppKey encryption
+				if [[ $(isStringProtected /connector/settings/custom $gconf) -eq 1 ]];then
+					trustedAppKey=`encodeString "$trustedAppKey"`
+				fi
 
-				# Restoring configengine xml settings
+				cd $dumpPath
+				
+				# Restore the connector xml files
+				cp $restoreFolder/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/groupwise/connector.xml $gconf;
+				cp $restoreFolder/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml $mconf;
+				setXML "$gconf" '/connector/settings/custom/listeningLocation' "$IP"
+
+				# Restore engine.xml file
+				passProXML=`xmlpath 'engine/settings/database/protected' < $econf`
+				cp $restoreFolder/etc/datasync/configengine/engines/default/engine.xml $econf
+				
+				# Set all passwords / keys for hostname encryption
+				encdbPassword=`encodeString "$dbPassword"`
+				if [[ $(isStringProtected /config/configengine/database $ceconf) -eq 1 ]];then
+					setXML "$ceconf" '/config/configengine/database/password' "$encdbPassword"
+				fi
+				if [[ $(isStringProtected /engine/settings/database $econf) -eq 1 ]];then
+					setXML "$econf" '/engine/settings/database/password' "$encdbPassword"
+				fi
+				if [[ $(isStringProtected /connector/settings/custom $mconf) -eq 1 ]];then
+					setXML "$mconf" '/connector/settings/custom/dbpass' "$encdbPassword"
+				fi
+
 				setXML "$ceconf" '/config/configengine/source/provisioning' "$provisioning"
 				setXML "$ceconf" '/config/configengine/source/authentication' "$authentication"
 				setXML "$ceconf" '/config/configengine/ldap/login/password' "$ldapPassword"
-				setXML "$mconf" '/connector/settings/custom/attachmentMaxSize' "$mAttachSize"
-				setXML "$gconf" '/connector/settings/custom/attachmentMaxSize' "$gAttachSize"
-				setXML "$mconf" '/connector/settings/custom/ldapAddress' "$ldapAddress"
-				setXML "$mconf" '/connector/settings/custom/ldapPort' "$ldapPort"
-				setXML "$mconf" '/connector/settings/custom/ldapSSL' "$ldapSecure"
-				setXML "$mconf" '/connector/settings/custom/authentication' "$authentication"
-				setXML "$gconf" '/connector/settings/custom/port' "$gPort"
-				setXML "$mconf" '/connector/settings/custom/listenPort' "$mPort"
-
+				setXML "$ceconf" '/config/configengine/notification/smtpPassword' "$smtpPassword"
+ 				setXML "$gconf" '/connector/settings/custom/trustedAppKey' "$trustedAppKey"
 
 				# Copy in old certificates
 				echo
-				cd $dumpPath
-				if askYesOrNo "Restore certificates from dump?";then
-					cp mobility.pem $dirVarMobility/device/
-					cp server.pem $dirVarMobility/webadmin/
+				if askYesOrNo "Restore certificates?";then
+					cp $restoreFolder/mobility.pem $dirVarMobility/device/
+					cp $restoreFolder/server.pem $dirVarMobility/webadmin/
 				fi
-				if askYesOrNo "Restore users & groups from dump?";then
+
+				# Restore users and groups
+				if askYesOrNo "Restore users & groups?";then
 					checkPGPASS;
-					psql -U $dbUsername datasync < targets.sql 2>/dev/null
-					psql -U $dbUsername datasync < membershipCache.sql 2>/dev/null
+					psql -U $dbUsername datasync < $restoreFolder/targets.sql 2>/dev/null
+					psql -U $dbUsername datasync < $restoreFolder/membershipCache.sql 2>/dev/null
 				fi
-				rm -f mobility.pem server.pem targets.sql membershipCache.sql
+
+				# Vacuum / index to set the table values
+				vacuumDB;
+				indexDB;
 
 				if askYesOrNo "Start Mobility?";then
 					rcDS start;
 				fi
-
+				# Clean up
+				rm -r $restoreFolder/
 				echo -e "\nMobility `cat $dirOptMobility/version` install complete"
 			fi
 			path="";
@@ -3933,7 +3962,7 @@ while [ "$1" != "" ]; do
 		echo -e "  -d  \t--devices\tPrint a list of all devices with count"
 		echo -e "  -db \t--database\tChange database password"
 		echo -e "  -ch \t--changeHost\tSet previous hostname to fix encryption"
-		echo -e "  -in \t--install\tDump / Install Mobility Menu"
+		echo -e "  -re \t--restore\tBackup / Restore Mobility Menu"
 	;;
 
 	--version | version) dsappSwitch=1
@@ -3986,13 +4015,13 @@ while [ "$1" != "" ]; do
 		showStatus
 	;;
 
-	--install | -in) dsappSwitch=1
+	--restore | -re) dsappSwitch=1
 		while :
 		do
 			clear;
 			datasyncBanner
-			echo -e "\t1. Dump install settings"
-	 		echo -e "\t2. Install Mobility"
+			echo -e "\t1. Backup Mobility settings"
+	 		echo -e "\t2. Restore / Install Mobility"
 	 		echo -e "\n\t0. Quit"
 		 	echo -n -e "\n\tSelection: "
 		 	read -n1 opt;
