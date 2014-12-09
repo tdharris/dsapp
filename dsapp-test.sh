@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='203'
+dsappversion='204'
 
 ##################################################################################################
 #	Set up banner logo
@@ -3191,10 +3191,19 @@ function ghc_checkVMWare {
 	lspci | grep -i vmware &>/dev/null
 	if [ $? -eq 0 ]; then
 		echo "This server is running within a virtualized platform." >>$ghcLog
-		/etc/init.d/vmware-tools status >>$ghcLog 1>/dev/null
-		if [ $? -ne 0 ]; then
-			problem=true
-			echo "/etc/init.d/vmware-tools is not running..." >>$ghcLog
+
+		if [ -f "/etc/init.d/vmware-tools-services" ];then
+			/etc/init.d/vmware-tools-services status >>$ghcLog 1>/dev/null
+			if [ $? -ne 0 ]; then
+				problem=true
+				echo "/etc/init.d/vmware-tools-services is not running..." >>$ghcLog
+			fi
+		elif [ -f "/etc/init.d/vmware-tools" ];then
+			/etc/init.d/vmware-tools status >>$ghcLog 1>/dev/null
+			if [ $? -ne 0 ]; then
+				problem=true
+				echo "/etc/init.d/vmware-tools is not running..." >>$ghcLog
+			fi
 		fi
 	fi
 
