@@ -77,7 +77,7 @@ EOF
 	fi
 
 	# Make sure switch passed in, is valid.
-	switchArray=('-h' '--help' '--version' '--debug' '--bug' '-au' '--autoUpdate' '-ghc' '--gHealthCheck' '-f' '--force' '-ul' '--uploadLogs' '-c' '--check' '-s' '--status' '-up' '--update' '-v' '--vacuum' '-i' '--index' '-u' '--users' '-d' '--devices' '-db' '--database' '-ch' '--changeHost' '-re' '--restore')
+	switchArray=('-h' '--help' '--version' '--debug' '--bug' '-au' '--autoUpdate' '-ghc' '--gHealthCheck' '-f' '--force' '-ul' '--uploadLogs' '-c' '--check' '-s' '--status' '-up' '--update' '-v' '--vacuum' '-i' '--index' '-u' '--users' '-d' '--devices' '-db' '--database' '-ch' '--changeHost' '-re' '--restore' '--updateDsapp')
 	switchCheck="$@"
 	switchError=false
 	while IFS= read -r line
@@ -3958,6 +3958,7 @@ while [ "$1" != "" ]; do
 		echo -e "      \t--version\tReport dsapp version"
 		echo -e "      \t--debug\t\tToggles dsapp log debug level [$debug]"
 		echo -e "      \t--bug\t\tReport a issue for dsapp"
+		echo -e "      \t--updateDsapp\tUpdates dsapp to laatest version"
 		echo -e "  -au \t--autoUpdate\tToggles dsapp autoUpdate [$autoUpdate]"
 		echo -e "  -ghc\t--gHealthCheck\tGeneral Health Check"
 		echo -e "  -f  \t--force\t\tForce runs dsapp"
@@ -3976,6 +3977,10 @@ while [ "$1" != "" ]; do
 
 	--version | version) dsappSwitch=1
 		echo -e "\nThis running instance of dsapp is v"$dsappversion"\n"
+	;;
+
+	--updateDsapp ) dsappSwitch=1
+		autoUpdateDsapp;
 	;;
 
 	-ghc | --gHealthCheck) dsappSwitch=1
