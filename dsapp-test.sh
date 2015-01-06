@@ -1292,14 +1292,14 @@ function createDatabases {
 	function monitorUser {
 		verifyUser vuid; verifyReturnNum=$?
 		if [ $verifyReturnNum -eq 2 ] || [ $verifyReturnNum -eq 0 ] ; then
-				echo -e "\n" && watch -n1 "psql -U '$dbUsername' mobility -c \"select state,userID from users where userid ilike '%$vuid%'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\""
+				echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where userid ilike '%$vuid%'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\""
 				# tailf /var/log/datasync/default.pipeline1.mobility-AppInterface.log | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid
 				break;
 		fi
 	}
 
 	function sMonitorUser {
-				echo -e "\n" && watch -n1 "psql -U '$dbUsername' mobility -c \"select state,userID from users where userid ilike '%$vuid%'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\""
+				echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where userid ilike '%$vuid%'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\""
 				break;
 	}
 
@@ -2728,6 +2728,9 @@ function ghc_checkServices {
 			elif [ "$listener" = "httpd2-prefork" ];then
 				failure+="mobility-connector ($mPort). "
 				echo "Apache2 listening on port $mPort: $mstatus" >> $ghcLog
+			elif [ "$listener" != "python" ];then
+				failure+="mobility-connector ($mPort). "
+				echo "Python not listening on port $mPort: $mstatus" >> $ghcLog
 			fi
 		fi
 		
