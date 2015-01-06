@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='205'
+dsappversion='206'
 
 ##################################################################################################
 #	Set up banner logo
@@ -276,7 +276,7 @@ EOF
 		mSecure=`xmlpath 'connector/settings/custom/ssl' < $mconf`
 		mlistenAddress=`xmlpath 'connector/settings/custom/listenAddress' < $mconf`
 		sListenAddress=`xmlpath 'connector/settings/custom/listeningLocation' < $gconf`
-		gListenAddress=`xmlpath 'connector/settings/custom/soapServer' < $gconf | grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}'`
+		gListenAddress=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f3 -d '/' | cut -f1 -d ':'`
 		trustedName=`xmlpath 'connector/settings/custom/trustedAppName' < $gconf`
 		gPort=`xmlpath 'connector/settings/custom/port' < $gconf`
 		sPort=`xmlpath 'connector/settings/custom/soapServer' < $gconf | rev | cut -f1 -d ':' | cut -f2 -d '/' | rev`
@@ -3527,8 +3527,14 @@ function ghc_checkTrustedApp {
 	if [ "$var" = "true" ];then
 		echo "Trusted Application is valid" >>$ghcLog;
 	else
-		echo "Trusted Application is invalid" >>$ghcLog;
-		problem=true;
+		if [ "$warn" = "false" ];then
+			if (`echo "$var" | grep -iq "Requested record not found"`);then 
+				echo "Trusted Application name is invalid" >>$ghcLog;
+			elif (`echo "$var" | grep -iq "Invalid key for trusted application"`);then 
+				echo "Trusted Application key is invalid" >>$ghcLog;
+			fi
+			problem=true;
+		fi
 	fi
 
 	# Return either pass/fail, 0 indicates pass.
