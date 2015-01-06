@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='204'
+dsappversion='205'
 
 ##################################################################################################
 #	Set up banner logo
@@ -2719,7 +2719,7 @@ function ghc_checkServices {
 	function checkMobility {
 		
 		netstat -patune | grep -i ":$mPort" | grep -i listen > /dev/null
-		if [ $? -ne 0 ] 
+		if [ $? -ne 0 ];then
 			local listener=`netstat -pan | grep -i listen | grep :443 | rev |awk '{print $1}' | rev | cut -f2 -d '/'`
 			if [ "$listener" = "python" ];then
 				mstatus=false;
