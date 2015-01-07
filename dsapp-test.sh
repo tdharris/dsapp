@@ -3516,25 +3516,30 @@ function ghc_checkTrustedApp {
 	ghcNewHeader "Verifying Trusted Application..."
 	problem=false; warn=false
 	# Any logging info >>$ghcLog
-
-	if [ "$sSecure" = "http" ];then
-		local var=`python  /opt/novell/datasync/syncengine/connectors/mobility/cli/gw_login.pyc --gw=$sSecure://$gListenAddress:$sPort --appname=$trustedName --key=$trustedAppKey`
-	else
-		echo "Unable to verify trusted application." >>$ghcLog;
-		problem=true; warn=true;
-	fi
-
-	if [ "$var" = "true" ];then
-		echo "Trusted Application is valid" >>$ghcLog;
-	else
-		if [ "$warn" = "false" ];then
-			if (`echo "$var" | grep -iq "Requested record not found"`);then 
-				echo "Trusted Application name is invalid" >>$ghcLog;
-			elif (`echo "$var" | grep -iq "Invalid key for trusted application"`);then 
-				echo "Trusted Application key is invalid" >>$ghcLog;
-			fi
-			problem=true;
+	if [ -n "$trustedAppKey" ];then
+		if [ "$sSecure" = "http" ];then
+			local var=`python  /opt/novell/datasync/syncengine/connectors/mobility/cli/gw_login.pyc --gw=$sSecure://$gListenAddress:$sPort --appname=$trustedName --key=$trustedAppKey 2>/dev/null`
+		elif [ "$sSecure" = "https" ];then
+			echo "SOAP Secure. Unable to test trusted application." >>$ghcLog;
+			problem=true; warn=true;
 		fi
+
+		if [ "$var" = "true" ];then
+			echo "Trusted Application is valid" >>$ghcLog;
+		elif [ -z "$var" ] && [ "$warn" = "false" ];then
+			echo "Failed checking trusted application." >>$ghcLog;
+			problem=true; warn=true;
+		elif [ -n "$var" ];then
+				if (`echo "$var" | grep -iq "Requested record not found"`);then 
+					echo "Trusted Application name is invalid" >>$ghcLog;
+				elif (`echo "$var" | grep -iq "Invalid key for trusted application"`);then 
+					echo "Trusted Application key is invalid" >>$ghcLog;
+				fi
+				problem=true;
+		fi
+	else
+		echo "Error decoding trusted application key." >>$ghcLog;
+		problem=true; warn=true;
 	fi
 
 	# Return either pass/fail, 0 indicates pass.
