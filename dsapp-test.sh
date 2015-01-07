@@ -265,35 +265,6 @@ EOF
 	  done
 	}
 
-	if [ -z "$1" ];then
-		datasyncBanner; echo "Loading Menu..."; else clear;
-	fi
-	if ($dsInstalledCheck);then
-		ldapAddress=`xmlpath 'connector/settings/custom/ldapAddress' < $mconf`
-		ldapPort=`xmlpath 'connector/settings/custom/ldapPort' < $mconf`
-		ldapSecure=`xmlpath 'config/configengine/ldap/secure' < $ceconf`
-		mPort=`xmlpath 'connector/settings/custom/listenPort' < $mconf`
-		mSecure=`xmlpath 'connector/settings/custom/ssl' < $mconf`
-		mlistenAddress=`xmlpath 'connector/settings/custom/listenAddress' < $mconf`
-		sListenAddress=`xmlpath 'connector/settings/custom/listeningLocation' < $gconf`
-		gListenAddress=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f3 -d '/' | cut -f1 -d ':'`
-		trustedName=`xmlpath 'connector/settings/custom/trustedAppName' < $gconf`
-		gPort=`xmlpath 'connector/settings/custom/port' < $gconf`
-		sPort=`xmlpath 'connector/settings/custom/soapServer' < $gconf | rev | cut -f1 -d ':' | cut -f2 -d '/' | rev`
-		sSecure=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f1 -d ':'`
-		wPort=`xmlpath 'config/server/port' < $wconf`
-		ldapAdmin=`xmlpath 'config/configengine/ldap/login/dn' < $ceconf`
-		provisioning=`xmlpath 'config/configengine/source/provisioning' < $ceconf`
-		authentication=`xmlpath 'config/configengine/source/authentication' < $ceconf`
-		galUserName=`xmlpath 'connector/settings/custom/galUserName' < $mconf`
-		groupContainer=`xmlpath 'config/configengine/ldap/groupContainer' < $ceconf`
-		userContainer=`xmlpath 'config/configengine/ldap/userContainer' < $ceconf`
-		mAttachSize=`xmlpath 'connector/settings/custom/attachmentMaxSize' < $mconf`
-		gAttachSize=`xmlpath 'connector/settings/custom/attachmentMaxSize' < $gconf`
-		webAdmins=`xmlpath 'config/configengine/ldap/admins/dn' < $ceconf`
-	fi
-
-
 	# Global variable for verifyUser
 	vuid="";
 	uid="";
@@ -313,6 +284,9 @@ EOF
 ##################################################################################################
 # Begin Logging Section
 ##################################################################################################
+# Disable color from logging
+INTERACTIVE_MODE=off
+
 if [[ "${INTERACTIVE_MODE}" == "off" ]]
 then
     # Then we don't care about log colors
@@ -408,6 +382,81 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 #	Initialization
 #
 ##################################################################################################
+
+	# Load Menu (Get all needed variables)
+	if [ -z "$1" ];then
+		datasyncBanner; echo "Loading Menu..."; else clear;
+	fi
+	if ($dsInstalledCheck);then
+		log_debug "===== Variable Assignment ====="
+		log_debug "Assigning ldapAddress from mconf"
+		ldapAddress=`xmlpath 'connector/settings/custom/ldapAddress' < $mconf`
+		
+		log_debug "Assigning ldapPort from mconf"
+		ldapPort=`xmlpath 'connector/settings/custom/ldapPort' < $mconf`
+		
+		log_debug "Assigning ldapSecure from ceconf"
+		ldapSecure=`xmlpath 'config/configengine/ldap/secure' < $ceconf`
+		
+		log_debug "Assigning mPort from mconf"
+		mPort=`xmlpath 'connector/settings/custom/listenPort' < $mconf`
+		
+		log_debug "Assigning mSecure from mconf"
+		mSecure=`xmlpath 'connector/settings/custom/ssl' < $mconf`
+		
+		log_debug "Assigning mlistenAddress from mconf"
+		mlistenAddress=`xmlpath 'connector/settings/custom/listenAddress' < $mconf`
+		
+		log_debug "Assigning sListenAddress from gconf"
+		sListenAddress=`xmlpath 'connector/settings/custom/listeningLocation' < $gconf`
+		
+		log_debug "Assigning gListenAddress from gconf"
+		gListenAddress=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f3 -d '/' | cut -f1 -d ':'`
+		
+		log_debug "Assigning trustedName from gconf"
+		trustedName=`xmlpath 'connector/settings/custom/trustedAppName' < $gconf`
+		
+		log_debug "Assigning gPort from gconf"
+		gPort=`xmlpath 'connector/settings/custom/port' < $gconf`
+
+		log_debug "Assigning sPort from gconf"
+		sPort=`xmlpath 'connector/settings/custom/soapServer' < $gconf | rev | cut -f1 -d ':' | cut -f2 -d '/' | rev`
+		
+		log_debug "Assigning sSecure from gconf"
+		sSecure=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f1 -d ':'`
+		
+		log_debug "Assigning wPort from wconf"
+		wPort=`xmlpath 'config/server/port' < $wconf`
+
+		log_debug "Assigning ldapAdmin from ceconf"
+		ldapAdmin=`xmlpath 'config/configengine/ldap/login/dn' < $ceconf`
+
+		log_debug "Assigning provisioning from ceconf"
+		provisioning=`xmlpath 'config/configengine/source/provisioning' < $ceconf`
+		
+		log_debug "Assigning authentication from ceconf"
+		authentication=`xmlpath 'config/configengine/source/authentication' < $ceconf`
+		
+		log_debug "Assigning galUserName from mconf"
+		galUserName=`xmlpath 'connector/settings/custom/galUserName' < $mconf`
+
+		log_debug "Assigning groupContainer from ceconf"
+		groupContainer=`xmlpath 'config/configengine/ldap/groupContainer' < $ceconf`
+
+		log_debug "Assigning userContainer from ceconf"
+		userContainer=`xmlpath 'config/configengine/ldap/userContainer' < $ceconf`
+		
+		log_debug "Assigning mAttachSize from mconf"
+		mAttachSize=`xmlpath 'connector/settings/custom/attachmentMaxSize' < $mconf`
+		
+		log_debug "Assigning gAttachSize from gconf"
+		gAttachSize=`xmlpath 'connector/settings/custom/attachmentMaxSize' < $gconf`
+		
+		log_debug "Assigning webAdmins from ceconf"
+		webAdmins=`xmlpath 'config/configengine/ldap/admins/dn' < $ceconf`
+		log_debug "===== End Variable Assignment ====="
+	fi
+
 	# Set PATH environment for script to include /usr/sbin
 	PATH=$PATH:/usr/sbin/
 
@@ -490,10 +539,12 @@ fi
 function announceNewFeature {
 	if($newFeature);then
 		clear; datasyncBanner
+		# Start Code for new feature -----
 		echo -e "\tNew Feature\n\nGeneral Health Check.\nLocated in the Checks & Queries menu.\n"
 		if askYesOrNo "Would you like to run it now?"; then
 			generalHealthCheck
 		fi
+		# End Code for new feature ------
 	fi
 }
 
@@ -1908,17 +1959,17 @@ EOF
 function changeDBPass {
 	local lineNumber input vinput
 	datasyncBanner;
-	if askYesOrNo "Change datasync database password?";then
+	if askYesOrNo "Change psql datasync_user password?";then
 
-		read -sp "Enter new database password: " input
+		read -sp "Enter new password: " input
 		if [ -z "$input" ];then
 			echo "Invalid input";
 			exit 1
 		fi
 		echo
-		read -sp "Re-enter new database password: " vinput
+		read -sp "Re-enter new password: " vinput
 		if [ "$vinput" != "$input" ];then
-			echo "Passwords do not match"
+			echo -e "\n\nPasswords do not match"
 			exit 1
 		fi
 		echo
