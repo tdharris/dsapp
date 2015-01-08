@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='206'
+dsappversion='207'
 
 ##################################################################################################
 #	Set up banner logo
@@ -1247,7 +1247,7 @@ function createDatabases {
 		if [ -n "$1" ];then
 
 			# Check if user exists in datasync database
-			local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where \"dn\" ~* '($uid[.|,].*)$' OR dn ilike '$uid' OR \"targetName\" ilike '$uid';" | sed 's/^ *//' | sed 's/ *$//'`
+			local validUser=`psql -U $dbUsername datasync -t -c "select distinct dn from targets where (\"dn\" ~* '($uid[.|,].*)$' OR dn ilike '$uid' OR \"targetName\" ilike '$uid') AND disabled='0';" | sed 's/^ *//' | sed 's/ *$//'`
 
 			# No user found with either eDirectoryID or GroupwiseID: return 1
 			if [ -z "$validUser" ];then
