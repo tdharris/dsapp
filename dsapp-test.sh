@@ -5145,7 +5145,8 @@ EOF
 		 echo -e "\t4. Mobility pending syncevents by User"
 		 echo -e "\t5. View Attachments by User"
 		 echo -e "\n\t6. Check Mobility attachments (CAUTION)"
-		 echo -e "\t7. Watch psql command (CAUTION)"
+		 echo -e "\t7. Check Mobility attachments counts (BETA)"
+		 echo -e "\t8. Watch psql command (CAUTION)"
 		 echo -e "\n\t0. Back"
 		 echo -n -e "\n\tSelection: "
 		 read -n1 opt
@@ -5263,12 +5264,13 @@ EOF
 							# Get rid of first line which was used for import "filestoreid"
 							sed -i '1,1d' $oldAttachments;
 
-							# Remove files and database references
-							removeFilesFromList
+							# Remove database references
 psql -U $dbUsername mobility -L /tmp/dsapp-attachment.log <<EOF
 delete from attachmentmaps am where am.attachmentid IN (select attachmentid from attachments where filestoreid IN (select regexp_replace(filestoreid, '.+/', '') from dsapp_oldattachments));
 delete from attachments where filestoreid IN (select regexp_replace(filestoreid, '.+/', '') from dsapp_oldattachments);
 EOF
+							# Remove files
+							removeFilesFromList
 							# Insert files removed into log
 							echo $removed >> /tmp/removedFiles.log;
 						fi
@@ -5293,8 +5295,25 @@ EOF
 
 				eContinue;
 				;;
-
-			7) # Watch psql command
+			7)
+				datasyncBanner;
+				psql -U $dbUsername mobility -L /tmp/dsapp-attachments.log -c 'copy attachments (filestoreid) to STDOUT' | sort | uniq > /tmp/dsapp-attachments-database
+				find $dirVarMobility/mobility/attachments -type f -printf "%f\n" | sort > /tmp/dsapp-attachments-files;
+				printf "%10d distinct filestoreid entries in the database. \n" `wc -l < /tmp/dsapp-attachments-database`
+				printf "%10d distinct filestoreid entries in the file system.\n" `wc -l < /tmp/dsapp-attachments-files`
+				i=`comm -13 /tmp/dsapp-attachments-database /tmp/dsapp-attachments-files | wc -l`
+				if [ $i -gt 0 ]; then
+					printf "Informational: %10d orphans files on the file system.\n" $i;
+				fi
+				i=`comm -23 /tmp/dsapp-attachments-database /tmp/dsapp-attachments-files | wc -l`
+				if [ $i -gt 0 ]; then
+					echo -e "\nWARNING:"
+					printf "%10d entires missing from the file system!\n" $i;
+				fi
+				echo
+				eContinue;
+				;;
+			8) # Watch psql command
 				q=false
 				while :
 				do datasyncBanner;
