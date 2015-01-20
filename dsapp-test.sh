@@ -5265,12 +5265,13 @@ EOF
 							# Get rid of first line which was used for import "filestoreid"
 							sed -i '1,1d' $oldAttachments;
 
-							# Remove files and database references
-							removeFilesFromList
+							# Remove database references
 psql -U $dbUsername mobility -L /tmp/dsapp-attachment.log <<EOF
 delete from attachmentmaps am where am.attachmentid IN (select attachmentid from attachments where filestoreid IN (select regexp_replace(filestoreid, '.+/', '') from dsapp_oldattachments));
 delete from attachments where filestoreid IN (select regexp_replace(filestoreid, '.+/', '') from dsapp_oldattachments);
 EOF
+							# Remove files
+							removeFilesFromList
 							# Insert files removed into log
 							echo $removed >> /tmp/removedFiles.log;
 						fi
