@@ -4040,7 +4040,7 @@ while [ "$1" != "" ]; do
 		echo -e "      \t--version\tReport dsapp version"
 		echo -e "      \t--debug\t\tToggles dsapp log debug level [$debug]"
 		echo -e "      \t--bug\t\tReport a issue for dsapp"
-		echo -e "      \t--updateDsapp\tUpdates dsapp to laatest version"
+		echo -e "      \t--updateDsapp\tUpdates dsapp to latest version"
 		echo -e "  -au \t--autoUpdate\tToggles dsapp autoUpdate [$autoUpdate]"
 		echo -e "  -ghc\t--gHealthCheck\tGeneral Health Check"
 		echo -e "  -f  \t--force\t\tForce runs dsapp"
@@ -4495,7 +4495,9 @@ EOF
 	     ;;
 
 	   5) 	datasyncBanner; #Remove log archive
-			askYesOrNo $"Permission to clean log archives?" cleanLog;
+			if askYesOrNo $"Permission to clean log archives?";then
+				cleanLog;
+			fi
 			echo;eContinue;
 			;;
 
