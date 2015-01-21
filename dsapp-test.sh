@@ -602,16 +602,20 @@ function autoUpdateDsapp {
 		if (checkFTP);then
 
 			# Fetch online dsapp and store to memory, check version
-			publicVersion=`curl -s ftp://ftp.novell.com/outgoing/dsapp-version.info | grep -m1 dsappversion= | cut -f2 -d "'"`
+			publicVersion=`curl --connect-timeout 3 -s ftp://ftp.novell.com/outgoing/dsapp-version.info | grep -m1 dsappversion= | cut -f2 -d "'"`
 			log_debug "[Init] [autoUpdateDsapp] publicVersion: $publicVersion, currentVersion: $dsappversion"
 			# publicVersion=`curl -s ftp://ftp.novell.com/outgoing/$dsapp_tar | tar -Oxz 2>/dev/null | grep -m1 dsappversion= | cut -f2 -d "'"`
 
+			clear; echo -e "\nChecking for new dsapp..."
+
 			# Download if newer version is available
-			if [ "$dsappversion" -ne "$publicVersion" ];then
-					clear;
-					echo -e "\nChecking for new dsapp..."
-					echo -e "v$dsappversion (v$publicVersion available)"
-					updateDsapp
+			if [ -n "$publicVersion" ];then
+				if [ "$dsappversion" -lt "$publicVersion" ];then
+						echo -e "v$dsappversion (v$publicVersion available)"
+						updateDsapp
+				fi
+			else
+				clear; echo -e "Connection timed out.";
 			fi
 		fi
 	fi
