@@ -5169,7 +5169,8 @@ EOF
 		 echo -e "\t4. Mobility pending syncevents by User"
 		 echo -e "\t5. View Attachments by User"
 		 echo -e "\n\t6. Check Mobility attachments (CAUTION)"
-		 echo -e "\t7. Watch psql command (CAUTION)"
+		 echo -e "\t7. Check Mobility attachments counts (BETA)"
+		 echo -e "\t8. Watch psql command (CAUTION)"
 		 echo -e "\n\t0. Back"
 		 echo -n -e "\n\tSelection: "
 		 read -n1 opt
@@ -5318,8 +5319,31 @@ EOF
 
 				eContinue;
 				;;
-
-			7) # Watch psql command
+			7)
+				datasyncBanner;
+				psql -U $dbUsername mobility -L /tmp/dsapp-attachments.log -c 'copy attachments (filestoreid) to STDOUT' | sort > /tmp/dsapp-attachments-database
+				find $dirVarMobility/mobility/attachments -type f -printf "%f\n" | sort > /tmp/dsapp-attachments-files;
+				uniq /tmp/dsapp-attachments-database > /tmp/dsapp-attachments-database-uniq
+				uniq /tmp/dsapp-attachments-files > /tmp/dsapp-attachments-files-uniq
+				printf "%10d filestoreid entries in the database.\n" `wc -l < /tmp/dsapp-attachments-database`
+				printf "%10d filestoreid entries in the file system.\n\n" `wc -l < /tmp/dsapp-attachments-files`
+				printf "%10d distinct filestoreid entries in the database.\n" `wc -l < /tmp/dsapp-attachments-database-uniq`
+				printf "%10d distinct filestoreid entries in the file system.\n\n" `wc -l < /tmp/dsapp-attachments-files-uniq`
+				printf "%10d duplicates filestoreid entries in the database.\n" `uniq /tmp/dsapp-attachments-database -d | wc -l`
+				printf "%10d 0-record filestoreid entries in the database.\n" `egrep ^0$ /tmp/dsapp-attachments-database | wc -l`
+				i=`comm -13 /tmp/dsapp-attachments-database-uniq /tmp/dsapp-attachments-files-uniq | wc -l`
+				if [ $i -gt 0 ]; then
+					printf "Informational: %10d orphans files on the file system.\n" $i;
+				fi
+				i=`comm -23 /tmp/dsapp-attachments-database-uniq /tmp/dsapp-attachments-files-uniq | wc -l`
+				if [ $i -gt 0 ]; then
+					echo -e "\nWARNING:"
+					printf "%10d entires missing from the file system!\n" $i;
+				fi
+				echo
+				eContinue;
+				;;
+			8) # Watch psql command
 				q=false
 				while :
 				do datasyncBanner;
