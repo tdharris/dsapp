@@ -1440,7 +1440,7 @@ function mCleanup { # Requires userID passed in.
 
 	# Get filestoreIDs that are safe to delete
 	local fileID=`psql -U $dbUsername mobility -t -c "SELECT filestoreid FROM attachments LEFT OUTER JOIN attachmentmaps ON attachments.attachmentid=attachmentmaps.attachmentid WHERE attachmentmaps.attachmentid IS NULL;" | sed 's/^ *//' | sed 's/ *$//'`
-	
+
 	# Log into mobility database, and clean tables with users guid
 	psql -U $dbUsername mobility <<EOF
 	delete from deviceimages where userid='$uGuid';
@@ -1458,16 +1458,34 @@ EOF
 		psql -U $dbUsername mobility -c "delete from attachments where attachmentid='$line';" &>/dev/null
 	done <<< "$uAttachment"
 
-	# While loop to delete all 'safe to delete' attachments from the file system
+	# Remove duplicate fileIDs
+	echo "$fileID" >> $dsappLogs/fileIDs;
+	cat $dsappLogs/fileIDs | sort | uniq > $dsappLogs/fileIDs.tmp; mv $dsappLogs/fileIDs.tmp $dsappLogs/fileIDs;
+	sed -i '/^\s*$/d' $dsappLogs/fileIDs;
+	fileID=`cat $dsappLogs/fileIDs`;
+
+	# echo to output
 	if [ -n "$fileID" ];then
-		echo -e "\nCleaning up `echo $fileID|wc -w` attachments\nPlease wait."
+		echo -e "\nCleaning `echo $fileID|wc -w` attachments."
+	fi
+
+	# While loop to delete all 'safe to delete' attachments from the file system (runs in background)
+	if [ -n "$fileID" ];then
+		echo -e "\n"`date`"\n------- Cleaning `echo $fileID|wc -w` attachments -------" >> $dsappLogs/mCleanup.log
+		local attachmentCount=0;
 		while IFS= read -r line
 		do
 			if [ -f "$mAttach`python $dsapplib/filestoreIdToPath.pyc $line`" ];then 
-				rm -f $mAttach`python $dsapplib/filestoreIdToPath.pyc $line`
+				rm -fv $mAttach`python $dsapplib/filestoreIdToPath.pyc $line` >> $dsappLogs/mCleanup.log
+				attachmentCount=$(($attachmentCount + 1));
+			else
+				echo -e "Warning : FileID $line not found" >> $dsappLogs/mCleanup.log
 			fi
+			sed -i "/$line/d" $dsappLogs/fileIDs;
+			fileID=`cat $dsappLogs/fileIDs`;
 		done <<< "$fileID"
-	fi
+		echo -e "------- Complete : $attachmentCount files removed -------" >> $dsappLogs/mCleanup.log
+	fi &
 }
 
 function dCleanup { # Requires userID passed in.
