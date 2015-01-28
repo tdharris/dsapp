@@ -1458,6 +1458,12 @@ EOF
 		psql -U $dbUsername mobility -c "delete from attachments where attachmentid='$line';" &>/dev/null
 	done <<< "$uAttachment"
 
+	# While loop to remove orphaned filestoreids
+	while IFS= read -r line
+	do
+		psql -U $dbUsername mobility -c "delete from attachments where filestoreid='$line';" &>/dev/null
+	done <<< "$fileID"
+
 	# Remove duplicate fileIDs
 	echo "$fileID" >> $dsappLogs/fileIDs;
 	cat $dsappLogs/fileIDs | sort | uniq > $dsappLogs/fileIDs.tmp; mv $dsappLogs/fileIDs.tmp $dsappLogs/fileIDs;
