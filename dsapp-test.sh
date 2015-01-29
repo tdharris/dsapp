@@ -2005,34 +2005,43 @@ function changeDBPass {
 		#Get Encrypted password from user input
 		local inputEncrpt=$(encodeString $input)
 
-		# Backup conf files
-		backupConf "changeDBPass";
+		echo "Changing database password..."
+		su postgres -c "cd /;psql -c \"ALTER USER datasync_user WITH password '"$input"';\"" 1>/dev/null 2>$dsapptmp/psql-error
+		if [ `cat "$dsapptmp/psql-error" | wc -c` -eq 0 ];then
+			# Backup conf files
+			backupConf "changeDBPass";
 
-		echo "Changing database password"
-		su postgres -c "psql -c \"ALTER USER datasync_user WITH password '"$input"';\"" &>/dev/null
-		lineNumber=`cat --number $ceconf | sed -n "/<database>/,/<\/database>/p" | grep -i password | awk '{print $1}'`
+			lineNumber=`cat --number $ceconf | sed -n "/<database>/,/<\/database>/p" | grep -i password | awk '{print $1}'`
 
-		if [[ $(isStringProtected /config/configengine/database $ceconf) -eq 1 ]];then
-			sed -i ""$lineNumber"s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $ceconf
+			if [[ $(isStringProtected /config/configengine/database $ceconf) -eq 1 ]];then
+				sed -i ""$lineNumber"s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $ceconf
+			else
+				sed -i ""$lineNumber"s|<password>.*</password>|<password>"$input"</password>|g" $ceconf
+			fi
+
+			if [[ $(isStringProtected /engine/settings/database $econf) -eq 1 ]];then
+				sed -i "s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $econf
+			else
+				sed -i "s|<password>.*</password>|<password>"$input"</password>|g" $econf
+			fi
+
+			if [[ $(isStringProtected /connector/settings/custom $mconf) -eq 1 ]];then
+				sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$inputEncrpt"</dbpass>|g" $mconf
+			else
+				sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$input"</dbpass>|g" $mconf
+			fi
+
+			echo -e "\nDatabase password updated. Please restart mobility."
 		else
-			sed -i ""$lineNumber"s|<password>.*</password>|<password>"$input"</password>|g" $ceconf
+			echo -e "\nError : Failed changing database password".
+			if askYesOrNo "View error?";then
+				less $dsapptmp/psql-error;
+			fi
 		fi
-
-		if [[ $(isStringProtected /engine/settings/database $econf) -eq 1 ]];then
-			sed -i "s|<password>.*</password>|<password>"$inputEncrpt"</password>|g" $econf
-		else
-			sed -i "s|<password>.*</password>|<password>"$input"</password>|g" $econf
-		fi
-
-		if [[ $(isStringProtected /connector/settings/custom $mconf) -eq 1 ]];then
-			sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$inputEncrpt"</dbpass>|g" $mconf
-		else
-			sed -i "s|<dbpass>.*</dbpass>|<dbpass>"$input"</dbpass>|g" $mconf
-		fi
-
-		echo -e "\nDatabase password updated. Please restart mobility."
 	fi
-	eContinue;
+	rm -f $dsapptmp/psql-error
+	echo;eContinue;
+
 }
 
 function changeAppName {
