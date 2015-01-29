@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='207'
+dsappversion='208'
 
 ##################################################################################################
 #	Set up banner logo
@@ -1458,14 +1458,7 @@ EOF
 		psql -U $dbUsername mobility -c "delete from attachments where attachmentid='$line';" &>/dev/null
 	done <<< "$uAttachment"
 
-	# While loop to remove orphaned filestoreids
-	while IFS= read -r line
-	do
-		psql -U $dbUsername mobility -c "delete from attachments where filestoreid='$line';" &>/dev/null
-	done <<< "$fileID"
-
 	# Remove duplicate fileIDs
-	echo -e "Generating list of files..."
 	echo "$fileID" >> $dsappLogs/fileIDs;
 	cat $dsappLogs/fileIDs | sort | uniq > $dsappLogs/fileIDs.tmp; mv $dsappLogs/fileIDs.tmp $dsappLogs/fileIDs;
 	sed -i '/^\s*$/d' $dsappLogs/fileIDs;
@@ -1506,7 +1499,7 @@ function dCleanup { # Requires userID passed in.
 	local psqlAppNameM=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.mobility';"| sed 's/^ *//' | sed 's/ *$//'`
 	
 	# Get all creationEventIDs from objectMappins
-	echo "Generating creationEventID list..."
+	echo "Building creationEventID list..."
 	local uEventID=`psql -U $dbUsername datasync -t -c "select \"objectID\",\"creationEventID\" from \"objectMappings\" where \"objectID\" ilike '%|$psqlAppNameG' OR \"objectID\" ilike '%|$psqlAppNameM' OR \"objectID\" ilike '%|$1';" | cut -f3 -d '|' | rev | cut -f1 -d '.' | rev`
 
 	# While loop to delete objectMappings
@@ -4345,7 +4338,8 @@ cd $cPWD;
  echo -e "\t3. Database"
  echo -e "\t4. Certificates"
  echo -e "\n\t5. User Issues"
- echo -e "\t6. Checks & Queries"
+ echo -e "\t6. User Info"
+ echo -e "\t7. Checks & Queries"
  echo -e "\n\t0. Quit"
  echo -n -e "\n\tSelection: "; tput sc
  echo -e "\n\n\n\tDisclaimer: Use at your own discretion, not supported by Novell.\n\tSee [dsapp --bug] to report issues."
@@ -4948,7 +4942,6 @@ done
  	echo -e "\t6. Change user FDN"
  	echo -e "\t7. What deleted this (contact, email, folder, calendar)?"
  	echo -e "\t8. List subjects of deleted items from device"
- 	echo -e "\t9. List all devices from db"
 	echo -e "\n\t0. Back"
  	echo -n -e "\n\tSelection: "
  	read -n1 opt;
@@ -5146,13 +5139,43 @@ done
 		8) whatDeviceDeleted
 			;;
 
-		9) #Device Info
+		/q | q | 0) break;;
+		*) ;;
+		esac
+		done
+		;; 
+
+##################################################################################################
+#	
+#	User Information Menu
+#
+##################################################################################################
+	6) # User Information
+		while :
+		do
+		datasyncBanner;
+	 	 echo -e "\t1. List all devices from db"
+	 	 echo -e "\t2. List of GMS users & emails"
+		 echo -e "\n\t0. Back"
+		 echo -n -e "\n\tSelection: "
+		 read -n1 opt
+		 case $opt in
+
+		1) #Device Info
 			clear;
 			echo -e "\nBelow is a list of users and devices. For more details about each device (i.e. OS version), look up what is in the description column. For an iOS device, there could be a listing of Apple-iPhone3C1/902.176. Use the following website, http://enterpriseios.com/wiki/UserAgent to convert to an Apple product, iOS Version and Build.\n" | fold -s
 			mpsql << EOF
 			select u.userid, description, identifierstring, devicetype from devices d INNER JOIN users u ON d.userid = u.guid;
 EOF
 			read -p "Press [Enter] when finished.";
+			;;
+
+		2) # List of GMS users & emails
+			clear;
+			mpsql << EOF
+			select g.displayname, g.firstname, g.lastname, g.emailaddress from gal g INNER JOIN users ON (g.alias = users.name);
+EOF
+			eContinue
 			;;
 
 		/q | q | 0) break;;
@@ -5166,7 +5189,7 @@ EOF
 #	Checks & Queries Menu
 #
 ##################################################################################################
-	6) # Queries
+	7) # Queries
 		while :
 		do
 		datasyncBanner;
