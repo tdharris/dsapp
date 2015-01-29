@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='208'
+dsappversion='209'
 
 ##################################################################################################
 #	Set up banner logo
@@ -1458,7 +1458,14 @@ EOF
 		psql -U $dbUsername mobility -c "delete from attachments where attachmentid='$line';" &>/dev/null
 	done <<< "$uAttachment"
 
+	# While loop to remove orphaned filestoreids
+	while IFS= read -r line
+	do
+		psql -U $dbUsername mobility -c "delete from attachments where filestoreid='$line';" &>/dev/null
+	done <<< "$fileID"
+
 	# Remove duplicate fileIDs
+	echo -e "Generating list of files..."
 	echo "$fileID" >> $dsappLogs/fileIDs;
 	cat $dsappLogs/fileIDs | sort | uniq > $dsappLogs/fileIDs.tmp; mv $dsappLogs/fileIDs.tmp $dsappLogs/fileIDs;
 	sed -i '/^\s*$/d' $dsappLogs/fileIDs;
@@ -1499,7 +1506,7 @@ function dCleanup { # Requires userID passed in.
 	local psqlAppNameM=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.mobility';"| sed 's/^ *//' | sed 's/ *$//'`
 	
 	# Get all creationEventIDs from objectMappins
-	echo "Building creationEventID list..."
+	echo "Generating creationEventID list..."
 	local uEventID=`psql -U $dbUsername datasync -t -c "select \"objectID\",\"creationEventID\" from \"objectMappings\" where \"objectID\" ilike '%|$psqlAppNameG' OR \"objectID\" ilike '%|$psqlAppNameM' OR \"objectID\" ilike '%|$1';" | cut -f3 -d '|' | rev | cut -f1 -d '.' | rev`
 
 	# While loop to delete objectMappings
