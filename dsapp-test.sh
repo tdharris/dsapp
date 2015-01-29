@@ -4349,12 +4349,12 @@ cd $cPWD;
  echo -e "\t7. Checks & Queries"
  echo -e "\n\t0. Quit"
  echo -n -e "\n\tSelection: "; tput sc
- echo -e "\n\n\n\tDisclaimer: Use at your own discretion, not supported by Novell.\n\tSee [dsapp --bug] to report issues."
+ echo -e "\n\n\tUse at your own discretion. dsapp is not supported by Novell.\n\tSee [dsapp --bug] to report issues."
  tput rc; read -n1 opt;
  a=true;
  case $opt in
 
- d) clear; ###Log into Database### --Not on Menu--
+ d | D) clear; ###Log into Database### --Not on Menu--
 	dpsql;
 	;;
 
