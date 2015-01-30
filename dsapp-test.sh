@@ -3841,6 +3841,14 @@ function installMobility { # $1 = repository name
 	# Source in configuration file
 	tar zxf $dumpFile; source $restoreFolder/mobilitySettings.conf
 
+	# Check variables have values before install
+	if [ -z "$dbPassword" ] || [ -z "$galUserName" ] || [ -z "$mPort" ] || [ -z "$mSecure" ] || [ -z "$gPort" ] || [ -z "$sListenAddress" ] || [ -z "$gListenAddress" ] || [ -z "$trustedName" ] || [ -z "$sPort" ] || [ -z "$sSecure" ];then
+		echo -e "Variable attribute missing for install. Check mobilitySettings.conf"
+		echo -e "dbPassword: $dbPassword \ngalUserName: $galUserName \nmPort: $mPort \nmSecure: $mSecure \ngPort: $gPort \nsListenAddress: $sListenAddress \ngListenAddress: $gListenAddress \ntrustedName: $trustedName \nsPort: $sPort \nsSecure: $sSecure"
+		echo; eContinue;
+		exit 1;
+	fi
+
 	local setupDir="$dirOptMobility/syncengine/connectors/mobility/cli"
 	local keyFile="$dsappConf/$trustedName.key"; echo "$trustedAppKey" > $keyFile;
 
@@ -3978,7 +3986,7 @@ function installMobility { # $1 = repository name
 				# Kill / stop mobility
 				killall -9 python;
 				rcDS stop silent;
-
+				
 				# Restore other configengine xml settings with awk as xmllint set has character limits
 				awk '/<notification>/{p=1;print;print "'$xmlNotification'"}/<\/notification>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
 				awk '/<ldap>/{p=1;print;print "'$xmlLDAP'"}/<\/ldap>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
@@ -3986,48 +3994,33 @@ function installMobility { # $1 = repository name
 					awk '/<gw>/{p=1;print;print "'$xmlgwAdmins'"}/<\/gw>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
 				fi
 
-				# Get correct passwords encryption
-				if [ -n "$smtpPassword" ];then
-					if [[ $(isStringProtected /config/configengine/notification $ceconf) -eq 1 ]];then
-						smtpPassword=`encodeString "$smtpPassword"`
-					fi
-				fi
-				if [[ $(isStringProtected /config/configengine/ldap/login $ceconf) -eq 1 ]];then
-					ldapPassword=`encodeString "$ldapPassword"`
-				fi
-				# Set trustedAppKey encryption
-				if [[ $(isStringProtected /connector/settings/custom $gconf) -eq 1 ]];then
-					trustedAppKey=`encodeString "$trustedAppKey"`
-				fi
-
+				# Restore the connector, and engine xml files
 				cd $dumpPath
-				
-				# Restore the connector xml files
 				cp $restoreFolder/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/groupwise/connector.xml $gconf;
 				cp $restoreFolder/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml $mconf;
-				setXML "$gconf" '/connector/settings/custom/listeningLocation' "$IP"
-
-				# Restore engine.xml file
-				passProXML=`xmlpath 'engine/settings/database/protected' < $econf`
 				cp $restoreFolder/etc/datasync/configengine/engines/default/engine.xml $econf
-				
-				# Set all passwords / keys for hostname encryption
-				encdbPassword=`encodeString "$dbPassword"`
-				if [[ $(isStringProtected /config/configengine/database $ceconf) -eq 1 ]];then
-					setXML "$ceconf" '/config/configengine/database/password' "$encdbPassword"
-				fi
-				if [[ $(isStringProtected /engine/settings/database $econf) -eq 1 ]];then
-					setXML "$econf" '/engine/settings/database/password' "$encdbPassword"
-				fi
-				if [[ $(isStringProtected /connector/settings/custom $mconf) -eq 1 ]];then
-					setXML "$mconf" '/connector/settings/custom/dbpass' "$encdbPassword"
-				fi
 
+				# Remove <protected> lines from XML files
+				sed -i '/<protected>/d' `find $dirEtcMobility -name "*.xml"`
+
+				# Update XML values
+				setXML "$gconf" '/connector/settings/custom/listeningLocation' "$IP"
 				setXML "$ceconf" '/config/configengine/source/provisioning' "$provisioning"
 				setXML "$ceconf" '/config/configengine/source/authentication' "$authentication"
 				setXML "$ceconf" '/config/configengine/ldap/login/password' "$ldapPassword"
+				setXML "$ceconf" '/config/configengine/database/password' "$dbPassword"
+				setXML "$mconf" '/connector/settings/custom/dbpass' "$dbPassword"
+				setXML "$econf" '/engine/settings/database/password' "$dbPassword"
 				setXML "$ceconf" '/config/configengine/notification/smtpPassword' "$smtpPassword"
  				setXML "$gconf" '/connector/settings/custom/trustedAppKey' "$trustedAppKey"
+
+ 				# Update configuration files
+ 				echo -e "\nUpdating configuration files..."
+				export FEEDBACK=""
+				export LOGGER=""
+				python $dirOptMobility/common/lib/upgrade.pyc;
+				killall -9 python;
+				rcDS stop silent;
 
 				# Copy in old certificates
 				echo
