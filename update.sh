@@ -38,13 +38,18 @@ function incrementBuild {
 }
 
 function uploadFTP {
+	echo -e "-------------------------------\nBuilding with dsappSource.sh\n-------------------------------"
 	$PWD/dsappSource.sh dsapp;
+	echo
 	# cp dsapp-test.sh dsapp.sh;
 	# tar -czf dsapp.tgz dsapp.sh;
-	ftp ftp.novell.com -a <<EOF
+
+	read -p "Novell FTP User: " userid
+	read -sp "Password: " pass
+
+	
+	lftp -d -e 'set ssl:ca-file ~/.lftp.support-ftp-internal.ca.crt ; set ftp:ssl-force true; set ssl:verify-certificate true' -u "$userid","$pass" ftp-internal.provo.novell.com <<EOF
 	cd outgoing
-	bin
-	ha
 	put dsapp.tgz
 EOF
 	if [ $? -ne 0 ]; then
@@ -52,7 +57,10 @@ EOF
 		return 1
 	fi
 	echo "dsappversion='$version'" > $tmp_publishedVersion
-	ftp -u ftp://ftp.novell.com/outgoing/dsapp-version.info $tmp_publishedVersion
+	lftp -d -e 'set ssl:ca-file ~/.lftp.support-ftp-internal.ca.crt ; set ftp:ssl-force true; set ssl:verify-certificate true' -u "$userid","$pass" ftp-internal.provo.novell.com <<EOF 
+	cd outgoing
+	put dsapp-version.info $tmp_publishedVersion
+EOF
 	echo -e "\nCopying to root@tharris7:/wrk/outgoing: "
 	scp dsapp.tgz $tmp_publishedVersion root@tharris7.lab.novell.com:/wrk/outgoing
 	if [ $? -ne 0 ]; then
