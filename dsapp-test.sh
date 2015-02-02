@@ -1900,11 +1900,11 @@ function checkNightlyMaintenance {
 		echo -e "\nNightly Maintenance disabled\n"
 	else
 		echo -e "\nNightly Maintenance History:"
-	history=`grep -i  "nightly maintenance" $mAlog | tail -5`
+	history=`grep "Nightly maintenance" $mAlog | tail -5`
 	if [ -z "$history" ]; then
 		for file in `ls -t $mAlog-* 2>/dev/null | head -5`
 		do
-			history=`zgrep -i "nightly maintenance" "$file" 2>/dev/null | tail -5`
+			history=`zgrep "Nightly maintenance" "$file" 2>/dev/null | tail -5`
 			if [ -n "$history" ]; then
 				echo -e "$file"
 				echo -e "$history"
