@@ -5377,6 +5377,11 @@ EOF
 					echo -e "\nWARNING:"
 					printf "%10d entires missing from the file system!\n" $i;
 				fi
+				i=`egrep -v '^[0-9a-f]{32}$' /tmp/dsapp-attachments-files | wc -l`
+				if [ $i -gt 0 ]; then
+					echo -e "\nWARNING:"
+					printf "%10d files with bad filename on the file system!\n" $i;
+				fi
 				echo
 				eContinue;
 				;;
