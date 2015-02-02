@@ -5370,16 +5370,17 @@ EOF
 				printf "%10d 0-record filestoreid entries in the database.\n" `egrep ^0$ /tmp/dsapp-attachments-database | wc -l`
 				i=`comm -13 /tmp/dsapp-attachments-database-uniq /tmp/dsapp-attachments-files-uniq | wc -l`
 				if [ $i -gt 0 ]; then
-					printf "Informational: %10d orphans files on the file system.\n" $i;
+					echo -e "\n${bYELLOW}Informational:${NC}"
+					printf "%10d orphans files on the file system.\n" $i;
 				fi
 				i=`comm -23 /tmp/dsapp-attachments-database-uniq /tmp/dsapp-attachments-files-uniq | wc -l`
 				if [ $i -gt 0 ]; then
-					echo -e "\nWARNING:"
+					echo -e "\n${bRED}WARNING:${NC}"
 					printf "%10d entires missing from the file system!\n" $i;
 				fi
 				i=`egrep -v '^[0-9a-f]{32}$' /tmp/dsapp-attachments-files | wc -l`
 				if [ $i -gt 0 ]; then
-					echo -e "\nWARNING:"
+					echo -e "\n${bRED}WARNING:${NC}"
 					printf "%10d files with bad filename on the file system!\n" $i;
 				fi
 				echo
