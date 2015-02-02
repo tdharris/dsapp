@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='209'
+dsappversion='210'
 
 ##################################################################################################
 #	Set up banner logo
@@ -106,24 +106,19 @@ EOF
 	fi
 
 	function checkInstall {
-	# Check for Mobility installed.
-	dsInstalled=`chkconfig | grep -iom 1 datasync`;
-	if [ "$dsInstalled" != "datasync" ];then
-		dsInstalledCheck=false
-	else
-		dsInstalledCheck=true
-	fi
-	}
-	checkInstall;
-	
+	# Check if Mobility is installed.
 	if [[ "$forceMode" -ne "1" ]];then
-		if (! $dsInstalledCheck);then
+		local dsInstalled=`chkconfig | grep -iom 1 datasync`;
+		if [ "$dsInstalled" != "datasync" ];then
 			datasyncBanner;
 			read -p "Mobility is not installed."
 			clear;
 			exit 1;
 		fi
 	fi
+	}
+
+	checkInstall;
 
 ##################################################################################################
 #	Declaration of Variables
@@ -637,7 +632,7 @@ function autoUpdateDsapp {
 		if [ -f "/root/.pgpass" ];then
 			# If the file is there, does it have a password?
 			if [[ -n `cat /root/.pgpass | cut -d ':' -f5` ]]; then
-				dbLogin=`psql -U $dbUsername datasync -c "\d" 2>/dev/null`;
+				dbLogin=`psql -U $dbUsername -l 2>/dev/null`;
 				if [ $? -eq '0' ];then
 					echo "0";
 				else
@@ -941,7 +936,7 @@ log_debug "[Init] [getsmtpPassword] $smtpPassword"
 		fi
 		yastRun=`ps aux | grep -i yast | awk '{print $2}' | sed '$d'`
 		if [ -n "$yastRun" ];then
-			echo -e "YaST could not be closed. Aborting install"
+			echo -e "YaST could not be closed. Aborting..."
 			return 1;
 		else return 0;
 		fi
@@ -1902,9 +1897,9 @@ function checkNightlyMaintenance {
 	grep -iw "<databaseMaintenance>1</databaseMaintenance>" $mconf
 	if [ $? -ne 0 ]; then
 		problem=true
-	fi
-
-	echo -e "\nNightly Maintenance History:"
+		echo -e "\nNightly Maintenance disabled\n"
+	else
+		echo -e "\nNightly Maintenance History:"
 	history=`grep -i  "nightly maintenance" $mAlog | tail -5`
 	if [ -z "$history" ]; then
 		for file in `ls -t $mAlog-* 2>/dev/null | head -5`
@@ -1918,12 +1913,14 @@ function checkNightlyMaintenance {
 		done
 
 		if [ -z "$history" ]; then
-			echo -e "Nothing found. Nightly Maintenance has not run recently."
+			echo -e "Nothing found. Nightly Maintenance may have not run recently."
 			problem=true
 		fi
 	else echo -e "$mAlog\n""$history"
 	fi
 	echo ""
+	fi
+
 	if ($problem); then 
 		return 1 
 	else return 0
@@ -4029,9 +4026,10 @@ function installMobility { # $1 = repository name
 					cp $restoreFolder/server.pem $dirVarMobility/webadmin/
 				fi
 
+				checkPGPASS;
+				
 				# Restore users and groups
 				if askYesOrNo "Restore users & groups?";then
-					checkPGPASS;
 					psql -U $dbUsername datasync < $restoreFolder/targets.sql 2>/dev/null
 					psql -U $dbUsername datasync < $restoreFolder/membershipCache.sql 2>/dev/null
 				fi
