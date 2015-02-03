@@ -5180,7 +5180,7 @@ EOF
 		2) # List of GMS users & emails
 			clear;
 			mpsql << EOF
-			select g.displayname, g.firstname, g.lastname, g.emailaddress from gal g INNER JOIN users ON (g.alias = users.name);
+			select g.displayname, g.firstname, g.lastname, u.userid, g.emailaddress from gal g INNER JOIN users u ON (g.alias = u.name);
 EOF
 			eContinue
 			;;
