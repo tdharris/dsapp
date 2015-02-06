@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='210'
+dsappversion='211'
 
 ##################################################################################################
 #	Set up banner logo
@@ -1446,29 +1446,38 @@ function mCleanup { # Requires userID passed in.
 	\q
 
 EOF
-	
+
 	# While loop to remove all users attachments
-	while IFS= read -r line
-	do
-		psql -U $dbUsername mobility -c "delete from attachments where attachmentid='$line';" &>/dev/null
-	done <<< "$uAttachment"
+	if [ -n "$uAttachment" ];then
+		echo -e "Removing `echo \"$uAttachment\" | wc -l` attachment entires..."
+		while IFS= read -r line
+		do
+			psql -U $dbUsername mobility -c "delete from attachments where attachmentid='$line';" &>/dev/null
+		done <<< "$uAttachment"
+	fi
 
 	# While loop to remove orphaned filestoreids
-	while IFS= read -r line
-	do
-		psql -U $dbUsername mobility -c "delete from attachments where filestoreid='$line';" &>/dev/null
-	done <<< "$fileID"
+	if [ -n "$fileID" ];then
+		echo -e "Checking for orphaned attachment entires..."
+		while IFS= read -r line
+		do
+			psql -U $dbUsername mobility -c "delete from attachments where filestoreid='$line';" &>/dev/null
+		done <<< "$fileID"
+	fi
+
+	# Get number of CPU cores for parallel process. Set default to 8 if cpu cores greater then 8
+	local cpuCore=`nproc`; if [ "$cpuCore" -gt '8' ];then cpuCore=8;fi
 
 	# Remove duplicate fileIDs
 	echo -e "Generating list of files..."
 	echo "$fileID" >> $dsappLogs/fileIDs;
-	cat $dsappLogs/fileIDs | sort | uniq > $dsappLogs/fileIDs.tmp; mv $dsappLogs/fileIDs.tmp $dsappLogs/fileIDs;
+	cat $dsappLogs/fileIDs | sort -u --parallel $cpuCore > $dsappLogs/fileIDs.tmp; mv $dsappLogs/fileIDs.tmp $dsappLogs/fileIDs;
 	sed -i '/^\s*$/d' $dsappLogs/fileIDs;
 	fileID=`cat $dsappLogs/fileIDs`;
 
 	# echo to output
 	if [ -n "$fileID" ];then
-		echo -e "\nCleaning `echo $fileID|wc -w` attachments."
+		echo -e "\nCleaning `echo $fileID|wc -w` attachments from file system."
 	fi
 
 	# While loop to delete all 'safe to delete' attachments from the file system (runs in background)
