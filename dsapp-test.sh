@@ -162,6 +162,8 @@ EOF
 	isNum='^[0-9]+$'
 	ds_20x='2000'
 	ds_21x='2100'
+	previousVersion="20153"
+	latestVersion="210230"
 
 	# Configuration Files
 	mconf="/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml"
@@ -1236,6 +1238,7 @@ function createDatabases {
 			killall -9 postgres &>/dev/null;
 			getDSVersion;
 			setVariables;
+			getExactMobilityVersion;
 			rcpostgresql start;
 			rcDS start;
 			echo -e "\nYour Mobility product has been successfully updated to "`cat $dirOptMobility/version`"\n";
@@ -4677,6 +4680,17 @@ EOF
 			;;
 
 		3) # Apply FTF / Patch Files
+
+		#	patchEm will only work given the following conditions are met:
+		#   	-Global variable patchFiles is defined prior to calling patchEm and that variable is an array of strings
+		#			 that contain the full-path and filename of the file to be patched (ie /path/to/file1.pyc)
+		# 		-The patchEm function must receive two parameters: 1) the ftpfilename (ie bugX.zip), 2) the required version
+		#			 of Mobility for the patch (removing all periods from the string, ie 20153 would be for GMS 2.0.1.53)
+		#		-The ftpFilename must be a compressed file of type: .tgz, .tar, .zip and nothing else.
+		# 		-The patch files must be at the root level of the compressed file, not underneath any subfolders
+		#
+		#		Note: Please make sure these ftpFiles are available on Novell's FTP by placing them in //tharris7.lab.novell.com/outgoing
+
 		   # Menu-requirements: ftp connection to Novell
 			datasyncBanner;
 			if (! checkFTP);then
@@ -4686,32 +4700,28 @@ EOF
 			else
 			while :
 			do
-				datasyncBanner;
-				echo -e "\t1. Show Applied Patches"
-				echo -e "\n\t2. Fix slow startup\n\t\t(GMS 2.0.1.53 only) - TID 7014819, Bug 870939"
-				echo -e "\t3. Fix LG Optimus fwd attachment encoded\n\t\t(GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
-				echo -e "\t4. Fix Sony Xperia Z unable to see mails in Inbox\n\t\t(GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698"
-				echo -e "\t5. Log in to the web admin using either the GW or LDAP userid\n\t\t(GMS 2.0.1.53 only) - TID 7015622, Bug 895165"
-				echo -e "\t6. Fix update.sh - clear-text passwords - TID 7016214, Bug 918694"
+				# Version older then last two builds
+				if [ "$daVersion" -lt "$previousVersion" ];then
+					echo -e "No FTFs available for version $daVersion."
+					eContinue
+					break;
+				fi
 
-		 		echo -e "\n\t0. Back"
-			 	echo -n -e "\n\tSelection: "
-			 	read -n1 opt;
-				case $opt in
+				# Previous version of mobility
+				if [ "$daVersion" = "$previousVersion" ];then
+					datasyncBanner;
+					echo -e "\t1. Show Applied Patches"
+					echo -e "\n\t2. Fix slow startup\n\t\t(GMS 2.0.1.53 only) - TID 7014819, Bug 870939"
+					echo -e "\t3. Fix LG Optimus fwd attachment encoded\n\t\t(GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
+					echo -e "\t4. Fix Sony Xperia Z unable to see mails in Inbox\n\t\t(GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698"
+					echo -e "\t5. Log in to the web admin using either the GW or LDAP userid\n\t\t(GMS 2.0.1.53 only) - TID 7015622, Bug 895165"
+					echo -e "\n\t0. Back"
+				 	echo -n -e "\n\tSelection: "
+				 	read -n1 opt;
+				 	case $opt in
 
-					#	patchEm will only work given the following conditions are met:
-					#   	-Global variable patchFiles is defined prior to calling patchEm and that variable is an array of strings
-					#			 that contain the full-path and filename of the file to be patched (ie /path/to/file1.pyc)
-					# 		-The patchEm function must receive two parameters: 1) the ftpfilename (ie bugX.zip), 2) the required version
-					#			 of Mobility for the patch (removing all periods from the string, ie 20153 would be for GMS 2.0.1.53)
-					#		-The ftpFilename must be a compressed file of type: .tgz, .tar, .zip and nothing else.
-					# 		-The patch files must be at the root level of the compressed file, not underneath any subfolders
-					#
-					#		Note: Please make sure these ftpFiles are available on Novell's FTP by placing them in //tharris7.lab.novell.com/outgoing
-
-					1) # Show current FTF Patch level
+				 		1) # Show current FTF Patch level
 						datasyncBanner;
-
 						if [ -e "$dsappConf/patchlevel" ]; then
 							cat "$dsappConf/patchlevel"
 						else echo "No patches have been applied to this Mobility server."
@@ -4719,41 +4729,66 @@ EOF
 						echo; eContinue;
 						;;
 
-					2) # Fix slow startup (GMS 2.0.1.53 only) - TID 7014819, Bug 870939
-						patchFiles=( "/opt/novell/datasync/syncengine/connectors/groupwise/lib/gwsoap.pyc" )
-						patchEm "870939.zip" "20153"
-						;;
+					 	2) # Fix slow startup (GMS 2.0.1.53 only) - TID 7014819, Bug 870939
+							patchFiles=( "/opt/novell/datasync/syncengine/connectors/groupwise/lib/gwsoap.pyc" )
+							patchEm "870939.zip" "20153"
+							;;
 
-					3) # fixLGOptimusFwdAttachmentEncoded (GMS 2.0.1.53 only) - TID 7015238, Bug 882909
-						patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/mobility_util.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/smartForward.pyc" )
-						patchEm "882909.zip" "20153"
-						;;
+						3) # fixLGOptimusFwdAttachmentEncoded (GMS 2.0.1.53 only) - TID 7015238, Bug 882909
+							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/mobility_util.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/smartForward.pyc" )
+							patchEm "882909.zip" "20153"
+							;;
 
-					4) # Fix Sony Xperia Z unable to see mails in Inbox (GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698
-						patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/sync.pyc" )
-						patchEm "861830-868698.zip" "20153"
-						;;
+						4) # Fix Sony Xperia Z unable to see mails in Inbox (GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698
+							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/sync.pyc" )
+							patchEm "861830-868698.zip" "20153"
+							;;
 
-					5) # Log in to the web admin using either the GW connector username or the LDAP username (GMS 2.0.1.53 only) - TID 7015622, Bug 895165
-						patchFiles=( "/opt/novell/datasync/common/lib/datasync/auth/ldap_driver.pyc" "/opt/novell/datasync/configengine/lib/configengine/__init__.pyc" )
-						patchEm "895165.zip" "20153"
-						;;
+						5) # Log in to the web admin using either the GW connector username or the LDAP username (GMS 2.0.1.53 only) - TID 7015622, Bug 895165
+							patchFiles=( "/opt/novell/datasync/common/lib/datasync/auth/ldap_driver.pyc" "/opt/novell/datasync/configengine/lib/configengine/__init__.pyc" )
+							patchEm "895165.zip" "20153"
+							;;
 
-					6) # Fix update.sh to work with clear-text passwords - TID 7016214, Bug 918694
-						patchFiles=( "/opt/novell/datasync/common/lib/upgrade.pyc" )
-						patchEm "918694.zip" "210230"
-						;;
+							/q | q | 0) break;;
+						*) ;;
 
-			/q | q | 0) break;;
-					*) ;;
+					esac
+				fi
 
-				esac
-				done
+				# Latest version of mobility
+				if [ "$daVersion" = "$latestVersion" ];then
+					datasyncBanner;
+					echo -e "\t1. Show Applied Patches"
+					echo -e "\t2. Fix update.sh - clear-text passwords - TID 7016214, Bug 918694"
+					echo -e "\n\t0. Back"
+				 	echo -n -e "\n\tSelection: "
+				 	read -n1 opt;
+				 	case $opt in
+
+					 	1) # Show current FTF Patch level
+							datasyncBanner;
+							if [ -e "$dsappConf/patchlevel" ]; then
+								cat "$dsappConf/patchlevel"
+							else echo "No patches have been applied to this Mobility server."
+							fi
+							echo; eContinue;
+							;;
+
+					 	2) # Fix update.sh to work with clear-text passwords - TID 7016214, Bug 918694
+							patchFiles=( "/opt/novell/datasync/common/lib/upgrade.pyc" )
+							patchEm "918694.zip" "210230"
+							;;
+
+					 	/q | q | 0) break;;
+						*) ;;
+					esac
+				fi
+			done
 			fi
-				;;
+		;;
 
-		  /q | q | 0) break;;
-		  *) ;;
+		 /q | q | 0) break;;
+		 *) ;;
 		esac
 		done
 		;;
