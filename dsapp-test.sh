@@ -1,26 +1,26 @@
 #!/bin/bash
 ##################################################################################################
-#																								
-#	dsapp was created to help customers and support engineers troubleshoot 
+#
+#	dsapp was created to help customers and support engineers troubleshoot
 #	and solve common issues for the Novell GroupWise Mobility product.
-#	
+#
 #	by Tyler Harris and Shane Nielson
 #
 ##################################################################################################
 
-dsappversion='211'
+dsappversion='212'
 
 ##################################################################################################
 #	Set up banner logo
 ##################################################################################################
 function datasyncBanner {
-s=`cat << "EOF"                                                       
-         _                       
-      __| |___  __ _ _ __  _ __  
-     / _' / __|/ _' | '_ \\| '_ \\ 
+s=`cat << "EOF"
+         _
+      __| |___  __ _ _ __  _ __
+     / _' / __|/ _' | '_ \\| '_ \\
     | (_| \__ | (_| | |_) | |_) |
-     \__,_|___/\__,_| .__/| .__/ 
-                    |_|   |_|                                          
+     \__,_|___/\__,_| .__/| .__/
+                    |_|   |_|
 EOF
 `
 
@@ -44,7 +44,7 @@ EOF
 	# Make sure user is root
 	if [ "$(id -u)" != "0" ];then
 		datasyncBanner;
-		read -p "Please login as root to run this script."; 
+		read -p "Please login as root to run this script.";
 		exit 1;
 	fi
 
@@ -271,11 +271,11 @@ EOF
 	fi
 	dsHostname=`cat $dsappConf/dsHostname.conf`
 
-	# Store dsapp version 
+	# Store dsapp version
 	if [ ! -f "$dsappConf/dsappVersion" ];then
 		echo $dsappversion > $dsappConf/dsappVersion
 	fi
-	
+
 ##################################################################################################
 # Begin Logging Section
 ##################################################################################################
@@ -345,7 +345,7 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 	}
 
 ##################################################################################################
-#	Version: Pre-Eenou 
+#	Version: Pre-Eenou
 ##################################################################################################
 	function declareVariables1 {
 		log_debug "[Init] [declareVariables1] Declaring variables for 1.x"
@@ -386,40 +386,40 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 		log_debug "===== Variable Assignment ====="
 		log_debug "Assigning ldapAddress from mconf"
 		ldapAddress=`xmlpath 'connector/settings/custom/ldapAddress' < $mconf`
-		
+
 		log_debug "Assigning ldapPort from mconf"
 		ldapPort=`xmlpath 'connector/settings/custom/ldapPort' < $mconf`
-		
+
 		log_debug "Assigning ldapSecure from ceconf"
 		ldapSecure=`xmlpath 'config/configengine/ldap/secure' < $ceconf`
-		
+
 		log_debug "Assigning mPort from mconf"
 		mPort=`xmlpath 'connector/settings/custom/listenPort' < $mconf`
-		
+
 		log_debug "Assigning mSecure from mconf"
 		mSecure=`xmlpath 'connector/settings/custom/ssl' < $mconf`
-		
+
 		log_debug "Assigning mlistenAddress from mconf"
 		mlistenAddress=`xmlpath 'connector/settings/custom/listenAddress' < $mconf`
-		
+
 		log_debug "Assigning sListenAddress from gconf"
 		sListenAddress=`xmlpath 'connector/settings/custom/listeningLocation' < $gconf`
-		
+
 		log_debug "Assigning gListenAddress from gconf"
 		gListenAddress=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f3 -d '/' | cut -f1 -d ':'`
-		
+
 		log_debug "Assigning trustedName from gconf"
 		trustedName=`xmlpath 'connector/settings/custom/trustedAppName' < $gconf`
-		
+
 		log_debug "Assigning gPort from gconf"
 		gPort=`xmlpath 'connector/settings/custom/port' < $gconf`
 
 		log_debug "Assigning sPort from gconf"
 		sPort=`xmlpath 'connector/settings/custom/soapServer' < $gconf | rev | cut -f1 -d ':' | cut -f2 -d '/' | rev`
-		
+
 		log_debug "Assigning sSecure from gconf"
 		sSecure=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f1 -d ':'`
-		
+
 		log_debug "Assigning wPort from wconf"
 		wPort=`xmlpath 'config/server/port' < $wconf`
 
@@ -428,10 +428,10 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 
 		log_debug "Assigning provisioning from ceconf"
 		provisioning=`xmlpath 'config/configengine/source/provisioning' < $ceconf`
-		
+
 		log_debug "Assigning authentication from ceconf"
 		authentication=`xmlpath 'config/configengine/source/authentication' < $ceconf`
-		
+
 		log_debug "Assigning galUserName from mconf"
 		galUserName=`xmlpath 'connector/settings/custom/galUserName' < $mconf`
 
@@ -440,13 +440,13 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 
 		log_debug "Assigning userContainer from ceconf"
 		userContainer=`xmlpath 'config/configengine/ldap/userContainer' < $ceconf`
-		
+
 		log_debug "Assigning mAttachSize from mconf"
 		mAttachSize=`xmlpath 'connector/settings/custom/attachmentMaxSize' < $mconf`
-		
+
 		log_debug "Assigning gAttachSize from gconf"
 		gAttachSize=`xmlpath 'connector/settings/custom/attachmentMaxSize' < $gconf`
-		
+
 		log_debug "Assigning webAdmins from ceconf"
 		webAdmins=`xmlpath 'config/configengine/ldap/admins/dn' < $ceconf`
 		log_debug "===== End Variable Assignment ====="
@@ -479,7 +479,7 @@ function pushConf {
 }
 
 function dsappLogRotate {
-logRotate="$(cat <<EOF                                                        
+logRotate="$(cat <<EOF
 /opt/novell/datasync/tools/dsapp/logs/*.log {
     compress
     compresscmd /usr/bin/gzip
@@ -490,7 +490,7 @@ logRotate="$(cat <<EOF
     notifempty
     size +4096k
     create 640 root root
-}                                     
+}
 EOF
 )"
 if [ ! -f "/etc/logrotate.d/dsapp" ];then
@@ -550,7 +550,7 @@ function checkFTP {
 	if [ $? -eq 0 ]; then
 		log_success "$header Passed ftp.novell.com:21"
 		return 0;
-	else 
+	else
 		log_warning "$header Failed ftp.novell.com:21"
 		return 1;
 	fi
@@ -781,7 +781,7 @@ function autoUpdateDsapp {
 	else local var="";
 	fi
 
-	if [[ "$dsHostname" != `hostname -f` ]] || [ "$var" = "skip" ];then 
+	if [[ "$dsHostname" != `hostname -f` ]] || [ "$var" = "skip" ];then
 		if [ "$var" != "skip" ];then echo -e "\nHostname differs from last time dsapp ran.";
 			echo -e "\nReconfigure Mobility password encryption";
 		fi
@@ -810,7 +810,7 @@ function autoUpdateDsapp {
 			smtpPassword=$(encodeString $smtpPassword)
 
 			# Backup all configuration files
-			backupConf "checkHostname"		
+			backupConf "checkHostname"
 
 			# Setting database password in multiple files
 			if [[ $(isStringProtected /config/configengine/database $ceconf) -eq 1 ]];then
@@ -901,7 +901,7 @@ log_debug "[Init] [getsmtpPassword] $smtpPassword"
 #	Declaration of Functions
 #
 ##################################################################################################
-		
+
 	function promptVerifyPath {
 		while [ true ];do
     		read -ep "$1" path;
@@ -996,14 +996,14 @@ log_debug "[Init] [getsmtpPassword] $smtpPassword"
 
 			# Tar up all files
 			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog $dsappLog `find /etc/datasync/ -name *.xml -type f` `ls $mAlog-* | tail -n1 2>/dev/null` `ls $gAlog-* | tail -n1 2>/dev/null` 2>/dev/null;
-			
+
 			# Move tmp log back
 			mv $dsappLogs/dsapp.tmp $dsappLogs/dsapp.log
-			
+
 			if [ $? -eq 0 ]; then
 				echo -e "\n$dsappupload/$srn"_"$d.tgz\n"
 			fi
-			
+
 			# FTP Send..
 			echo
 			if askYesOrNo $"Do you want to upload the logs to Novell?"; then
@@ -1057,7 +1057,7 @@ function createDatabases {
 	echo "create mobility database done.."
 	PGPASSWORD="$dbPassword" psql -d "mobility" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/syncengine/connectors/mobility/mobility_pgsql.sql"
 	echo "extend schema mobility done.."
-	
+
 	if [ $dsVersion -gt $ds_20x ];then
 		PGPASSWORD="$dbPassword" createdb "dsmonitor" -U $dbUsername
 		echo "create monitor database done.."
@@ -1119,7 +1119,7 @@ function createDatabases {
 				rm -r $log
 
 				# Copy Log directory to /tmp before deleting /opt/novell/datasync/ directory
-				cp -vr "$dsappLogs" 
+				cp -vr "$dsappLogs"
 
 				rm -r $dirOptMobility;
 
@@ -1149,7 +1149,7 @@ function createDatabases {
 			echo -e '\n\t4. Look under "Novell Data Synchronizer Connector for Mobility" | "Data Synchronizer Mobility Pack" and check for the "Code". It should be 14 alphanumeric characters.'
 		fi
 		echo -e "\n\t5. Note down the registration/activation code.\n\n"
-		
+
 		#Obtain Registration/Activation Code and Email Address
 		read -ep "Registration Code: " reg;
 		echo -e "\n"
@@ -1166,7 +1166,7 @@ function createDatabases {
 	}
 
 	function cleanLog {
-		echo -e "\nProcessing..."; 
+		echo -e "\nProcessing...";
 		rm -fvR $log/connectors/*;
 		rm -fvR $log/syncengine/*;
 		if askYesOrNo $"To prevent future disk space hogging, set log maxage to 14?" ; then
@@ -1315,7 +1315,7 @@ function createDatabases {
 			if [ $? -eq 0 ];then
 				verifyCount=$(($verifyCount - 2))
 			fi
-			
+
 			verifyUserMobilityDB "$uid"
 			if [ $? -eq 0 ];then
 				verifyCount=$(($verifyCount - 1))
@@ -1364,7 +1364,7 @@ EOF
 		eContinue;
 		sMonitorUser
 		fi
-		
+
 	}
 
 function dremoveUser {
@@ -1486,7 +1486,7 @@ EOF
 		local attachmentCount=0;
 		while IFS= read -r line
 		do
-			if [ -f "$mAttach`python $dsapplib/filestoreIdToPath.pyc $line`" ];then 
+			if [ -f "$mAttach`python $dsapplib/filestoreIdToPath.pyc $line`" ];then
 				rm -fv $mAttach`python $dsapplib/filestoreIdToPath.pyc $line` >> $dsappLogs/mCleanup.log
 				attachmentCount=$(($attachmentCount + 1));
 			else
@@ -1508,7 +1508,7 @@ function dCleanup { # Requires userID passed in.
 	# Get targetName from each connector
 	local psqlAppNameG=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.groupwise';"| sed 's/^ *//' | sed 's/ *$//'`
 	local psqlAppNameM=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.mobility';"| sed 's/^ *//' | sed 's/ *$//'`
-	
+
 	# Get all creationEventIDs from objectMappins
 	echo "Generating creationEventID list..."
 	local uEventID=`psql -U $dbUsername datasync -t -c "select \"objectID\",\"creationEventID\" from \"objectMappings\" where \"objectID\" ilike '%|$psqlAppNameG' OR \"objectID\" ilike '%|$psqlAppNameM' OR \"objectID\" ilike '%|$1';" | cut -f3 -d '|' | rev | cut -f1 -d '.' | rev`
@@ -1566,10 +1566,10 @@ function addGroup {
 }
 
 function gwCheck {
-if askYesOrNo $"Do you want to attempt remote gwCheck repair?"; then	
-			# read -ep "IP address of $gwVersion `echo $userPO | tr [:lower:] [:upper:]` GroupWise Server: " 
+if askYesOrNo $"Do you want to attempt remote gwCheck repair?"; then
+			# read -ep "IP address of $gwVersion `echo $userPO | tr [:lower:] [:upper:]` GroupWise Server: "
 			echo "You will be prompted for the password of root."
-			
+
 echo "#!/bin/bash
 gwCheckPath='/opt/novell/groupwise/software'
 function tryCheck {
@@ -1584,12 +1584,12 @@ echo 'echo "<?xml version="1.0" encoding="UTF-8"?>
                         <database-type>
                                 <post-office>
                                         <post-office-name>
-                                                $userPO 
+                                                $userPO
                                         </post-office-name>
                                         <object-type>
                                                 <user-resource>
                                                         <name>
-                                                                $vuid   
+                                                                $vuid
                                                         </name>
                                                 </user-resource>
                                         </object-type>
@@ -1607,17 +1607,17 @@ echo 'echo "<?xml version="1.0" encoding="UTF-8"?>
                                 <results>
                                         <send-to/>
                                 </results>
-                        </process-option> 
+                        </process-option>
 </GWCheck>" > /opt/novell/groupwise/gwcheck/bin/gwcheckDS.opt' >> $dsapptmp/gwCheck.sh
 
 echo '/opt/novell/groupwise/gwcheck/bin/gwcheckt /opt/novell/groupwise/gwcheck/bin/gwcheckDS.opt >/opt/novell/groupwise/gwcheck/bin/file' >> $dsapptmp/gwCheck.sh
 echo 'less /opt/novell/groupwise/gwcheck/bin/file 2>/dev/null' >> $dsapptmp/gwCheck.sh
 echo 'rm /opt/novell/groupwise/gwcheck/bin/file /opt/novell/groupwise/gwcheck/bin/gwcheckDS.opt 2>/dev/null' >> $dsapptmp/gwCheck.sh
-echo -e 'else 
+echo -e 'else
 	function tryInstall {
 		cd $gwCheckPath &>/dev/null
 		if [ -d "${PWD}/admin" ]; then
-			cd admin						
+			cd admin
 			rpm -ihv --force novell-groupwise-gwcheck*.rpm
 			tryCheck
 			else echo -e "\\nUnable to find GWCheck in SDD directory:\\n$gwCheckPath\\n"
@@ -1628,18 +1628,18 @@ echo -e 'else
 					tryInstall
 						break;
 					else echo "Invalid path - no admin directory."
-				fi 	
+				fi
 			done
 		fi
 	}
 	tryInstall
-	
+
 fi
 }
 tryCheck' >> $dsapptmp/gwCheck.sh
-# 			echo "if [ ! -d /opt/novell/groupwise/gwcheck ]; then 
+# 			echo "if [ ! -d /opt/novell/groupwise/gwcheck ]; then
 # 					if [ -d /opt/novell/groupwise/software/admin/ ]; then
-# 						cd /opt/novell/groupwise/software/admin 
+# 						cd /opt/novell/groupwise/software/admin
 # 						rpm -ihv novell-groupwise-gwcheck*.rpm
 # 					fi
 # 				fi" > $dsapptmp/gwCheck.sh
@@ -1653,12 +1653,12 @@ tryCheck' >> $dsapptmp/gwCheck.sh
 #                         <database-type>
 #                                 <post-office>
 #                                         <post-office-name>
-#                                                 $userPO 
+#                                                 $userPO
 #                                         </post-office-name>
 #                                         <object-type>
 #                                                 <user-resource>
 #                                                         <name>
-#                                                                 $vuid   
+#                                                                 $vuid
 #                                                         </name>
 #                                                 </user-resource>
 #                                         </object-type>
@@ -1676,14 +1676,14 @@ tryCheck' >> $dsapptmp/gwCheck.sh
 #                                 <results>
 #                                         <send-to/>
 #                                 </results>
-#                         </process-option> 
+#                         </process-option>
 # </GWCheck>" > /opt/novell/groupwise/gwcheck/bin/gwcheckDS.opt' >> $dsapptmp/gwCheck.sh
 # 		echo '/opt/novell/groupwise/gwcheck/bin/gwcheckt /opt/novell/groupwise/gwcheck/bin/gwcheckDS.opt >/opt/novell/groupwise/gwcheck/bin/file' >> $dsapptmp/gwCheck.sh
 # 		echo 'less /opt/novell/groupwise/gwcheck/bin/file 2>/dev/null' >> $dsapptmp/gwCheck.sh
 # 		echo 'rm /opt/novell/groupwise/gwcheck/bin/file /opt/novell/groupwise/gwcheck/bin/gwcheckDS.opt 2>/dev/null' >> $dsapptmp/gwCheck.sh
 # 		echo 'else echo -e "\nUnable to find GWCheck in default SDD directory:\n/opt/novell/groupwise/software/admin\n"' >> $dsapptmp/gwCheck.sh
 # 		echo 'fi' >> $dsapptmp/gwCheck.sh
-		
+
 # cat $dsapptmp/gwCheck.sh
 # scp $dsapptmp/gwCheck.sh root@$poaAddress:/root
 scp  $dsapptmp/gwCheck.sh root@$poaAddress:/root
@@ -1734,7 +1734,7 @@ Content-Type: text/xml
 </SOAP-ENV:Envelope>
 EOF`
 
-if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`); then 
+if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`); then
 	echo "Invalid key for trusted application."
 	eContinue; continue;
 fi
@@ -1743,7 +1743,7 @@ fi
 if (`echo "$soapLoginResponse" | grep -qi "Location: https:"`);then
 	echo "SOAP $poa secure. Cannot complete."
 else
-	if (`echo "$soapLoginResponse" | grep -q "redirect"`); then 
+	if (`echo "$soapLoginResponse" | grep -q "redirect"`); then
 	poaAddress=`echo "$soapLoginResponse" | grep -iwo "<gwt:ipAddress>.*</gwt:ipAddress>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	port=`echo "$soapLoginResponse" | grep -iwo "<gwt:port>.*</gwt:port>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	poa=`echo "$poaAddress:$port"`
@@ -1823,16 +1823,16 @@ tempFile1=$dsapptmp/tempFile1.xml
 echo $folderResponse > $tempFile1
 
 tempFile=$dsapptmp/tempFile.xml
-perl -e'$x=join("",<STDIN>);$x=~s/\s*[\n]+\s*//gs; $x=~s/^.*?(<gwt:folder.*<\/gwt:folder>).*?$/$1/i;$x=~s/<\/gwt:folder>/<\/gwt:folder>\n/gi;print $x;'> $tempFile <$tempFile1 
+perl -e'$x=join("",<STDIN>);$x=~s/\s*[\n]+\s*//gs; $x=~s/^.*?(<gwt:folder.*<\/gwt:folder>).*?$/$1/i;$x=~s/<\/gwt:folder>/<\/gwt:folder>\n/gi;print $x;'> $tempFile <$tempFile1
 rootID=`cat $tempFile | grep Root | awk '!/<.*>/' RS="<"gwt:id">|</"gwt:id">"`
 
-function findParent { 
+function findParent {
 	parentID=`cat $tempFile | grep -m1 $1 | awk '!/<.*>/' RS="<"gwt:parent">|</"gwt:parent">"`
 	# If there is a problem, returning 1
-	if [ "$rootID" = "$parentID" ]; 
+	if [ "$rootID" = "$parentID" ];
 		then return 0
 		else return 1
-	fi	
+	fi
 }
 
 function parentResults {
@@ -1860,7 +1860,7 @@ if [ $? -eq 1 ]
 fi
 
 if ($parentError)
-	then 
+	then
 		echo -e "\nLogin as the user account and make sure that the folder structure is proper\nand all the System Folders are in the root and not buried under some other\nfolder (Mailbox, Sent Items, Contacts Folder, Documents, Calendar, Tasklist,\nCabinet, Work In Progress, Junk Mail, Trash ). If they are under any other\nfolder, move it back to the Root Folder. Then reinitialize the user from WebAdmin.\n"
 		gwCheck
 	else  echo -e "\n$gwVersion $userPO\nNo problems detected with folder structure in GroupWise.\n"
@@ -1894,7 +1894,7 @@ function updateMobilityFTP {
 			echo -e "Failed FTP: host (connection) might have problems\n"
 		fi
 		else
-			echo -e "\nInvalid file name... Returning to Main Menu.";		
+			echo -e "\nInvalid file name... Returning to Main Menu.";
 		fi
 	eContinue;
 }
@@ -1930,8 +1930,8 @@ function checkNightlyMaintenance {
 	echo ""
 	fi
 
-	if ($problem); then 
-		return 1 
+	if ($problem); then
+		return 1
 	else return 0
 	fi
 }
@@ -1941,7 +1941,7 @@ function showStatus {
 	echo -e "\nGroupWise-connector:"
 	tac $gAlog | grep -im1 queue
 	psql -U $dbUsername datasync -c "select state,count(*) from consumerevents where state!='1000' group by state;"
-	
+
 	echo -e "\nMobility-connector:"
 	tac $mAlog | grep -im1 queue
 	psql -U $dbUsername mobility -c "select state,count(*) from syncevents where state!='1000' group by state;"
@@ -1971,7 +1971,7 @@ if [ $? -ne 3 ] ; then
 	if [ -z "$deletions" ]; then
 		echo "Nothing found."
 	fi
-	
+
 	echo
 	eContinue;
 fi
@@ -2131,13 +2131,13 @@ function newCertPass {
         done
 }
 
-function createCSRKey { 
+function createCSRKey {
     #Start of Generate CSR and Key script.
     certPath
         cd $certPath;
         echo -e "\nGenerating a Key and CSR";
         newCertPass
-        
+
     echo ""
     openssl genrsa -passout pass:${pass} -des3 -out server.key 2048;
     openssl req -new -key server.key -out server.csr -passin pass:${pass};
@@ -2160,19 +2160,19 @@ function signCert {
 		fi
 	    openssl x509 -req -days $certDays -in $csr -signkey $key -out $crt -passin pass:${pass} 2>/dev/null;
 	    echo -e "Server certificate created at $crt";
-	    else 
+	    else
 	        echo "Could not find server.key or server.csr in "${PWD##&/};
 	fi
 }
 # TODO: fix password prompts, error checking...
 function createPEM {
     echo -e "\nCreating PEM..."
-    
+
     # Ask for files/path if not self-signed
     if (! $isSelfSigned); then
     	echo -e "Please provide the private key, the public key or certificate, and any intermediate CA or bundles.\n"
 	    read -ep "Enter the full path for certificate files (ie. /root/certificates): " path;
-	    if [ -d $path ];then 
+	    if [ -d $path ];then
 	        cd $path;
 	        ls --format=single-column | column
 	        if [ $? -eq 0 ]; then
@@ -2191,7 +2191,7 @@ function createPEM {
 	            echo -e "Cannot find any or all certificates files.";
 	        fi
 	    else echo "Invalid file path.";
-	    fi 
+	    fi
 	fi
 
 	# Create PEM
@@ -2205,7 +2205,7 @@ function createPEM {
 	        echo "$(cat nopassword.key)" > server.pem;
 	        rm -f nopassword.key;
 	        echo "$(cat $crt)" >> server.pem;
-	        
+
 	        if (! $isSelfSigned); then
 		        while [ true ];
 		        do
@@ -2260,7 +2260,7 @@ function configureMobility {
 function verify {
     echo -e "\nPlease provide the private key and the public key/certificate\n"
     read -ep "Enter the full path for certificate files (ie. /root/certificates): " path;
-    if [ -d $path ];then 
+    if [ -d $path ];then
         cd $path;
     echo "Listing certificate files..."
         ls -l *.key *.crt 2>/dev/null;
@@ -2350,7 +2350,7 @@ function checkLDAP {
 				return 1
 			fi
 		fi
-	else 
+	else
 		echo -e "Mobility not configured to use LDAP in $mconf"
 		return 1
 	fi
@@ -2391,7 +2391,7 @@ function updateFDN {
 				if [ -n "$userDN" ];then
 					break;
 				else
-					if (! askYesOrNo $"Invalid Entry... try again?");then 
+					if (! askYesOrNo $"Invalid Entry... try again?");then
 						break; break;
 					fi
 				fi
@@ -2435,7 +2435,7 @@ EOF
 }
 
 ##################################################################################################
-#	
+#
 #	Patch / FTF Fixes
 #
 ##################################################################################################
@@ -2464,7 +2464,7 @@ function ftfPatchlevel {
 function ftfPatchlevelCheck {
 	if [ ! -f "$dsappConf/patchlevel" ];then
 		return 0;
-	else 
+	else
 		if (`cat "$dsappConf/patchlevel" | grep -qi "$1"`);then
 			datasyncBanner;
 			echo -e "Patch $1 has already been applied.\n"
@@ -2484,7 +2484,7 @@ function checkVersion {
 	if [ "$1" == "$daVersion" ]; then
 		info "\nVersion check ${bGREEN}passed${NC}.\n"
 		return 0;
-	else 
+	else
 		error "This patch is intended for version $1, the server is running version $daVersion\n"
 		return 1;
 	fi
@@ -2510,7 +2510,7 @@ function uncompressIt {
 }
 
 function patchEm {
-	
+
 	datasyncBanner;
 	local ftpFile="$1"
 	local version="$2"
@@ -2563,7 +2563,7 @@ function backupDatabase {
 	pg_dump -U $dbUsername datasync > "$path/datasync.BAK_"$time;
 	echo -e "Backup datasync.BAK_"$time "created at $path";
 
-	else 
+	else
 		echo "Invalid path.";
 	fi
 	echo; eContinue;
@@ -2682,7 +2682,7 @@ function restoreDatabase {
 getExactMobilityVersion
 
 ##################################################################################################
-#	
+#
 #	General Health Check
 #
 ##################################################################################################
@@ -2704,7 +2704,7 @@ function generalHealthCheck {
 	# Start rpm -qa in background.
 	rpm -qa > $dsapptmp/tmpRPMs &
 	rpmsPID=$!
-	
+
 	# Begin Checks
 	ghc_checkServices
 	ghc_checkLDAP
@@ -2753,10 +2753,10 @@ function ghcNewHeader {
 
 function passFail {
 	if [ $1 -eq 1 ]; then
-		echo -e "${bRED}Failed.${NC}" 
+		echo -e "${bRED}Failed.${NC}"
  		echo -e "\nFailed.\n" >> $ghcLog
  	elif [ $1 -eq 2 ]; then
- 		echo -e "${bYELLOW}Warning.${NC}" 
+ 		echo -e "${bYELLOW}Warning.${NC}"
  		echo -e "\nWarning.\n" >> $ghcLog
  	elif [ $1 -eq 0 ]; then
  		echo -e "${bGREEN}Passed.${NC}"
@@ -2771,7 +2771,7 @@ function isStringInFile {
 	grep -iw "$1" "$2" >/dev/null
 	if [ $? -eq 0 ]; then
 		return 0
-	else 
+	else
 		return 1
 	fi
 }
@@ -2815,14 +2815,14 @@ function ghc_checkServices {
 	failure="";
 	function checkStatus {
 		rcdatasync-$1 status >> $ghcLog 2>&1
-		if [ $? -ne 0 ] 
+		if [ $? -ne 0 ]
 			then status=false;
 			failure+="$1. "
 		fi
-	} 
+	}
 
 	function checkMobility {
-		
+
 		netstat -patune | grep -i ":$mPort" | grep -i listen > /dev/null
 		if [ $? -ne 0 ];then
 			local listener=`netstat -pan | grep -i listen | grep :443 | rev |awk '{print $1}' | rev | cut -f2 -d '/'`
@@ -2838,12 +2838,12 @@ function ghc_checkServices {
 				echo "Python not listening on port $mPort: $mstatus" >> $ghcLog
 			fi
 		fi
-		
-	} 
+
+	}
 
 	function checkGroupWise {
 		netstat -patune | grep -i ":$gPort" | grep -i listen > /dev/null
-		if [ $? -ne 0 ] 
+		if [ $? -ne 0 ]
 			then gstatus=false;
 			failure+="groupwise-connector ($gPort). "
 		fi
@@ -2906,7 +2906,7 @@ function ghc_checkXML {
 	# using -print0 to save memory, | to encapsulated while to preserve global variable "problem" when assessing boolean for passFail
 	find /etc/datasync/ -type f -name "*.xml" -print0 | \
 	{ while read -r -d $'\0' file
-		do 
+		do
 			xmllint --noout "$file" 2>/dev/null >> $ghcLog
 			status="$?"
 			if [ $status -ne 0 ]; then
@@ -2921,7 +2921,7 @@ function ghc_checkXML {
 		else passFail 0
 		fi
 	}
-	
+
 }
 
 function ghc_checkPSQLConfig {
@@ -2954,7 +2954,7 @@ function ghc_checkPSQLConfig {
 	checkpghba "local*.*mobility*.*all*.*md5"
 	checkpghba "host*.*mobility*.*all*.*127.0.0.1/32*.*md5"
 	checkpghba "host*.*mobility*.*all*.*::1/128*.*md5"
-	
+
 	if [ $problem -ne 0 ]; then
 		passFail 1
 	else passFail 0
@@ -2966,7 +2966,7 @@ function ghc_checkRPMs {
 	problem=false
 
 	declare -a needIt=('pyxml' 'perl-ldap')
-	
+
 	wait $rpmsPID
 	rpms=$(<$dsapptmp/tmpRPMs);rm -f $dsapptmp/tmpRPMs;
 	for i in "${needIt[@]}"; do
@@ -3001,7 +3001,7 @@ function ghc_checkLDAP {
 		fi
 
 		if [[ "$ldapPort" -eq "389" ]]; then
-			/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" >>$ghcLog 2>&1 
+			/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" "$ldapAdmin" >>$ghcLog 2>&1
 			if [[ "$?" -ne 0 ]]; then
 				problem=true
 			fi
@@ -3013,7 +3013,7 @@ function ghc_checkLDAP {
 		fi
 	else echo -e "Mobility not configured to use LDAP in $mconf\nSkipping test." >>$ghcLog
 	fi
-	
+
 	# Return either pass/fail, 0 indicates pass.
 	if ($problem); then
 		passFail 1
@@ -3044,15 +3044,15 @@ function ghc_verifyCertificates {
 
 	if (! $mstatus); then
 		warn=true;
-		echo "Mobility agent is not running - skipping certificate check" >>$ghcLog 
+		echo "Mobility agent is not running - skipping certificate check" >>$ghcLog
 	else
 		# Device Certificate
-		echo -e "----------------------------------------------------------\nChecking Device Certificate:\n----------------------------------------------------------" >>$ghcLog 
+		echo -e "----------------------------------------------------------\nChecking Device Certificate:\n----------------------------------------------------------" >>$ghcLog
 
 			# Check Expiration Date
 			echo -e "\nChecking Expiration Date:\n----------------------------" >>$ghcLog
 			certExpirationDate=`echo | openssl s_client -connect $mlistenAddress:$mPort 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d "=" -f2 | awk '{print $1, $2, $4}'`
-			if [ $(date -d "$dateTolerance" +%s) -ge $(date -d "$certExpirationDate" +%s) ]; then 
+			if [ $(date -d "$dateTolerance" +%s) -ge $(date -d "$certExpirationDate" +%s) ]; then
 				echo -e "WARNING: Certificate expires soon!\n$devCert" >>$ghcLog
 				warn=true;
 			fi
@@ -3074,12 +3074,12 @@ function ghc_verifyCertificates {
 			fi
 
 		# WebAdmin Certificate
-		echo -e "\n------------------------------------------------------------\nChecking WebAdmin Certificate:\n------------------------------------------------------------" >>$ghcLog 
-		
+		echo -e "\n------------------------------------------------------------\nChecking WebAdmin Certificate:\n------------------------------------------------------------" >>$ghcLog
+
 			# Check Expiration Date
 			echo -e "\nChecking Expiration Date:\n----------------------------" >>$ghcLog
 			certExpirationDate=`echo | openssl s_client -connect $mlistenAddress:$wPort 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d "=" -f2 | awk '{print $1, $2, $4}'`
-			if [ $(date -d "$dateTolerance" +%s) -ge $(date -d "$certExpirationDate" +%s) ]; then 
+			if [ $(date -d "$dateTolerance" +%s) -ge $(date -d "$certExpirationDate" +%s) ]; then
 				echo -e "WARNING: Certificate expires soon!\n$webCert" >>$ghcLog
 				warn=true;
 			fi
@@ -3100,7 +3100,7 @@ function ghc_verifyCertificates {
 				problem=true
 			fi
 	fi
-	
+
 	# Check for dos2unix stuff...
 	grep -Pl "\r" $devCert $webCert &>/dev/null
 	if [ $? -eq 0 ]; then
@@ -3148,21 +3148,21 @@ function ghc_checkManualMaintenance {
 	ghcNewHeader "Checking for database maintenance: vacuum & reindex..."
 	dbMaintTolerance=180
 	problem=false
-	
+
 	grabDS=`psql -U $dbUsername datasync -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;" 2>/dev/null`
 	grabMob=`psql -U $dbUsername mobility -c "select relname,last_vacuum,date_part('days', now() - last_vacuum) as \"days_ago\" from pg_stat_user_tables;" 2>/dev/null`
 	echo -e "$grabDS\n$grabMob" >>$ghcLog
 
 	checkDatasync=`echo "$grabDS" | awk '{ print $6 }' | tr -d [:alpha:] | tr -d [:punct:]| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' | sort -nr | head -n1`
 	checkMobility=`echo "$grabMob" | awk '{ print $6 }' | tr -d [:alpha:] | tr -d [:punct:]| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' | sort -nr | head -n1`
-	
+
 	# If last maintenance was >90 days ago
 	if [[ -z "$checkDatasync" ]] || [[ "$checkDatasync" -ge $dbMaintTolerance ]]; then
 		problem=true
 	elif [[ -z "$checkMobility" ]] || [[ "$checkMobility" -ge $dbMaintTolerance ]]; then
 		problem=true
 	fi
-	
+
 	if ($problem); then
 		echo -e "\nNo manual maintenance in over $dbMaintTolerance days.\nSOLUTION: TID 7009453" >>$ghcLog
 		passFail 1
@@ -3177,7 +3177,7 @@ function ghc_checkReferenceCount {
 	problem=false
 	# Any logging info >> $ghcLog
 
-	 
+
 	if [[ `psql -U $dbUsername datasync -c "select \"referenceCount\" from targets ORDER BY \"referenceCount\" DESC;" 2>/dev/null | awk '{ print $1 }' | tr -d [:alpha:] | tr -d [:punct:] | sed '/^$/d' | head -n1` -gt 1 ]]; then
 		problem=true
 		echo -e "Detected referenceCount issue in datasync db.\nSOLUTION: See TID 7012163" >>$ghcLog
@@ -3186,7 +3186,7 @@ function ghc_checkReferenceCount {
 
 	if ($problem); then
 		passFail 1
-	else 
+	else
 		echo -e "No problems detected with referenceCount in targets table.">>$ghcLog
 		passFail 0
 	fi
@@ -3202,7 +3202,7 @@ function ghc_checkDiskSpace {
 	size=$(echo $output | awk '{ print $1}' | cut -d'%' -f1  )
 	if [ $size -ge 90 ]; then
 		problem=true
-	    echo -e "System is low on disk space.\nSOLUTION: See TID 7010533, 7013456, 7010711" >>$ghcLog 
+	    echo -e "System is low on disk space.\nSOLUTION: See TID 7010533, 7013456, 7010711" >>$ghcLog
 	fi
 
 	if ($problem); then
@@ -3221,7 +3221,7 @@ function ghc_checkDiskIO {
 	# diskIO=$(<tmpdiskIO); rm -f tmpdiskIO;
 	diskIO=$(hdparm -t `df -P /var | tail -1 | cut -d ' ' -f1`)
 	resultMBs=$(echo $diskIO | rev | awk '{ print $2 }' | rev)
-	if [ $(echo "$resultMBs>=13.33" | bc) -ne 1 ]; then 
+	if [ $(echo "$resultMBs>=13.33" | bc) -ne 1 ]; then
 		warn=true
 	fi
 
@@ -3281,7 +3281,7 @@ function ghc_checkRPMSave {
 
 	files=`find /etc/datasync/ -name *.rpmsave*`
 	echo "$files" >>$ghcLog
-	
+
 	files=`find /etc/datasync/ -name *.rpmsave* | wc -l`
 	if [[ "$files" -ne 0 ]]; then
 		problem=true
@@ -3291,7 +3291,7 @@ function ghc_checkRPMSave {
 	# Return either pass/fail, 0 indicates pass.
 	if ($problem); then
 		passFail 2
-	else 
+	else
 		echo "No rpmsave files found." >>$ghcLog
 		passFail 0
 	fi
@@ -3377,7 +3377,7 @@ function ghc_checkUpdateSH {
 		fi
 	else passFail 0
 	fi
-	
+
 }
 
 function ghc_checkPOA {
@@ -3401,7 +3401,7 @@ function ghc_checkPOA {
 		wget --no-check-certificate --save-cookies "$cookie" --post-data "func=authenticate&username=$admin&password=$ldapPassword" https://localhost:8120/post/auth -O "$auth" &>/dev/null
 
 		# Request getStatusData using session-id from cookie
-		log_debug "$header wget --no-check-certificate --load-cookies \"$cookie\" https://localhost:8120/admin/dashboard/getStatusData -O \"$res\"" 
+		log_debug "$header wget --no-check-certificate --load-cookies \"$cookie\" https://localhost:8120/admin/dashboard/getStatusData -O \"$res\""
 		wget --no-check-certificate --load-cookies "$cookie" https://localhost:8120/admin/dashboard/getStatusData -O "$res" &>/dev/null
 
 		# cat "$res" | python -mjson.tool | less
@@ -3425,7 +3425,7 @@ def checkMe(data):
 	# If any PO(s) are returned (first object is GWCHealth, all other objects in array are Post Offices)
 	if len(myList) > 1:
 		# else return some error "no PO(s) found/reported"
-		
+
 		# skip first item in array (GWCHealth object instead of PO)
 
 		myList.pop('GWCHealth')
@@ -3435,7 +3435,7 @@ def checkMe(data):
 			latency=values["stats"]["POALatency"]["level"]
 
 			print keys, "Status:", status, "| Connection:", connection, "| Latency:", latency
-			
+
 			if all(x in ["20_Normal"] for x in [status, connection, latency]):
 				problem = 0;
 
@@ -3451,7 +3451,7 @@ EOF`
 		fi
 
 	fi
-	
+
 	# Return either pass/fail, 0 indicates pass.
 	echo "$checkPOA" >>$ghcLog
 	if ($problem); then
@@ -3521,8 +3521,8 @@ function ghc_checkUserFDN {
 			passFail 2
 		else passFail 1
 		fi
-	else 
-		if [ $noLDAP -eq 0 ];then echo -e "All detected LDAP users have matching FDNs" >>$ghcLog; fi 
+	else
+		if [ $noLDAP -eq 0 ];then echo -e "All detected LDAP users have matching FDNs" >>$ghcLog; fi
 		passFail 0
 	fi
 }
@@ -3534,17 +3534,17 @@ function ghc_verifyDatabaseIntegrity {
 	# Any logging info >>$ghcLog
 
 	psql -U $dbUsername datasync -t -c "select distinct dn from targets where disabled='0' and \"targetType\"='user';" > $dsapptmp/output.txt
-	psql -U $dbUsername mobility -t -c "select distinct userid from users;" > $dsapptmp/output2.txt 
+	psql -U $dbUsername mobility -t -c "select distinct userid from users;" > $dsapptmp/output2.txt
 
 	local var=""
 	local var2=""
 	while read line
-	do 
-		if [ "$var" != "$line" ];then 
-			if [ -n "$line" ];then  
+	do
+		if [ "$var" != "$line" ];then
+			if [ -n "$line" ];then
 				var="$line";
 				var2=`grep -o "$var" $dsapptmp/output2.txt`
-				if [ -z "$var2" ];then 
+				if [ -z "$var2" ];then
 					problem=true
 					echo "Datasync: $var not on mobility database" >>$ghcLog
 				fi
@@ -3571,7 +3571,7 @@ function ghc_verifyDatabaseIntegrity {
 	# Return either pass/fail, 0 indicates pass.
 	if ($problem); then
 		passFail 1
-	else 
+	else
 		echo -e "All detected users on both databases" >>$ghcLog
 		passFail 0
 	fi
@@ -3590,9 +3590,9 @@ function ghc_verifyTargetsIntegrity {
 	local var2=""
 	local var3=""
 	while read line
-	do 
-		if [ "$var" != "$line" ];then 
-			if [ -n "$line" ];then  
+	do
+		if [ "$var" != "$line" ];then
+			if [ -n "$line" ];then
 				var=`echo "$line" | cut -f1 -d '|' | sed 's/^ *//' | sed 's/ *$//'`
 				var2=`grep -o "$var" $dsapptmp/output.txt | wc -l`;
 				if [ $var2 -ne 2 ];then
@@ -3610,7 +3610,7 @@ function ghc_verifyTargetsIntegrity {
 	# Return either pass/fail, 0 indicates pass.
 	if ($problem); then
 		passFail 1
-	else 
+	else
 		echo -e "All users/groups on both connectors" >>$ghcLog;
 		passFail 0
 	fi
@@ -3635,9 +3635,9 @@ function ghc_checkTrustedApp {
 			echo "Failed checking trusted application." >>$ghcLog;
 			problem=true; warn=true;
 		elif [ -n "$var" ];then
-				if (`echo "$var" | grep -iq "Requested record not found"`);then 
+				if (`echo "$var" | grep -iq "Requested record not found"`);then
 					echo "Trusted Application name is invalid" >>$ghcLog;
-				elif (`echo "$var" | grep -iq "Invalid key for trusted application"`);then 
+				elif (`echo "$var" | grep -iq "Invalid key for trusted application"`);then
 					echo "Trusted Application key is invalid" >>$ghcLog;
 				fi
 				problem=true;
@@ -3653,7 +3653,7 @@ function ghc_checkTrustedApp {
 			passFail 2
 		else passFail 1
 		fi
-	else 
+	else
 		passFail 0
 	fi
 }
@@ -3734,7 +3734,7 @@ function dumpSettings {
 		echo -e "\n###########################################################\n# Source install variables\n###########################################################\n\nldapAddress=\"$ldapAddress\"\nldapPort=\"$ldapPort\"\nldapSecure=\"$ldapSecure\"\nldapAdmin=\"$ldapAdmin\"\nldapPassword=\"$ldapPassword\"" >> $dumpFile
 		echo -en "userContainer=\"" >> $dumpFile; while IFS= read -r line; do echo -en "$line " >> $dumpFile; done <<< "$userContainer"; sed -i 's/ *$//' $dumpFile; echo '"' >> $dumpFile;
 		echo -en "groupContainer=\"" >> $dumpFile; while IFS= read -r line; do echo -en "$line " >> $dumpFile; done <<< "$groupContainer"; sed -i 's/ *$//' $dumpFile; echo '"' >> $dumpFile;
-		echo -e "dbUsername=\"$dbUsername\"\ndbPassword=\"$dbPassword\"\ntrustedName=\"$trustedName\"\ntrustedAppKey=\"$trustedAppKey\"\ngListenAddress=\"$gListenAddress\"\nsPort=\"$sPort\"" >>$dumpFile; 
+		echo -e "dbUsername=\"$dbUsername\"\ndbPassword=\"$dbPassword\"\ntrustedName=\"$trustedName\"\ntrustedAppKey=\"$trustedAppKey\"\ngListenAddress=\"$gListenAddress\"\nsPort=\"$sPort\"" >>$dumpFile;
 		if [ "$sSecure" = "https" ];then echo -e "sSecure=\"yes\"" >>$dumpFile; else echo -e "sSecure=\"no\"" >>$dumpFile; fi
 		echo -e "sListenAddress=\"$sListenAddress\"\nmPort=\"$mPort\"" >> $dumpFile
 		if [ $mSecure -eq 1 ];then echo -e "mSecure=\"true\"" >>$dumpFile; else echo -e "mSecure=\"false\"" >>$dumpFile; fi
@@ -3832,7 +3832,7 @@ function installMobility { # $1 = repository name
 		else
 			dumpFile=`ls mobility_install-*.tgz`
 			quit=false
-		fi	
+		fi
 	else return 1
 	fi
 
@@ -3992,7 +3992,7 @@ function installMobility { # $1 = repository name
 				# Kill / stop mobility
 				killall -9 python;
 				rcDS stop silent;
-				
+
 				# Restore other configengine xml settings with awk as xmllint set has character limits
 				awk '/<notification>/{p=1;print;print "'$xmlNotification'"}/<\/notification>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
 				awk '/<ldap>/{p=1;print;print "'$xmlLDAP'"}/<\/ldap>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
@@ -4036,7 +4036,7 @@ function installMobility { # $1 = repository name
 				fi
 
 				checkPGPASS;
-				
+
 				# Restore users and groups
 				if askYesOrNo "Restore users & groups?";then
 					psql -U $dbUsername datasync < $restoreFolder/targets.sql 2>/dev/null
@@ -4064,7 +4064,7 @@ function installMobility { # $1 = repository name
 
 
 ##################################################################################################
-#	
+#
 #	Switches / Command-line parameters
 #
 ##################################################################################################
@@ -4169,13 +4169,13 @@ while [ "$1" != "" ]; do
 			*) ;;
 			esac
 		done
-		;; 
+		;;
 
 	-u | --users) dsappSwitch=1
 		if [ -f ./db.log ];then
 			echo "Count of users:" > db.log;
 			psql -U $dbUsername mobility -t -c "select count(*) from users;" >> db.log;
-			echo "Count of devices:" >> db.log; 
+			echo "Count of devices:" >> db.log;
 			psql -U $dbUsername mobility -t -c "select count(*) from devices where devicetype!='';" >> db.log;
 			psql -U $dbUsername mobility -c "select u.userid, devicetype from devices d INNER JOIN users u ON d.userid = u.guid;" >> db.log;
 		else
@@ -4190,13 +4190,13 @@ while [ "$1" != "" ]; do
 		if [ -f ./db.log ];then
 			echo "Count of users:" > db.log;
 			psql -U $dbUsername mobility -t -c "select count(*) from users;" >> db.log;
-			echo "Count of devices:" >> db.log; 
+			echo "Count of devices:" >> db.log;
 			psql -U $dbUsername mobility -t -c "select count(*) from devices where devicetype!='';" >> db.log;
 			psql -U $dbUsername mobility -c "select u.userid, devicetype from devices d INNER JOIN users u ON d.userid = u.guid;" >> db.log;
 		else
-			echo "Count of devices:" > db.log; 
-			psql -U $dbUsername mobility -t -c "select count(*) from devices where devicetype!='';" >> db.log; 
-			echo "Devices:" >> db.log; 
+			echo "Count of devices:" > db.log;
+			psql -U $dbUsername mobility -t -c "select count(*) from devices where devicetype!='';" >> db.log;
+			echo "Devices:" >> db.log;
 			psql -U $dbUsername mobility -c "select devicetype,description,tstamp from devices where devicetype!='' order by tstamp ASC;" >> db.log;
 		fi
 	;;
@@ -4308,7 +4308,7 @@ while [ "$1" != "" ]; do
  	*) dsappSwitch=1
  	 echo "dsapp: '"$1"' is not a valid command. See '--help'."
  	 eContinue;
- 	 ;; 
+ 	 ;;
 	esac # End of Case
 	shift;
 	done
@@ -4329,7 +4329,7 @@ fi
 
 
 ##################################################################################################
-#	
+#
 #	Main Menu
 #
 ##################################################################################################
@@ -4368,7 +4368,7 @@ cd $cPWD;
 	;;
 
 ##################################################################################################
-#	
+#
 #	Logging Menu
 #
 ##################################################################################################
@@ -4386,7 +4386,7 @@ cd $cPWD;
 		 	read -n1 opt;
 			case $opt in
 	  1) # Upload logs
-			getLogs	
+			getLogs
 			;;
 
 	  2) #Set logs to default
@@ -4396,24 +4396,24 @@ cd $cPWD;
 
 		    sed -i "s|<level>.*</level>|<level>info</level>|g" `find $dirEtcMobility/ -name *.xml`;
 			sed -i "s|<verbose>.*</verbose>|<verbose>off</verbose>|g" `find $dirEtcMobility/ -name *.xml`;
-			
+
 			printf "\nRestarting Mobility.\n";
 			rcDS restart;
 
 			echo "Logs have been set to defaults."
 			eContinue;
-		fi		
+		fi
 		;;
-			
+
 	  3) #Set logs to diagnostic / debug
-		datasyncBanner; 
+		datasyncBanner;
 		if askYesOrNo $"Permission to restart Mobility?"; then
 			echo -e "\nConfigured logs to diagnostic/debug...";
 
 			sed -i "s|<level>.*</level>|<level>debug</level>|g" `find $dirEtcMobility/ -name *.xml`;
 			sed -i "s|<verbose>.*</verbose>|<verbose>diagnostic</verbose>|g" `find find $dirEtcMobility/ -name *.xml`;
-			sed -i "s|<failures>.*</failures>|<failures>on</failures>|g" `find find $dirEtcMobility/ -name *.xml`;	
-			
+			sed -i "s|<failures>.*</failures>|<failures>on</failures>|g" `find find $dirEtcMobility/ -name *.xml`;
+
 			printf "\nRestarting Mobility.\n";
 			rcDS restart;
 
@@ -4444,7 +4444,7 @@ cd $cPWD;
 
 			cp $log/connectors/*.log $dsapptmp 2>/dev/null;
 			cp $log/syncengine/engine.log $dsapptmp 2>/dev/null;
-			cd $dsapptmp; 
+			cd $dsapptmp;
 			logCount=false;
 
 			if [ -f $gAlog ];then
@@ -4452,7 +4452,7 @@ cd $cPWD;
 			logResult=`cat $gAlog | grep -i $sString 2>/dev/null`;
 			if [ ! -z "$logResult" ];then
 				echo $logResult;
-			else 
+			else
 				echo "No result found in log."
 			fi
 			logCount=true;
@@ -4463,7 +4463,7 @@ cd $cPWD;
 			logResult=`cat $glog | grep -i $sString 2>/dev/null`;
 			if [ ! -z "$logResult" ];then
 				echo $logResult;
-			else 
+			else
 				echo "No result found in log."
 			fi
 			logCount=true;
@@ -4474,7 +4474,7 @@ cd $cPWD;
 			logResult=`cat $log/syncengine/engine.log | grep -i $sString 2>/dev/null`;
 			if [ ! -z "$logResult" ];then
 				echo $logResult;
-			else 
+			else
 				echo "No result found in log."
 			fi
 			logCount=true;
@@ -4485,7 +4485,7 @@ cd $cPWD;
 			logResult=`cat $mlog | grep -i $sString 2>/dev/null`;
 			if [ ! -z "$logResult" ];then
 				echo $logResult;
-			else 
+			else
 				echo "No result found in log."
 			fi
 			logCount=true;
@@ -4496,7 +4496,7 @@ cd $cPWD;
 			logResult=`cat $mAlog | grep -m 2 -i $sString 2>/dev/null`;
 			if [ ! -z "$logResult" ];then
 				echo $logResult;
-			else 
+			else
 				echo "No result found in log."
 			fi
 			logCount=true;
@@ -4547,13 +4547,13 @@ EOF
 		done
 		;;
 
-	
+
 ##################################################################################################
-#	
+#
 #	Update / Register Menu
 #
 ##################################################################################################
-   2) 
+   2)
 	while :
 	do
 	datasyncBanner;
@@ -4674,7 +4674,7 @@ EOF
 			  *) ;;
 			esac
 			done
-			;; 
+			;;
 
 		3) # Apply FTF / Patch Files
 		   # Menu-requirements: ftp connection to Novell
@@ -4692,25 +4692,26 @@ EOF
 				echo -e "\t3. Fix LG Optimus fwd attachment encoded\n\t\t(GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
 				echo -e "\t4. Fix Sony Xperia Z unable to see mails in Inbox\n\t\t(GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698"
 				echo -e "\t5. Log in to the web admin using either the GW or LDAP userid\n\t\t(GMS 2.0.1.53 only) - TID 7015622, Bug 895165"
+				echo -e "\t6. Fix update.sh - clear-text passwords - TID 7016214, Bug 918694"
 
 		 		echo -e "\n\t0. Back"
 			 	echo -n -e "\n\tSelection: "
 			 	read -n1 opt;
 				case $opt in
-					
-					#	patchEm will only work given the following conditions are met: 
-					#   	-Global variable patchFiles is defined prior to calling patchEm and that variable is an array of strings 
+
+					#	patchEm will only work given the following conditions are met:
+					#   	-Global variable patchFiles is defined prior to calling patchEm and that variable is an array of strings
 					#			 that contain the full-path and filename of the file to be patched (ie /path/to/file1.pyc)
-					# 		-The patchEm function must receive two parameters: 1) the ftpfilename (ie bugX.zip), 2) the required version 
+					# 		-The patchEm function must receive two parameters: 1) the ftpfilename (ie bugX.zip), 2) the required version
 					#			 of Mobility for the patch (removing all periods from the string, ie 20153 would be for GMS 2.0.1.53)
 					#		-The ftpFilename must be a compressed file of type: .tgz, .tar, .zip and nothing else.
 					# 		-The patch files must be at the root level of the compressed file, not underneath any subfolders
-					#	
+					#
 					#		Note: Please make sure these ftpFiles are available on Novell's FTP by placing them in //tharris7.lab.novell.com/outgoing
 
 					1) # Show current FTF Patch level
 						datasyncBanner;
-						
+
 						if [ -e "$dsappConf/patchlevel" ]; then
 							cat "$dsappConf/patchlevel"
 						else echo "No patches have been applied to this Mobility server."
@@ -4738,6 +4739,11 @@ EOF
 						patchEm "895165.zip" "20153"
 						;;
 
+					6) # Fix update.sh to work with clear-text passwords - TID 7016214, Bug 918694
+						patchFiles=( "/opt/novell/datasync/common/lib/upgrade.pyc" )
+						patchEm "918694.zip" "210230"
+						;;
+
 			/q | q | 0) break;;
 					*) ;;
 
@@ -4753,7 +4759,7 @@ EOF
 		;;
 
 ##################################################################################################
-#	
+#
 #	Database Menu
 #
 ##################################################################################################
@@ -4818,7 +4824,7 @@ EOF
 					break; break;
 				fi
 			fi
-			
+
 			;;
 
 		6) # Fix targets/membershipCache - TID 7012163
@@ -4840,7 +4846,7 @@ EOF
  		read -n1 opt
 		case $opt in
 
-			1) 
+			1)
 			datasyncBanner;
 			if askYesOrNo $"Clean up and start over (Except Users)?"; then
 				dumpTable "datasync" "targets" $dsappConf;
@@ -4865,7 +4871,7 @@ EOF
 			eContinue;
 		;;
 
-			3) 
+			3)
 			datasyncBanner;
 			echo -e "Please run the uninstall.sh script first in "$dirOptMobility;
 			if askYesOrNo $"Uninstall Mobility?"; then
@@ -4878,7 +4884,7 @@ EOF
 		*) ;;
 	esac
 	done
-	;; 
+	;;
 
 	  /q | q | 0) datasyncBanner; echo -e "\nStarting Mobility..."; rcDS start; break;;
 	  *) ;;
@@ -4888,7 +4894,7 @@ EOF
 	;;
 
 ##################################################################################################
-#	
+#
 #	Certificate Menu
 #
 ##################################################################################################
@@ -4909,7 +4915,7 @@ do
     case $opt in
 
     1) # Self-Signed Certificate
-        datasyncBanner; 
+        datasyncBanner;
         echo -e "\nNote: The following will create a CSR, private key and generate a self-signed certificate.\n" | fold -s
         createCSRKey;
         signCert;
@@ -4942,7 +4948,7 @@ done
 ;;
 
 ##################################################################################################
-#	
+#
 #	User Issues Menu
 #
 ##################################################################################################
@@ -4962,7 +4968,7 @@ done
  	echo -n -e "\n\tSelection: "
  	read -n1 opt;
 	case $opt in
-			
+
 		1) # Monitor User Sync (submenu)
 			while :
 			do
@@ -4986,7 +4992,7 @@ done
 								cat $mAlog | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid | tail
 							echo ""
 							if askYesOrNo $"Do you want to continue to watch?"; then
-								tailf $mAlog | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid 
+								tailf $mAlog | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid
 							fi
 						fi
 						;;
@@ -4995,7 +5001,7 @@ done
 			  *) ;;
 			esac
 			done
-			;; 
+			;;
 
 		2) # GroupWise Checks... (submenu)
 			while :
@@ -5032,8 +5038,8 @@ done
 			  *) ;;
 			esac
 			done
-			;; 
-		
+			;;
+
 		3) # Remove & Reinit Users... (submenu)
 			while :
 			do
@@ -5069,7 +5075,7 @@ done
 			  *) ;;
 			esac
 			done
-			;; 
+			;;
 
 		4) # User Authentication
 			datasyncBanner;
@@ -5102,7 +5108,7 @@ done
 								grep -i "<authentication>ldap</authentication>" $mconf > /dev/null
 									ifReturn $"\tMobility Connector is set to use LDAP Authentication (eDirectory pass)\n\tPassword can be changed in ConsoleOne by the following:\n\t\t1. Properites of the User\n\t\t2. Restrictions Tab | Password Restrictions\n\t\t3. Change Password $cMobilityAuth\n"
 								grep -i "<authentication>groupwise</authentication>" $mconf > /dev/null
-									ifReturn $"\tMobility Connector is set to use GroupWise Authentication.\n\tPassword can be changed in ConsoleOne by the following:\n\t\t1. Properties of the User\n\t\t2. GroupWise Tab | Account\n\t\t3. Change GroupWise Password $cMobilityAuth"	
+									ifReturn $"\tMobility Connector is set to use GroupWise Authentication.\n\tPassword can be changed in ConsoleOne by the following:\n\t\t1. Properties of the User\n\t\t2. GroupWise Tab | Account\n\t\t3. Change GroupWise Password $cMobilityAuth"
 							fi
 						fi
 
@@ -5116,7 +5122,7 @@ done
 									ifReturn $"\tChange user's expiration date:\n\t\t1. Properties of user\n\t\t2. Restrictions tab | Login Restrictions\n\t\t3. Expiration Date\n"
 								grep -i "<authentication>groupwise</authentication>" $mconf > /dev/null
 									ifReturn $"\tChange user's expiration date:\n\t\t1. Properties of user\n\t\t2. GroupWise tab | Account\n\t\t3. Expiration Date\n"
-							fi 
+							fi
 						fi
 
 						# Initial Sync Problem - "Connection Blocked - user <userID(FDN)> initial sync"
@@ -5159,10 +5165,10 @@ done
 		*) ;;
 		esac
 		done
-		;; 
+		;;
 
 ##################################################################################################
-#	
+#
 #	User Information Menu
 #
 ##################################################################################################
@@ -5198,10 +5204,10 @@ EOF
 		*) ;;
 		esac
 		done
-		;; 
+		;;
 
 ##################################################################################################
-#	
+#
 #	Checks & Queries Menu
 #
 ##################################################################################################
@@ -5252,7 +5258,7 @@ EOF
 				datasyncBanner;
 				attachmentLog='/tmp/dsapp-attachment.log'
 				oldAttachments='/tmp/dsapp-oldAttachments'
-				rm $attachmentLog 2>/dev/null; 
+				rm $attachmentLog 2>/dev/null;
 				echo -e "--------------------------------------------------------------------------------------------------------------\n" > $attachmentLog;
 				echo -e "Server Information\n" >> $attachmentLog;
 				echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
@@ -5264,7 +5270,7 @@ EOF
 				d=`awk '!/<.*>/' RS="<"emailSyncLimitInDays">|</"emailSyncLimitInDays">" $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml`
 				tolerance=$((d+10))
 				echo -e "emailSyncLimitInDays("$d") + 10-day tolerance = "$tolerance"\n" >> $attachmentLog
-				
+
 				find=true;
 				if [ -s $oldAttachments ]; then
 					oldAttachmentContent=`grep -v "filestoreid" $oldAttachments`
@@ -5291,14 +5297,14 @@ EOF
 				datasyncBanner;
 				echo -e "\nNumber of attachments older than $d days:"
 				echo -e "\nMobility: "$n"\n"
-				if [ $n -gt 0 ]; then 
+				if [ $n -gt 0 ]; then
 					if askYesOrNo $"Check Nightly Maintenance?"; then
 						checkNightlyMaintenance
 					fi
 					if askYesOrNo $"Attempt to manually cleanup?"; then
 						read -ep "How many files for manual cleanup ($n)? " cleanupLimit
-						if [ "$cleanupLimit" = "" ]; then 
-							cleanupLimit=$n; 
+						if [ "$cleanupLimit" = "" ]; then
+							cleanupLimit=$n;
 						fi
 						echo -e "\nHow many files for manual cleanup (cleanupLimit): "$cleanupLimit >> $attachmentLog
 						dbCount=0
@@ -5310,7 +5316,7 @@ EOF
 						# Remove files function
 						function removeFilesFromList() {
 							for line in `cat $oldAttachments | head -$cleanupLimit`
-								do 
+								do
 									removed=`rm -v $line`;
 									if [ $? -eq 0 ]; then
 										fileCount=$(($fileCount+1))
@@ -5321,7 +5327,7 @@ EOF
 						}
 
 						# Create table for import
-						psql -U $dbUsername mobility -L /tmp/dsapp-attachment.log <<EOF 
+						psql -U $dbUsername mobility -L /tmp/dsapp-attachment.log <<EOF
 drop table dsapp_oldattachments;
 CREATE TABLE dsapp_oldattachments(
     id bigserial primary key,
@@ -5357,7 +5363,7 @@ EOF
 						echo -e "db references removed: "`grep DELETE $attachmentLog | tail -1`
 						# echo "Database references removed: "$dbCount >> $attachmentLog;
 						echo -e "\nSee $attachmentLog for log information.\n"
-						if askYesOrNo $"View log for details?"; then 
+						if askYesOrNo $"View log for details?"; then
 							less $attachmentLog
 						fi
 					fi
@@ -5401,15 +5407,15 @@ EOF
 					case $opt in
 						1) database='datasync'
 							datasyncBanner; break;;
-						2) database='mobility' 
+						2) database='mobility'
 							datasyncBanner; break;;
 						/q | q | 0) q=true; break;;
 						*) ;;
 					esac
 					done
-				if ($q) 
+				if ($q)
 					then break
-					else 
+					else
 						echo -e "\n$database"
 						read -p "psql command: " com;
 						read -p "seconds: " seconds;
@@ -5422,11 +5428,11 @@ EOF
 			*) ;;
 			esac
 			done
-			;; 
+			;;
 
 # # # # # # # # # # # # # # # # # # # # # #
 
-  /q | q | 0) 
+  /q | q | 0)
 				clear
 				echo "Bye $USER"
 				($pgpass) && rm -f ~/.pgpass;
@@ -5466,4 +5472,4 @@ EOF
 # 	  *) ;;
 # 	esac
 # 	done
-# 	;; 
+# 	;;
