@@ -3181,15 +3181,19 @@ function ghc_checkReferenceCount {
 	ghcNewHeader "Checking referenceCount..."
 	problem=false
 	# Any logging info >> $ghcLog
-
-
-	if [[ `psql -U $dbUsername datasync -c "select \"referenceCount\" from targets ORDER BY \"referenceCount\" DESC;" 2>/dev/null | awk '{ print $1 }' | tr -d [:alpha:] | tr -d [:punct:] | sed '/^$/d' | head -n1` -gt 1 ]]; then
-		problem=true
-		echo -e "Detected referenceCount issue in datasync db.\nSOLUTION: See TID 7012163" >>$ghcLog
-	fi
-
+	local userList=`psql -U datasync_user datasync -t -c "select \"referenceCount\",dn from targets where \"referenceCount\" > '1';"`
+	while IFS= read line
+	do 
+		local userCount=`echo "$line" | awk '{print $1}'`;
+		local userDN=`echo "$line" | awk '{print $3}'`;
+		local memberCount=`psql -U $dbUsername datasync -t -c "select count(*) from \"membershipCache\" where memberdn = '$userDN';" | sed 's/ //g'`;
+		if [[ "$userCount" != "$memberCount" ]]; then 
+			problem=true
+		fi; 
+	done <<< "$userList"
 
 	if ($problem); then
+		echo -e "Detected referenceCount issue in datasync db.\nSOLUTION: See TID 7012163" >>$ghcLog
 		passFail 1
 	else
 		echo -e "No problems detected with referenceCount in targets table.">>$ghcLog
@@ -3688,11 +3692,36 @@ EOF
 
 	echo
 	#refcount+ will fix referenceCount entries on targets table for non disabled users.
-	if askYesOrNo $"Set referenceCount to 1 for all non-disabled users/groups?"; then
+	if askYesOrNo $"Fix referenceCount for all non-disabled users/groups?"; then
+		echo -e "Setting referenceCount to 1"
 		dpsql << EOF
 		update targets set "referenceCount"='1' where disabled='0' AND "referenceCount" != '1';
 		\q
 EOF
+		echo -e "Fixing count for group members."
+		# Get list of users to increase referenceCount for
+		local userList=`psql -U $dbUsername datasync -t -c "select memberdn from \"membershipCache\";" | sed 's/ //g' | sort`
+		local userCount userLine;
+
+		# Set correct referenceCount for list of memberdns in membershipCache
+		while IFS= read line
+		do
+			if [ -n "$line" ];then
+				if [ -z "$userLine" ];then
+					userLine="$line";
+					userCount=1;
+				elif [ -n "$userLine" ];then
+					if [ "$line" = "$userLine" ];then
+						userCount=$((userCount + 1));
+					elif [ "$line" != "$userLine" ];then
+						psql -U $dbUsername datasync -c "UPDATE targets SET \"referenceCount\"=$userCount where dn='$userLine';"
+						userLine="$line";
+						userCount=1;
+					fi
+				fi
+			fi
+		done <<< "$userList";
+		psql -U $dbUsername datasync -c "UPDATE targets SET \"referenceCount\"=$userCount where dn='$userLine';"
 	fi
 	echo
 	eContinue;
