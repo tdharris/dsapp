@@ -2811,6 +2811,7 @@ function empty {
 # Check Functions/Modules
 function ghc_checkServices {
 	ghcNewHeader "Checking Mobility Services..."
+	# Presuming there are no problems (variables set to true), tests should set to false if there is a failure so overall test fails
 	status=true
 	mstatus=true;
 	gstatus=true;
@@ -2826,21 +2827,22 @@ function ghc_checkServices {
 
 	function checkMobility {
 
-		netstat -patune | grep -i ":$mPort" | grep -i listen > /dev/null
-		if [ $? -ne 0 ];then
-			local listener=`netstat -pan | grep -i listen | grep :443 | rev |awk '{print $1}' | rev | cut -f2 -d '/'`
+		# netstat -patune | grep -i ":$mPort" | grep -i listen > /dev/null
+		# if [ $? -ne 0 ];then
+			local listener=`netstat -pan | grep -i listen | grep :$mPort | rev |awk '{print $1}' | rev | cut -f2 -d '/'`
 			if [ "$listener" = "python" ];then
-				mstatus=false;
 				failure+="mobility-connector ($mPort). "
 				echo "Mobility Connector listening on port $mPort: $mstatus" >> $ghcLog
 			elif [ "$listener" = "httpd2-prefork" ];then
+				mstatus=false;
 				failure+="mobility-connector ($mPort). "
 				echo "Apache2 listening on port $mPort: $mstatus" >> $ghcLog
 			elif [ "$listener" != "python" ];then
+				mstatus=false;
 				failure+="mobility-connector ($mPort). "
 				echo "Python not listening on port $mPort: $mstatus" >> $ghcLog
 			fi
-		fi
+		# fi
 
 	}
 
