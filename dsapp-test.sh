@@ -2829,7 +2829,7 @@ function ghc_checkServices {
 
 		# netstat -patune | grep -i ":$mPort" | grep -i listen > /dev/null
 		# if [ $? -ne 0 ];then
-			local listener=`netstat -pan | grep -i listen | grep :$mPort | rev |awk '{print $1}' | rev | cut -f2 -d '/'`
+			local listener=`netstat -pan | grep -i listen | grep ":$mPort " | rev |awk '{print $1}' | rev | cut -f2 -d '/'`
 			if [ "$listener" = "python" ];then
 				failure+="mobility-connector ($mPort). "
 				echo "Mobility Connector listening on port $mPort: $mstatus" >> $ghcLog
