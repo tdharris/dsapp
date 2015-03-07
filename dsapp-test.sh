@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='213'
+dsappversion='214'
 
 ##################################################################################################
 #	Set up banner logo
@@ -3182,15 +3182,17 @@ function ghc_checkReferenceCount {
 	problem=false
 	# Any logging info >> $ghcLog
 	local userList=`psql -U datasync_user datasync -t -c "select \"referenceCount\",dn from targets where \"referenceCount\" > '1';"`
-	while IFS= read line
-	do 
-		local userCount=`echo "$line" | awk '{print $1}'`;
-		local userDN=`echo "$line" | awk '{print $3}'`;
-		local memberCount=`psql -U $dbUsername datasync -t -c "select count(*) from \"membershipCache\" where memberdn = '$userDN';" | sed 's/ //g'`;
-		if [[ "$userCount" != "$memberCount" ]]; then 
-			problem=true
-		fi; 
-	done <<< "$userList"
+	if [ -n "$userList" ];then
+		while IFS= read line
+		do 
+			local userCount=`echo "$line" | awk '{print $1}'`;
+			local userDN=`echo "$line" | awk '{print $3}'`;
+			local memberCount=`psql -U $dbUsername datasync -t -c "select count(*) from \"membershipCache\" where memberdn = '$userDN';" | sed 's/ //g'`;
+			if [[ "$userCount" != "$memberCount" ]]; then 
+				problem=true
+			fi; 
+		done <<< "$userList"
+	fi
 
 	if ($problem); then
 		echo -e "Detected referenceCount issue in datasync db.\nSOLUTION: See TID 7012163" >>$ghcLog
