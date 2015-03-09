@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='214'
+dsappversion='215'
 
 ##################################################################################################
 #	Set up banner logo
@@ -4793,6 +4793,7 @@ EOF
 					datasyncBanner;
 					echo -e "\t1. Show Applied Patches"
 					echo -e "\t2. Fix update.sh - clear-text passwords - TID 7016214, Bug 918694"
+					echo -e "\t3. Fix interface for synced admin user - TID 7016212, Bug 918660"
 					echo -e "\n\t0. Back"
 				 	echo -n -e "\n\tSelection: "
 				 	read -n1 opt;
@@ -4811,6 +4812,13 @@ EOF
 							patchFiles=( "/opt/novell/datasync/common/lib/upgrade.pyc" )
 							patchEm "918694.zip" "210230"
 							;;
+
+						3) # Fix interface for synced admin user - TID 7016212, Bug 918660
+							patchFiles=( "/opt/novell/datasync/configengine/lib/configengine/__init__.pyc" )
+							patchEm "918660.zip" "210230"
+							;;
+
+
 
 					 	/q | q | 0) break;;
 						*) ;;
