@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='215'
+dsappversion='216'
 
 ##################################################################################################
 #	Set up banner logo
@@ -3746,7 +3746,10 @@ function dumpSettings {
 	local time=`date +%m.%d.%y-%s`;
 	if askYesOrNo "Backup configuration settings?";then
 		promptVerifyPath "Path to save file: " dumpPath
-		local dumpFile=$(readlink -m "$dumpPath/mobilitySettings.conf")
+		mkdir $dumpPath/mobility_install-$time
+		dumpPathFolder=$dumpPath/mobility_install-$time
+
+		local dumpFile=$(readlink -m "$dumpPathFolder/mobilitySettings.conf")
 
 		# Get old XML settings to dump into new install XML
 		local xmlNotification=`echo "cat /config/configengine/notification"| xmllint --shell $ceconf | sed '1d;$d' | sed '1d;$d' | tr -d " \t\n\r"`
@@ -3782,23 +3785,22 @@ function dumpSettings {
 
 		# Dumping target, and membershipCache table
 		echo -e "\nGetting database tables..."
-		dumpTable "datasync" "targets" $dumpPath;
-		dumpTable datasync membershipCache $dumpPath;
+		dumpTable "datasync" "targets" $dumpPathFolder;
+		dumpTable datasync membershipCache $dumpPathFolder;
 
 		# Dumping certificate
 		echo -e "Getting server certificates..."
-		cp $dirVarMobility/device/mobility.pem $dumpPath/
-		cp $dirVarMobility/webadmin/server.pem $dumpPath/
+		cp $dirVarMobility/device/mobility.pem $dumpPathFolder/
+		cp $dirVarMobility/webadmin/server.pem $dumpPathFolder/
 
 		# Copy all .xml files
 		echo -e "Getting XML files..."
-		find /etc/datasync/ -name *.xml | cpio -pdm $dumpPath/ 2>/dev/null
+		find /etc/datasync/ -name *.xml | cpio -pdm $dumpPathFolder/ 2>/dev/null
 
 		# Tar up dumpFile and mobility.pem
 		cd $dumpPath;
-		mkdir mobility_install-$time
-		echo `hostname -f` > hostname.conf
-		mv -f * mobility_install-$time/ 2>/dev/null
+		echo `hostname -f` > $dumpPathFolder/hostname.conf
+		# mv -f * mobility_install-$time/ 2>/dev/null
 		tar czf mobility_install-$time.tgz mobility_install-$time/ 2>/dev/null
 		echo -e "\nBackup configuration settings complete..."
 		echo -n "Saved to: "; readlink -m "$dumpPath/mobility_install-$time.tgz"
