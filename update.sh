@@ -67,6 +67,11 @@ EOF
 		echo "Problem uploading to tharris7.lab.novell.com:/wrk/outgoing..."
 		return 2
 	fi
+
+	# Upload .tgz to github
+	echo -e "\nPublishing dsapp.tgz to GitHub..."
+	githubPush "dsapp.tgz"
+
 	rm -f dsapp.sh dsapp.tgz;
 	echo -e "\n-----------------------------------------"
 	echo -e "Added to FTP Successfully!"
@@ -79,7 +84,7 @@ function githubPush {
 	if [ $? -eq 0 ]; then
 		# Upload to Github.com
 		echo -e "\nUpload to Github.com:"
-		git add dsapp-test.sh update.sh dsapp-rpm.sh dsappSource.sh filestoreIdToPath.pyc 2> /dev/null
+		git add $1 2> /dev/null
 		if [ $? -eq 0 ]; then
 			#prompt for commit message
 			read -ep "Commit message? " message
@@ -125,7 +130,7 @@ function newPublicRelease {
 
 function newInternalRelease {
 	incrementBuild
-	githubPush
+	githubPush "dsapp-test.sh update.sh dsapp-rpm.sh dsappSource.sh filestoreIdToPath.pyc"
 	echo "v"$version
 	read -p "[Exit]";
 	exit 0
