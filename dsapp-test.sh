@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='217'
+dsappversion='218'
 
 ##################################################################################################
 #	Set up banner logo
@@ -5299,11 +5299,12 @@ EOF
 		 echo -e "\t1. General Health Check (beta)"
 		 echo -e "\t2. Nightly Maintenance Check"
 		 echo -e "\n\t3. Show Sync Status"
-		 echo -e "\t4. Mobility pending syncevents by User"
-		 echo -e "\t5. View Attachments by User"
-		 echo -e "\n\t6. Check Mobility attachments (CAUTION)"
-		 echo -e "\t7. Check Mobility attachments counts (BETA)"
-		 echo -e "\t8. Watch psql command (CAUTION)"
+		 echo -e "\t4. GW pending events by User (consumerevents)"
+		 echo -e "\t5. Mobility pending events by User (syncevents)"
+
+		 echo -e "\n\t6. Attachments..."
+
+		 echo -e "\t7. Watch psql command (CAUTION)"
 		 echo -e "\n\t0. Back"
 		 echo -n -e "\n\tSelection: "
 		 read -n1 opt
@@ -5323,160 +5324,222 @@ EOF
 				eContinue;
 				;;
 
-			4) # Mobility syncevents
+			4) # Show GW events by User (consumerevents)
+				datasyncBanner;
+				# Proceed only if consumerevents has entries:
+				rowCount=`psql -h localhost -U datasync_user -d datasync -c "select count(*) from consumerevents;" | awk 'NR==3'`
+				if [ $rowCount -gt 0 ]; then
+					# 1) Dump the consumerevents table
+					# 2) Count events sorted and grouped by sourceName:
+						# a. Grab list of sourceNames from edata column
+						# b. Sort to get similar names grouped together
+						# c. Show count of each unique name (count, name)
+						# d. Sort numerically descending (greatest to least)
+					pg_dump -U datasync_user -t consumerevents datasync | awk '!/<.*>/' RS="<"sourceName">|</"sourceName">" | sort | uniq -c | sort -nr
+
+					# FYI - STATE meanings:
+						# STATE_PENDING = '1'
+						# STATE_RETRY = '2'
+						# STATE_DEPENDENT = '3'
+						# STATE_PENDING_DEPENDENT = '4'
+						# STATE_RETRY_DEPENDENT = '5'
+						# STATE_ERROR_0 = '1000'
+
+					# Steps to fix if there is a big problem user...
+					# 3) Remove the user with an abnormally high count (WebAdmin)
+					# 4) Delete the consumer events associated with that now-removed user (replace userid)
+					# psql -U datasync_user -c "delete from consumerevents where edata ilike '%<sourceName>userid</sourceName>%';"
+				else echo -e "consumerevents table doesn't have any events (psql:datasync).\n"
+				fi
+				eContinue;
+				;;
+
+			5) # Mobility syncevents
 				datasyncBanner;
 				psql -U $dbUsername mobility -c "select DISTINCT  u.userid AS "FDN", count(eventid) as "events", se.userid FROM syncevents se INNER JOIN users u ON se.userid = u.guid GROUP BY u.userid, se.userid ORDER BY events DESC;"
 				eContinue;
 				;;
 
-			5) # Mobility attachments
-				datasyncBanner;
-				psql -U $dbUsername mobility -c "select DISTINCT u.userid AS fdn, ROUND(SUM(filesize)/1024/1024::numeric,4) AS \"MB\",  am.userid from attachments a INNER JOIN attachmentmaps am ON a.attachmentid = am.attachmentid INNER JOIN users u ON am.userid = u.guid WHERE a.filestoreid != '0' GROUP BY u.userid, am.userid ORDER BY \"MB\" DESC;"
-				eContinue;
-				;;
+			6)	# -------------------------------
+				# Attachments (submenu)
+				# -------------------------------
+				while :
+				do
+					clear;
+					datasyncBanner
+					echo -e "\t1. View Attachments by User"
+			 		echo -e "\t2. Check Mobility attachments (CAUTION)"
+			 		echo -e "\t3. Check Mobility attachments counts (BETA)"
 
-			6) # Mobility attachments over X days
-				datasyncBanner;
-				attachmentLog='/tmp/dsapp-attachment.log'
-				oldAttachments='/tmp/dsapp-oldAttachments'
-				rm $attachmentLog 2>/dev/null;
-				echo -e "--------------------------------------------------------------------------------------------------------------\n" > $attachmentLog;
-				echo -e "Server Information\n" >> $attachmentLog;
-				echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
-				cat $dirOptMobility/version >> $attachmentLog
-				cat /etc/*release >> $attachmentLog; echo >> $attachmentLog
-				df -h >> $attachmentLog; echo >> $attachmentLog
-				echo -e "Nightly Maintenance:" >> $attachmentLog
-				cat $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | grep -i database >> $attachmentLog; echo >> $attachmentLog;
-				d=`awk '!/<.*>/' RS="<"emailSyncLimitInDays">|</"emailSyncLimitInDays">" $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml`
-				tolerance=$((d+10))
-				echo -e "emailSyncLimitInDays("$d") + 10-day tolerance = "$tolerance"\n" >> $attachmentLog
+			 		echo -e "\n\t0. Back"
+				 	echo -n -e "\n\tSelection: "
+				 	read -n1 opt;
+					case $opt in
 
-				find=true;
-				if [ -s $oldAttachments ]; then
-					oldAttachmentContent=`grep -v "filestoreid" $oldAttachments`
-					if [ ! -z "$oldAttachmentContent" ]; then
-					   	if askYesOrNo $"Do you want to use the files found from the previous analysis?"; then
-					   		echo $oldAttachments
-					   		find=false;
-					   	fi
-					fi
-				fi
-				if ($find); then
-					echo "Analyzing mobility attachments... This may take a considerable amount of time."
-					echo "filestoreid" > $oldAttachments;
-					find $dirVarMobility/mobility/attachments -type f -mtime +$tolerance >> $oldAttachments;
-				fi
+						1) # View Attachments by User
+							# Mobility attachments
+							datasyncBanner;
+							psql -U $dbUsername mobility -c "select DISTINCT u.userid AS fdn, ROUND(SUM(filesize)/1024/1024::numeric,4) AS \"MB\",  am.userid from attachments a INNER JOIN attachmentmaps am ON a.attachmentid = am.attachmentid INNER JOIN users u ON am.userid = u.guid WHERE a.filestoreid != '0' GROUP BY u.userid, am.userid ORDER BY \"MB\" DESC;"
+							eContinue;
+							;;
 
-				n=`cat $oldAttachments | wc -l`
-				n=`echo $(($n - 1))`
-				echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
-				echo -e "Processing\n" >> $attachmentLog;
-				echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
-					echo "Files older than the above tolerance: "$n >> $attachmentLog
-					cat $oldAttachments >> $attachmentLog;
-				datasyncBanner;
-				echo -e "\nNumber of attachments older than $d days:"
-				echo -e "\nMobility: "$n"\n"
-				if [ $n -gt 0 ]; then
-					if askYesOrNo $"Check Nightly Maintenance?"; then
-						checkNightlyMaintenance
-					fi
-					if askYesOrNo $"Attempt to manually cleanup?"; then
-						read -ep "How many files for manual cleanup ($n)? " cleanupLimit
-						if [ "$cleanupLimit" = "" ]; then
-							cleanupLimit=$n;
-						fi
-						echo -e "\nHow many files for manual cleanup (cleanupLimit): "$cleanupLimit >> $attachmentLog
-						dbCount=0
-						fileCount=0
-						echo > /tmp/removedFiles.log;
-						echo -e "\nPSQL Log (removing references from db):" >> $attachmentLog
+						2) # Check Mobility attachments (CAUTION)
+							clear;
+							# Mobility attachments over X days
+							datasyncBanner;
+							attachmentLog='/tmp/dsapp-attachment.log'
+							oldAttachments='/tmp/dsapp-oldAttachments'
+							rm $attachmentLog 2>/dev/null;
+							echo -e "--------------------------------------------------------------------------------------------------------------\n" > $attachmentLog;
+							echo -e "Server Information\n" >> $attachmentLog;
+							echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
+							cat $dirOptMobility/version >> $attachmentLog
+							cat /etc/*release >> $attachmentLog; echo >> $attachmentLog
+							df -h >> $attachmentLog; echo >> $attachmentLog
+							echo -e "Nightly Maintenance:" >> $attachmentLog
+							cat $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml | grep -i database >> $attachmentLog; echo >> $attachmentLog;
+							d=`awk '!/<.*>/' RS="<"emailSyncLimitInDays">|</"emailSyncLimitInDays">" $dirEtcMobility/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml`
+							tolerance=$((d+10))
+							echo -e "emailSyncLimitInDays("$d") + 10-day tolerance = "$tolerance"\n" >> $attachmentLog
 
-						# CSV for import - ($oldAttachments)
-						# Remove files function
-						function removeFilesFromList() {
-							for line in `cat $oldAttachments | head -$cleanupLimit`
-								do
-									removed=`rm -v $line`;
-									if [ $? -eq 0 ]; then
-										fileCount=$(($fileCount+1))
+							find=true;
+							if [ -s $oldAttachments ]; then
+								oldAttachmentContent=`grep -v "filestoreid" $oldAttachments`
+								if [ ! -z "$oldAttachmentContent" ]; then
+								   	if askYesOrNo $"Do you want to use the files found from the previous analysis?"; then
+								   		echo $oldAttachments
+								   		find=false;
+								   	fi
+								fi
+							fi
+							if ($find); then
+								echo "Analyzing mobility attachments... This may take a considerable amount of time."
+								echo "filestoreid" > $oldAttachments;
+								find $dirVarMobility/mobility/attachments -type f -mtime +$tolerance >> $oldAttachments;
+							fi
+
+							n=`cat $oldAttachments | wc -l`
+							n=`echo $(($n - 1))`
+							echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
+							echo -e "Processing\n" >> $attachmentLog;
+							echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
+								echo "Files older than the above tolerance: "$n >> $attachmentLog
+								cat $oldAttachments >> $attachmentLog;
+							datasyncBanner;
+							echo -e "\nNumber of attachments older than $d days:"
+							echo -e "\nMobility: "$n"\n"
+							if [ $n -gt 0 ]; then
+								if askYesOrNo $"Check Nightly Maintenance?"; then
+									checkNightlyMaintenance
+								fi
+								if askYesOrNo $"Attempt to manually cleanup?"; then
+									read -ep "How many files for manual cleanup ($n)? " cleanupLimit
+									if [ "$cleanupLimit" = "" ]; then
+										cleanupLimit=$n;
 									fi
-									echo -e $fileCount": " $removed
-									echo $removed >> /tmp/removedFiles.log;
-								done
-						}
+									echo -e "\nHow many files for manual cleanup (cleanupLimit): "$cleanupLimit >> $attachmentLog
+									dbCount=0
+									fileCount=0
+									echo > /tmp/removedFiles.log;
+									echo -e "\nPSQL Log (removing references from db):" >> $attachmentLog
 
-						# Create table for import
-						psql -U $dbUsername mobility -L /tmp/dsapp-attachment.log <<EOF
+									# CSV for import - ($oldAttachments)
+									# Remove files function
+									function removeFilesFromList() {
+										for line in `cat $oldAttachments | head -$cleanupLimit`
+											do
+												removed=`rm -v $line`;
+												if [ $? -eq 0 ]; then
+													fileCount=$(($fileCount+1))
+												fi
+												echo -e $fileCount": " $removed
+												echo $removed >> /tmp/removedFiles.log;
+											done
+									}
+
+									# Create table for import
+									psql -U $dbUsername mobility -L /tmp/dsapp-attachment.log <<EOF
 drop table dsapp_oldattachments;
 CREATE TABLE dsapp_oldattachments(
     id bigserial primary key,
     filestoreid varchar(400) NOT NULL
 );
 EOF
-						# Import to new table
-						cat $oldAttachments | head -$cleanupLimit | psql -U datasync_user mobility -c "\copy \"dsapp_oldattachments\"(filestoreid) from STDIN WITH DELIMITER ',' CSV HEADER";
-						if [ $? -eq 0 ]; then
-							# Get rid of first line which was used for import "filestoreid"
-							sed -i '1,1d' $oldAttachments;
+									# Import to new table
+									cat $oldAttachments | head -$cleanupLimit | psql -U datasync_user mobility -c "\copy \"dsapp_oldattachments\"(filestoreid) from STDIN WITH DELIMITER ',' CSV HEADER";
+									if [ $? -eq 0 ]; then
+										# Get rid of first line which was used for import "filestoreid"
+										sed -i '1,1d' $oldAttachments;
 
-							# Remove database references
-psql -U $dbUsername mobility -L /tmp/dsapp-attachment.log <<EOF
+										# Remove database references
+			psql -U $dbUsername mobility -L /tmp/dsapp-attachment.log <<EOF
 delete from attachmentmaps am where am.attachmentid IN (select attachmentid from attachments where filestoreid IN (select regexp_replace(filestoreid, '.+/', '') from dsapp_oldattachments));
 delete from attachments where filestoreid IN (select regexp_replace(filestoreid, '.+/', '') from dsapp_oldattachments);
 EOF
-							# Remove files
-							removeFilesFromList
-							# Insert files removed into log
-							echo $removed >> /tmp/removedFiles.log;
-						fi
-                        # echo "Database references removed: "$dbCount
-                		echo -e "\nFiles removed:" >> $attachmentLog
-						cat /tmp/removedFiles.log >> $attachmentLog
-						echo -e "\nFiles removed: "$fileCount
-						echo >> $attachmentLog
-						echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
-						echo -e "Report\n" >> $attachmentLog;
-						echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
-						df -h >> $attachmentLog; echo >> $attachmentLog;
-						echo -e "\nFiles removed: "$fileCount >> $attachmentLog;
-						echo -e "db references removed: "`grep DELETE $attachmentLog | tail -1`
-						# echo "Database references removed: "$dbCount >> $attachmentLog;
-						echo -e "\nSee $attachmentLog for log information.\n"
-						if askYesOrNo $"View log for details?"; then
-							less $attachmentLog
-						fi
-					fi
-				fi
+										# Remove files
+										removeFilesFromList
+										# Insert files removed into log
+										echo $removed >> /tmp/removedFiles.log;
+									fi
+			                        # echo "Database references removed: "$dbCount
+			                		echo -e "\nFiles removed:" >> $attachmentLog
+									cat /tmp/removedFiles.log >> $attachmentLog
+									echo -e "\nFiles removed: "$fileCount
+									echo >> $attachmentLog
+									echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
+									echo -e "Report\n" >> $attachmentLog;
+									echo -e "--------------------------------------------------------------------------------------------------------------\n" >> $attachmentLog;
+									df -h >> $attachmentLog; echo >> $attachmentLog;
+									echo -e "\nFiles removed: "$fileCount >> $attachmentLog;
+									echo -e "db references removed: "`grep DELETE $attachmentLog | tail -1`
+									# echo "Database references removed: "$dbCount >> $attachmentLog;
+									echo -e "\nSee $attachmentLog for log information.\n"
+									if askYesOrNo $"View log for details?"; then
+										less $attachmentLog
+									fi
+								fi
+							fi
 
-				eContinue;
+							eContinue;
+							;;
+
+						3) # Check Mobility attachments counts (BETA)
+							clear;
+							datasyncBanner;
+							psql -U $dbUsername mobility -L /tmp/dsapp-attachments.log -c 'copy attachments (filestoreid) to STDOUT' | sort > /tmp/dsapp-attachments-database
+							find $dirVarMobility/mobility/attachments -type f -printf "%f\n" | sort > /tmp/dsapp-attachments-files;
+							uniq /tmp/dsapp-attachments-database > /tmp/dsapp-attachments-database-uniq
+							uniq /tmp/dsapp-attachments-files > /tmp/dsapp-attachments-files-uniq
+							printf "%10d filestoreid entries in the database.\n" `wc -l < /tmp/dsapp-attachments-database`
+							printf "%10d filestoreid entries in the file system.\n\n" `wc -l < /tmp/dsapp-attachments-files`
+							printf "%10d distinct filestoreid entries in the database.\n" `wc -l < /tmp/dsapp-attachments-database-uniq`
+							printf "%10d distinct filestoreid entries in the file system.\n\n" `wc -l < /tmp/dsapp-attachments-files-uniq`
+							printf "%10d duplicates filestoreid entries in the database.\n" `uniq /tmp/dsapp-attachments-database -d | wc -l`
+							printf "%10d 0-record filestoreid entries in the database.\n" `egrep ^0$ /tmp/dsapp-attachments-database | wc -l`
+							i=`comm -13 /tmp/dsapp-attachments-database-uniq /tmp/dsapp-attachments-files-uniq | wc -l`
+							if [ $i -gt 0 ]; then
+								printf "Informational: %10d orphans files on the file system.\n" $i;
+							fi
+							i=`comm -23 /tmp/dsapp-attachments-database-uniq /tmp/dsapp-attachments-files-uniq | wc -l`
+							if [ $i -gt 0 ]; then
+								echo -e "\nWARNING:"
+								printf "%10d entires missing from the file system!\n" $i;
+							fi
+							echo
+							eContinue;
+							;;
+
+				/q | q | 0)break;;
+				  *) ;;
+				esac
+				done
 				;;
-			7)
-				datasyncBanner;
-				psql -U $dbUsername mobility -L /tmp/dsapp-attachments.log -c 'copy attachments (filestoreid) to STDOUT' | sort > /tmp/dsapp-attachments-database
-				find $dirVarMobility/mobility/attachments -type f -printf "%f\n" | sort > /tmp/dsapp-attachments-files;
-				uniq /tmp/dsapp-attachments-database > /tmp/dsapp-attachments-database-uniq
-				uniq /tmp/dsapp-attachments-files > /tmp/dsapp-attachments-files-uniq
-				printf "%10d filestoreid entries in the database.\n" `wc -l < /tmp/dsapp-attachments-database`
-				printf "%10d filestoreid entries in the file system.\n\n" `wc -l < /tmp/dsapp-attachments-files`
-				printf "%10d distinct filestoreid entries in the database.\n" `wc -l < /tmp/dsapp-attachments-database-uniq`
-				printf "%10d distinct filestoreid entries in the file system.\n\n" `wc -l < /tmp/dsapp-attachments-files-uniq`
-				printf "%10d duplicates filestoreid entries in the database.\n" `uniq /tmp/dsapp-attachments-database -d | wc -l`
-				printf "%10d 0-record filestoreid entries in the database.\n" `egrep ^0$ /tmp/dsapp-attachments-database | wc -l`
-				i=`comm -13 /tmp/dsapp-attachments-database-uniq /tmp/dsapp-attachments-files-uniq | wc -l`
-				if [ $i -gt 0 ]; then
-					printf "Informational: %10d orphans files on the file system.\n" $i;
-				fi
-				i=`comm -23 /tmp/dsapp-attachments-database-uniq /tmp/dsapp-attachments-files-uniq | wc -l`
-				if [ $i -gt 0 ]; then
-					echo -e "\nWARNING:"
-					printf "%10d entires missing from the file system!\n" $i;
-				fi
-				echo
-				eContinue;
-				;;
-			8) # Watch psql command
+
+			# -------------------------------
+			# END Attachments (submenu)
+			# -------------------------------
+
+			7) # Watch psql command
 				q=false
 				while :
 				do datasyncBanner;
