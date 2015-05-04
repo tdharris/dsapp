@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='218'
+dsappversion='219'
 
 ##################################################################################################
 #	Set up banner logo
@@ -1422,17 +1422,17 @@ function mCleanup { # Requires userID passed in.
 	# Get users mobility guid
 	local uGuid=`psql -U $dbUsername mobility -t -c "select guid from users where userid ~* '($1[.|,].*)$' OR name ilike '$1' OR userid ilike '$1';" | sed 's/^ *//'| sed 's/ *$//'`
 
-	# Get users devices
-	local uDevices=`psql -U $dbUsername mobility -t -c "select deviceid from devices where userid='$uGuid';" | sed 's/^ *//'| sed 's/ *$//'`
+	# # Get users devices
+	# local uDevices=`psql -U $dbUsername mobility -t -c "select deviceid from devices where userid='$uGuid';" | sed 's/^ *//'| sed 's/ *$//'`
 
-	# Get attachments to delete
-	local uAttachment=`psql -U $dbUsername mobility -t -c "select attachmentid from attachmentmaps where objectid in (select objectid from deviceimages where userid='$uGuid');" | sed 's/^ *//'| sed 's/ *$//'`
+	# # Get attachments to delete
+	# local uAttachment=`psql -U $dbUsername mobility -t -c "select attachmentid from attachmentmaps where objectid in (select objectid from deviceimages where userid='$uGuid');" | sed 's/^ *//'| sed 's/ *$//'`
 
-	# While loop to remove all users devices from foldermaps
-	while IFS= read -r line
-	do
-		psql -U $dbUsername mobility -c "delete from foldermaps where deviceid='$line';" &>/dev/null
-	done <<< "$uDevices"
+	# # While loop to remove all users devices from foldermaps
+	# while IFS= read -r line
+	# do
+	# 	psql -U $dbUsername mobility -c "delete from foldermaps where deviceid='$line';" &>/dev/null
+	# done <<< "$uDevices"
 
 	# Delete attachmentmaps
 	psql -U $dbUsername mobility -c "delete from attachmentmaps where userid='$uGuid';";
@@ -1442,38 +1442,41 @@ function mCleanup { # Requires userID passed in.
 
 	# Log into mobility database, and clean tables with users guid
 	psql -U $dbUsername mobility <<EOF
+	delete from foldermaps where deviceid IN (select deviceid from devices where userid='$uGuid');
 	delete from deviceimages where userid='$uGuid';
 	delete from syncevents where userid='$uGuid';
 	delete from deviceevents where userid='$uGuid';
 	delete from devices where userid='$uGuid';
 	delete from users where guid='$uGuid';
+	delete from attachments where attachmentid IN (select attachmentid from attachmentmaps where objectid in (select objectid from deviceimages where userid='$uGuid'));
+	delete from attachments where filestoreid IN (SELECT filestoreid FROM attachments LEFT OUTER JOIN attachmentmaps ON attachments.attachmentid=attachmentmaps.attachmentid WHERE attachmentmaps.attachmentid IS NULL);
 	\q
 
 EOF
 
-	# While loop to remove all users attachments
-	if [ -n "$uAttachment" ];then
-		echo -e "Removing `echo \"$uAttachment\" | wc -l` attachment entires..."
-		while IFS= read -r line
-		do
-			psql -U $dbUsername mobility -c "delete from attachments where attachmentid='$line';" &>/dev/null
-		done <<< "$uAttachment"
-	fi
+	# # While loop to remove all users attachments
+	# if [ -n "$uAttachment" ];then
+	# 	echo -e "Removing `echo \"$uAttachment\" | wc -l` attachment entires..."
+	# 	while IFS= read -r line
+	# 	do
+	# 		psql -U $dbUsername mobility -c "delete from attachments where attachmentid='$line';" &>/dev/null
+	# 	done <<< "$uAttachment"
+	# fi
 
-	# While loop to remove orphaned filestoreids
-	if [ -n "$fileID" ];then
-		echo -e "Checking for orphaned attachment entires..."
-		while IFS= read -r line
-		do
-			psql -U $dbUsername mobility -c "delete from attachments where filestoreid='$line';" &>/dev/null
-		done <<< "$fileID"
-	fi
+	# # While loop to remove orphaned filestoreids
+	# if [ -n "$fileID" ];then
+	# 	echo -e "Checking for orphaned attachment entires..."
+	# 	while IFS= read -r line
+	# 	do
+	# 		psql -U $dbUsername mobility -c "delete from attachments where filestoreid='$line';" &>/dev/null
+	# 	done <<< "$fileID"
+	# fi
 
 	# Get number of CPU cores for parallel process. Set default to 8 if cpu cores greater then 8
 	local cpuCore=`nproc`; if [ "$cpuCore" -gt '8' ];then cpuCore=8;fi
 
 	# Remove duplicate fileIDs
-	echo -e "Generating list of files..."
+	echo -e "\nGenerating list of files..."
 	echo "$fileID" >> $dsappLogs/fileIDs;
 	cat $dsappLogs/fileIDs | sort -u --parallel $cpuCore > $dsappLogs/fileIDs.tmp; mv $dsappLogs/fileIDs.tmp $dsappLogs/fileIDs;
 	sed -i '/^\s*$/d' $dsappLogs/fileIDs;
@@ -1481,12 +1484,12 @@ EOF
 
 	# echo to output
 	if [ -n "$fileID" ];then
-		echo -e "\nCleaning `echo $fileID|wc -w` attachments from file system."
+		echo -e "Removing `echo $fileID|wc -w` attachments from file system."
 	fi
 
 	# While loop to delete all 'safe to delete' attachments from the file system (runs in background)
 	if [ -n "$fileID" ];then
-		echo -e "\n"`date`"\n------- Cleaning `echo $fileID|wc -w` attachments -------" >> $dsappLogs/mCleanup.log
+		echo -e "\n"`date`"\n------- Removing `echo $fileID|wc -w` attachments -------" >> $dsappLogs/mCleanup.log
 		local attachmentCount=0;
 		while IFS= read -r line
 		do
