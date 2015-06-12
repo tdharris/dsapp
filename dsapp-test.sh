@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='219'
+dsappversion='220'
 
 ##################################################################################################
 #	Set up banner logo
@@ -1422,18 +1422,6 @@ function mCleanup { # Requires userID passed in.
 	# Get users mobility guid
 	local uGuid=`psql -U $dbUsername mobility -t -c "select guid from users where userid ~* '($1[.|,].*)$' OR name ilike '$1' OR userid ilike '$1';" | sed 's/^ *//'| sed 's/ *$//'`
 
-	# # Get users devices
-	# local uDevices=`psql -U $dbUsername mobility -t -c "select deviceid from devices where userid='$uGuid';" | sed 's/^ *//'| sed 's/ *$//'`
-
-	# # Get attachments to delete
-	# local uAttachment=`psql -U $dbUsername mobility -t -c "select attachmentid from attachmentmaps where objectid in (select objectid from deviceimages where userid='$uGuid');" | sed 's/^ *//'| sed 's/ *$//'`
-
-	# # While loop to remove all users devices from foldermaps
-	# while IFS= read -r line
-	# do
-	# 	psql -U $dbUsername mobility -c "delete from foldermaps where deviceid='$line';" &>/dev/null
-	# done <<< "$uDevices"
-
 	# Delete attachmentmaps
 	psql -U $dbUsername mobility -c "delete from attachmentmaps where userid='$uGuid';";
 
@@ -1453,24 +1441,6 @@ function mCleanup { # Requires userID passed in.
 	\q
 
 EOF
-
-	# # While loop to remove all users attachments
-	# if [ -n "$uAttachment" ];then
-	# 	echo -e "Removing `echo \"$uAttachment\" | wc -l` attachment entires..."
-	# 	while IFS= read -r line
-	# 	do
-	# 		psql -U $dbUsername mobility -c "delete from attachments where attachmentid='$line';" &>/dev/null
-	# 	done <<< "$uAttachment"
-	# fi
-
-	# # While loop to remove orphaned filestoreids
-	# if [ -n "$fileID" ];then
-	# 	echo -e "Checking for orphaned attachment entires..."
-	# 	while IFS= read -r line
-	# 	do
-	# 		psql -U $dbUsername mobility -c "delete from attachments where filestoreid='$line';" &>/dev/null
-	# 	done <<< "$fileID"
-	# fi
 
 	# Get number of CPU cores for parallel process. Set default to 8 if cpu cores greater then 8
 	local cpuCore=`nproc`; if [ "$cpuCore" -gt '8' ];then cpuCore=8;fi
@@ -1516,21 +1486,9 @@ function dCleanup { # Requires userID passed in.
 	local psqlAppNameG=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.groupwise';"| sed 's/^ *//' | sed 's/ *$//'`
 	local psqlAppNameM=`psql -U $dbUsername datasync -t -c "select \"targetName\" from targets where (dn ~* '($1[.|,].*)$' OR dn ilike '$1' OR \"targetName\" ilike '$1') AND \"connectorID\"='default.pipeline1.mobility';"| sed 's/^ *//' | sed 's/ *$//'`
 
-	# Get all creationEventIDs from objectMappins
-	echo "Generating creationEventID list..."
-	local uEventID=`psql -U $dbUsername datasync -t -c "select \"objectID\",\"creationEventID\" from \"objectMappings\" where \"objectID\" ilike '%|$psqlAppNameG' OR \"objectID\" ilike '%|$psqlAppNameM' OR \"objectID\" ilike '%|$1';" | cut -f3 -d '|' | rev | cut -f1 -d '.' | rev`
-
-	# While loop to delete objectMappings
-	if [ `echo $uEventID |wc -w` -gt 0 ];then
-		echo -e "DELETE `echo $uEventID | wc -w`"
-		while IFS= read -r line
-		do
-			psql -U $dbUsername datasync -c "delete from \"objectMappings\" where \"creationEventID\" ilike '%.$line'" &>/dev/null
-		done <<< "$uEventID"
-	fi
-
 	# Delete objectMappings, cache, membershipCache, folderMappings, and targets from datasync DB
 	psql -U $dbUsername datasync <<EOF
+	delete from "objectMappings" where "objectID" IN (SELECT "objectID" from "objectMappings" where "objectID" ilike '%|$psqlAppNameG' OR "objectID" ilike '%|$psqlAppNameM' OR "objectID" ilike '%|$1');
 	delete from "folderMappings" where "targetDN" ilike '($1[.|,].*)$' OR "targetDN" ilike '$uUser';
 	delete from cache where "sourceDN" ilike '($1[.|,].*)$' OR "sourceDN" ilike '$uUser';
 	delete from "membershipCache" where (groupdn ilike '($1[.|,].*)$' OR memberdn ilike '($1[.|,].*)$') OR (groupdn ilike '$uUser' OR memberdn ilike '$uUser');
