@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='220'
+dsappversion='221'
 
 ##################################################################################################
 #	Set up banner logo
@@ -31,9 +31,18 @@ EOF
 #	Start up Checks
 ##################################################################################################
 
+	# Get dsapp PID
+	echo $$ >> /opt/novell/datasync/tools/dsapp/conf/dsapp.pid
+
 	function trapCall {
 		clear;
+		# Clear dsapp/tmp
 		rm -f /opt/novell/datasync/tools/dsapp/tmp/* 2>/dev/null
+
+		# Remove PID from dsapp.pid
+		sed -i '/'$$'/d' /opt/novell/datasync/tools/dsapp/conf/dsapp.pid
+
+		# Reset the terminal
 		reset;
 		echo "Bye $USER"
 		exit 1;
@@ -1352,9 +1361,14 @@ function createDatabases {
 		fi
 	}
 
+	function monitorSyncingUsers {
+		echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where state!='2'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\""
+		break;
+	}
+
 	function sMonitorUser {
-				echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where userid ilike '%$vuid%'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\""
-				break;
+		echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where userid ilike '%$vuid%'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\""
+		break;
 	}
 
 	function setUserState {
@@ -5015,8 +5029,9 @@ done
 			while :
 			do
 				datasyncBanner;
-				echo -e "\t1. Monitor User Sync State (Mobility)"
-		 		echo -e "\t2. Monitor User Sync GW/MC Count (Sync-Validate)"
+				echo -e "\t1. Monitor user sync state (Mobility)"
+		 		echo -e "\t2. Monitor user sync GW/MC count (Sync-Validate)"
+		 		echo -e "\t3. Monitor active users sync state"
 
 		 		echo -e "\n\t0. Back"
 			 	echo -n -e "\n\tSelection: "
@@ -5037,6 +5052,10 @@ done
 								tailf $mAlog | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid
 							fi
 						fi
+						;;
+
+					3) # Monitor active users sync state
+						monitorSyncingUsers;
 						;;
 
 			/q | q | 0)break;;
@@ -5540,7 +5559,14 @@ EOF
   /q | q | 0)
 				clear
 				echo "Bye $USER"
-				($pgpass) && rm -f ~/.pgpass;
+				if ($pgpass);then
+					if [ `cat $dsappConf/dsapp.pid | wc -l` -eq '1' ];then
+						rm -f ~/.pgpass;
+					fi
+				fi
+
+				# Remove PID from dsapp.pid
+				sed -i '/'$$'/d' $dsappConf/dsapp.pid
 				exit 0;;
   *) ;;
 
