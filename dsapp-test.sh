@@ -35,20 +35,35 @@ EOF
 	echo $$ >> /opt/novell/datasync/tools/dsapp/conf/dsapp.pid
 
 	function trapCall {
-		clear;
-		# Clear dsapp/tmp
-		rm -f /opt/novell/datasync/tools/dsapp/tmp/* 2>/dev/null
+		# Exit watch while staying in dsapp
+		if ($monitorValue);then
+			monitorValue=false;
+		else
+			# Clean up and exit script
+			clear;
+			# Clear dsapp/tmp
+			rm -f /opt/novell/datasync/tools/dsapp/tmp/* 2>/dev/null
 
-		# Remove PID from dsapp.pid
-		sed -i '/'$$'/d' /opt/novell/datasync/tools/dsapp/conf/dsapp.pid
+			# Removes .pgpass if pgpass=true in dsapp.conf
+			if ($pgpass);then
+				if [ `cat /opt/novell/datasync/tools/dsapp/conf/dsapp.pid | wc -l` -eq '1' ];then
+					rm -f ~/.pgpass;
+				fi
+			fi
 
-		# Reset the terminal
-		reset;
-		echo "Bye $USER"
-		exit 1;
+			# Remove PID from dsapp.pid
+			sed -i '/'$$'/d' /opt/novell/datasync/tools/dsapp/conf/dsapp.pid
+
+			# Reset the terminal
+			reset;
+			echo "Bye $USER"
+			exit 1;
+		fi
 	}
+
 	# Trap ^Cctrl c
 	trap trapCall SIGINT
+	monitorValue=false;
 
 	# Make sure user is root
 	if [ "$(id -u)" != "0" ];then
@@ -1353,22 +1368,21 @@ function createDatabases {
 	}
 
 	function monitorUser {
+		monitorValue=true;
 		verifyUser vuid; verifyReturnNum=$?
 		if [ $verifyReturnNum -eq 2 ] || [ $verifyReturnNum -eq 0 ] ; then
-				echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where userid ilike '%$vuid%'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\""
-				# tailf /var/log/datasync/default.pipeline1.mobility-AppInterface.log | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid
-				break;
+				echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where userid ilike '%$vuid%'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\"";
 		fi
 	}
 
 	function monitorSyncingUsers {
-		echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where state!='2'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\""
-		break;
+		monitorValue=true;
+		echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where state!='2'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\"";
 	}
 
 	function sMonitorUser {
-		echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where userid ilike '%$vuid%'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\""
-		break;
+		monitorValue=true;
+		echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where userid ilike '%$vuid%'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\"";
 	}
 
 	function setUserState {
