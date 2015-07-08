@@ -1688,6 +1688,37 @@ ssh -t root@$poaAddress 'chmod /root/gwCheck.sh 2>/dev/null; /root/gwCheck.sh' 2
 fi
 }
 
+function getSOAPLoginRepsonse {
+soapLoginResponse=`netcat $poaAddress $port << EOF
+POST /soap HTTP/1.0
+Accept-Encoding: identity
+Content-Length: 1083
+Soapaction: "loginRequest"
+Host: $poa
+User-Agent: Python-urllib/2.6
+Connection: close
+Content-Type: text/xml
+
+<SOAP-ENV:Envelope xmlns:ns0="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:ns1="http://schemas.novell.com/2005/01/GroupWise/methods" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tns="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
+   <SOAP-ENV:Header>
+      <tns:gwTrace></tns:gwTrace>
+   </SOAP-ENV:Header>
+   <SOAP-ENV:Body>
+      <ns1:loginRequest>
+         <auth xmlns="http://schemas.novell.com/2005/01/GroupWise/methods" xsi:type="ns0:TrustedApplication">
+            <ns0:username>$vuid</ns0:username>
+            <ns0:name>$trustedName</ns0:name>
+            <ns0:key>$trustedAppKey</ns0:key>
+         </auth>
+         <language xmlns="http://schemas.novell.com/2005/01/GroupWise/methods"/>
+         <version xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1.02</version>
+         <userid xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1</userid>
+      </ns1:loginRequest>
+   </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>
+EOF`
+}
+
 # The function below sets the SOAP Session Key using global variable 'soapSession'
 soapSession=''
 poa=''
@@ -1698,89 +1729,37 @@ poa=`cat $gconf| grep -i soap | sed 's/<[^>]*[>]//g' | tr -d ' ' | sed 's|[a-zA-
 poaAddress=`echo $poa | sed 's+:.*++g'`
 port=`echo $poa | sed 's+.*:++g'`
 
-soapLoginResponse=`netcat $poaAddress $port << EOF
-POST /soap HTTP/1.0
-Accept-Encoding: identity
-Content-Length: 1083
-Soapaction: "loginRequest"
-Host: $poa
-User-Agent: Python-urllib/2.6
-Connection: close
-Content-Type: text/xml
+getSOAPLoginRepsonse;
 
-<SOAP-ENV:Envelope xmlns:ns0="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:ns1="http://schemas.novell.com/2005/01/GroupWise/methods" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tns="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
-   <SOAP-ENV:Header>
-      <tns:gwTrace></tns:gwTrace>
-   </SOAP-ENV:Header>
-   <SOAP-ENV:Body>
-      <ns1:loginRequest>
-         <auth xmlns="http://schemas.novell.com/2005/01/GroupWise/methods" xsi:type="ns0:TrustedApplication">
-            <ns0:username>$vuid</ns0:username>
-            <ns0:name>$trustedName</ns0:name>
-            <ns0:key>$trustedAppKey</ns0:key>
-         </auth>
-         <language xmlns="http://schemas.novell.com/2005/01/GroupWise/methods"/>
-         <version xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1.02</version>
-         <userid xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1</userid>
-      </ns1:loginRequest>
-   </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>
-EOF`
-
+# Invalid trusted application found
 if (`echo "$soapLoginResponse" | grep -qi "Invalid key for trusted application"`); then
 	echo "Invalid key for trusted application."
 	eContinue; continue;
 fi
 
-#Error handle until secure SOAP code figured out.
+# Error handle until secure SOAP code figured out.
 if (`echo "$soapLoginResponse" | grep -qi "Location: https:"`);then
 	echo "SOAP $poa secure. Cannot complete."
 else
+	# Redirection found. Update address and port of new POA
 	if (`echo "$soapLoginResponse" | grep -q "redirect"`); then
-	poaAddress=`echo "$soapLoginResponse" | grep -iwo "<gwt:ipAddress>.*</gwt:ipAddress>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	port=`echo "$soapLoginResponse" | grep -iwo "<gwt:port>.*</gwt:port>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	poa=`echo "$poaAddress:$port"`
+		poaAddress=`echo "$soapLoginResponse" | grep -iwo "<gwt:ipAddress>.*</gwt:ipAddress>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
+		port=`echo "$soapLoginResponse" | grep -iwo "<gwt:port>.*</gwt:port>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
+		poa=`echo "$poaAddress:$port"`
 
-soapLoginResponse=`netcat $poaAddress $port << EOF
-POST /soap HTTP/1.0
-Accept-Encoding: identity
-Content-Length: 1083
-Soapaction: "loginRequest"
-Host: $poa
-User-Agent: Python-urllib/2.6
-Connection: close
-Content-Type: text/xml
-
-<SOAP-ENV:Envelope xmlns:ns0="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:ns1="http://schemas.novell.com/2005/01/GroupWise/methods" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tns="http://schemas.novell.com/2005/01/GroupWise/types" xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
-   <SOAP-ENV:Header>
-      <tns:gwTrace></tns:gwTrace>
-   </SOAP-ENV:Header>
-   <SOAP-ENV:Body>
-      <ns1:loginRequest>
-         <auth xmlns="http://schemas.novell.com/2005/01/GroupWise/methods" xsi:type="ns0:TrustedApplication">
-            <ns0:username>$vuid</ns0:username>
-            <ns0:name>$trustedName</ns0:name>
-            <ns0:key>$trustedAppKey</ns0:key>
-         </auth>
-         <language xmlns="http://schemas.novell.com/2005/01/GroupWise/methods"/>
-         <version xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1.02</version>
-         <userid xmlns="http://schemas.novell.com/2005/01/GroupWise/methods">1</userid>
-      </ns1:loginRequest>
-   </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>
-EOF`
-
+		getSOAPLoginRepsonse;
 	fi
+
 	if [ $? != 0 ]; then
 		echo -e "Redirection detected.\nFailure to connect to $poa"
 	fi
+
 	userPO=`echo $soapLoginResponse | grep -iwo "<gwt:postOffice>.*</gwt:postOffice>" | sed 's/<[^>]*[>]//g' | tr -d ' ' | tr [:upper:] [:lower:]`
 	gwVersion=`echo $soapLoginResponse | grep -iwo "<gwm:gwVersion>.*</gwm:gwVersion>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	soapSession=`echo $soapLoginResponse | grep -iwo "<gwm:session>.*</gwm:session>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
 	if [[ -z "$soapSession" || -z "$poa" ]]; then echo -e "\nNull response to soapLogin\nPOA: "$poa"\ntrustedName\Key: "$trustedName":"$trustedAppKey"\n\nsoapLoginResponse:\n"$soapLoginResponse"\n"$soapSession
 	fi
 fi
-# soapLoginResponse=`echo $soapLoginResponse | grep -iwo "<gwm:gwVersion>.*</gwm:gwVersion>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
 }
 
 folderResponse=''
@@ -2133,7 +2112,7 @@ function createCSRKey {
 
     echo ""
     openssl genrsa -passout pass:${pass} -des3 -out server.key 2048;
-    openssl req -new -key server.key -out server.csr -passin pass:${pass};
+    openssl req -she256 -new -key server.key -out server.csr -passin pass:${pass};
     key=${PWD##&/}"/server.key";
     csr=${PWD##&/}"/server.csr";
 
@@ -5094,15 +5073,23 @@ done
 						datasyncBanner;
 						verifyUser vuid;
 						if [ $? -ne 3 ] ; then
-							checkGroupWise
+							soapLogin;
+						else
+							echo "No such user '$uid'"
 						fi
 						eContinue;
 						;;
 
 					2) # gwCheck
 						datasyncBanner;
-						read -p "userID: " vuid
-						soapLogin
+						
+						verifyUser vuid;
+						if [ $? -ne 3 ] ; then
+							soapLogin;
+						else
+							echo "No such user '$uid'"
+						fi
+
 						if [ -n "$soapSession" ]; then
 							gwCheck
 						fi
