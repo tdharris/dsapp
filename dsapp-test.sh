@@ -1517,6 +1517,7 @@ function dCleanup { # Requires userID passed in.
 	# Delete objectMappings, cache, membershipCache, folderMappings, and targets from datasync DB
 	psql -U $dbUsername datasync <<EOF
 	delete from "objectMappings" where "objectID" IN (SELECT "objectID" from "objectMappings" where "objectID" ilike '%|$psqlAppNameG' OR "objectID" ilike '%|$psqlAppNameM' OR "objectID" ilike '%|$1');
+	delete from consumerevents where edata ilike '%<sourceName>$psqlAppNameG</sourceName>%' OR edata ilike '%<sourceName>$psqlAppNameM</sourceName>%';
 	delete from "folderMappings" where "targetDN" ilike '($1[.|,].*)$' OR "targetDN" ilike '$uUser';
 	delete from cache where "sourceDN" ilike '($1[.|,].*)$' OR "sourceDN" ilike '$uUser';
 	delete from "membershipCache" where (groupdn ilike '($1[.|,].*)$' OR memberdn ilike '($1[.|,].*)$') OR (groupdn ilike '$uUser' OR memberdn ilike '$uUser');
