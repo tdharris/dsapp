@@ -459,6 +459,9 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 		log_debug "Assigning authentication from ceconf"
 		authentication=`xmlpath 'config/configengine/source/authentication' < $ceconf`
 
+		log_debug "Assigning ldapEnabled from ceconf"
+		ldapEnabled=`xmlpath 'config/configengine/ldap/enabled' < $ceconf`
+
 		log_debug "Assigning galUserName from mconf"
 		galUserName=`xmlpath 'connector/settings/custom/galUserName' < $mconf`
 
@@ -2966,9 +2969,8 @@ function ghc_checkLDAP {
 	# Any logging info >> $ghcLog
 
 	problem=false
-
 	# Only test if authentication is ldap in mobility connector.xml
-	if [[ -n `grep -i "<authentication>" $mconf | grep -i ldap` ]]; then
+	if [ "$ldapEnabled" = "true" ]; then
 		echo -e "ldapServer: $ldapAddress\nldapPort: $ldapPort\nldapAdmin: $ldapAdmin\nldapPassword: $protectedldapPassword\n" >> $ghcLog
 		if (empty "${ldapPort}" || empty "${ldapAdmin}" || empty "${ldapPassword}"); then
 			echo -e "Unable to determine ldap variables." >> $ghcLog
@@ -2986,7 +2988,7 @@ function ghc_checkLDAP {
 				problem=true
 			fi
 		fi
-	else echo -e "Mobility not configured to use LDAP in $mconf\nSkipping test." >>$ghcLog
+	else echo -e "Skipping check - LDAP not enabled" >>$ghcLog
 	fi
 
 	# Return either pass/fail, 0 indicates pass.
@@ -3367,9 +3369,9 @@ function ghc_checkPOA {
 	problem=false; warn=false;
 	local header="[ghc_checkPOA]"
 
-	if [[ ! "$provisioning" == "ldap" ]]; then
+	if [ "$ldapEnabled" != "true" ]; then
 		warn=true;
-		echo "Skipping check - provisioning not set to ldap" >>$ghcLog
+		echo "Skipping check - LDAP not enabled" >>$ghcLog
 	else
 		local auth="$dsapptmp/getStatusData.auth"
 		local cookie="$dsapptmp/getStatusData.cookie"
