@@ -32,7 +32,15 @@ EOF
 ##################################################################################################
 
 	# Get dsapp PID
-	echo $$ >> /opt/novell/datasync/tools/dsapp/conf/dsapp.pid
+	pidFile=/opt/novell/datasync/tools/dsapp/conf/dsapp.pid
+	echo $$ >> $pidFile
+	# Clean up previous PIDs if not found
+	while IFS='' read -r line || [[ -n "$line" ]]; do 
+		if [ -z `ps -p $line -o comm=` ];then
+			sed -i "/$line/d" $pidFile
+		fi
+	done < $pidFile
+
 
 	function trapCall {
 		# Exit watch while staying in dsapp
