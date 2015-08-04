@@ -412,6 +412,7 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 #	Initialization
 #
 ##################################################################################################
+log_debug "[Section] : Loading Initialization section"
 
 	# Load Menu (Get all needed variables)
 	if [ -z "$1" ];then
@@ -517,6 +518,7 @@ function pushConf {
 }
 
 function dsappLogRotate {
+local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 logRotate="$(cat <<EOF
 /opt/novell/datasync/tools/dsapp/logs/*.log {
     compress
@@ -570,6 +572,7 @@ if [ `cat $dsappConf/dsappVersion` -lt $newFeatureVersion ];then
 	newFeature=true
 fi
 function announceNewFeature {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	if($newFeature);then
 		clear; datasyncBanner
 		# Start Code for new feature -----
@@ -582,7 +585,7 @@ function announceNewFeature {
 }
 
 function checkFTP {
-	local header="[checkFTP] :"
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# To call/use: if (checkFTP);then
 	netcat -z -w 2 ftp.novell.com 21;
 	if [ $? -eq 0 ]; then
@@ -595,7 +598,7 @@ function checkFTP {
 }
 
 function updateDsapp {
-	local header="[updateDsapp] :"
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	echo -e "\nUpdating dsapp..."
 	log_info "$header Updating dsapp..."
 
@@ -626,7 +629,7 @@ function updateDsapp {
 }
 
 function autoUpdateDsapp {
-
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Variable declared above autoUpdate=true
 	if ($autoUpdate); then
 
@@ -656,6 +659,7 @@ function autoUpdateDsapp {
 
 	#Get datasync version.
 	function getDSVersion {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		if ($dsInstalledCheck);then
 			dsVersion=`cat $version | cut -c1-7 | tr -d '.'`
 		fi
@@ -666,6 +670,7 @@ function autoUpdateDsapp {
 	dbUsername=`cat $ceconf | grep database -A 7 | grep "<username>" | cut -f2 -d '>' | cut -f1 -d '<'`
 
 	function checkDBPass {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		# Return of 1 indicates a bad file, needs to be recreated
 		if [ -f "/root/.pgpass" ];then
 			# If the file is there, does it have a password?
@@ -684,10 +689,12 @@ function autoUpdateDsapp {
 	}
 
 	function encodeString {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		echo "$1" | openssl enc -aes-256-cbc -a -k $dsHostname | base64 | tr -d '\040\011\012\015'
 	}
 
 	function decodeString {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		local decodeVar1=`echo "$1" | base64 -d`;
 		local decodeVar2=`echo "$decodeVar1" | openssl enc -aes-256-cbc -base64 -k $dsHostname -d 2>>$dsapptmp/error`;
 
@@ -701,6 +708,7 @@ function autoUpdateDsapp {
 	}
 
 	function isStringProtected {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		# $1 = xml path
 		# $2 = file to check
 		# This will echo 1 if it is protected
@@ -709,6 +717,7 @@ function autoUpdateDsapp {
 
 	# Get & Decode dbpass
 	function getDBPassword {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		#Grabbing password from configengine.xml
 		dbPassword=`xmlpath 'config/configengine/database/password' < $ceconf`
 		if [[ $(isStringProtected /config/configengine/database $ceconf) -eq 1 ]];then
@@ -725,6 +734,7 @@ function autoUpdateDsapp {
 
 	# Get & decode trustedAppKey
 	function getTrustedAppKey {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		trustedAppKey=`xmlpath 'connector/settings/custom/trustedAppKey' < $gconf`
 		if [[ $(isStringProtected /connector/settings/custom $gconf) -eq 1 ]];then
 			trustedAppKey=$(decodeString $trustedAppKey "Trusted Application")
@@ -740,6 +750,7 @@ function autoUpdateDsapp {
 
 	# Get & decode ldapLogin password
 	function getldapPassword {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		# Keeping protected for General Health Check Log
 		protectedldapPassword=`xmlpath 'config/configengine/ldap/login/password' < $ceconf`
 		ldapPassword="$protectedldapPassword"
@@ -756,6 +767,7 @@ function autoUpdateDsapp {
 	}
 
 	function getsmtpPassword {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		smtpPassword=`xmlpath 'config/configengine/notification/smtpPassword' < $ceconf`
 		if [[ $(isStringProtected /config/configengine/notification $ceconf) -eq 1 ]];then
 			smtpPassword=$(decodeString $smtpPassword "SMTP")
@@ -770,6 +782,7 @@ function autoUpdateDsapp {
 	}
 
 	function createPGPASS {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		getDBPassword;
 		#Creating new .pgpass file
 		echo "*:*:*:*:"$dbPassword > /root/.pgpass;
@@ -777,6 +790,7 @@ function autoUpdateDsapp {
 	}
 
 	function checkPGPASS {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		#Database .pgpass file / version check.
 		if [ $dsVersion -gt $ds_20x ];then
 		#Log into database or create .pgpass file to login.
@@ -798,6 +812,7 @@ function autoUpdateDsapp {
 	fi
 
 	function backupConf { # $1 = function name calling this function.
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	local now=$(date '+%X_%F')
 		mkdir -p $dsappBackup/$1/$now/
 		cp $ceconf $econf $dsappBackup/$1/$now/
@@ -811,6 +826,7 @@ function autoUpdateDsapp {
 
 	# Compare dsHostname hostname, with server hostname
 	function checkHostname {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		local lineNumber
 	if [ -n "$1" ];then
 		echo "$1" > $dsappConf/dsHostname.conf;
@@ -897,7 +913,9 @@ fi
 ##################################################################################################
 #	Initialize Variables
 ##################################################################################################
+log_debug "[Section] : Loading Initialize Variables section"
 	function setVariables {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		# Depends on version 1.x or 2.x
 		if ($dsInstalledCheck);then
 			if [ $dsVersion -gt $ds_20x ]; then
@@ -939,8 +957,10 @@ log_debug "[Init] [getsmtpPassword] $smtpPassword"
 #	Declaration of Functions
 #
 ##################################################################################################
+log_debug "[Section] : Loading Declaration of Function section"
 
 	function promptVerifyPath {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		while [ true ];do
     		read -ep "$1" path;
 	        if [ ! -d "$path" ]; then
@@ -955,6 +975,7 @@ log_debug "[Init] [getsmtpPassword] $smtpPassword"
 	}
 
 	function checkYaST {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		# Check if YaST is running
 		local yastRun=`ps aux | grep -i yast | awk '{print $2}' | sed '$d'`
 		if [ -n "$yastRun" ];then
@@ -981,6 +1002,7 @@ log_debug "[Init] [getsmtpPassword] $smtpPassword"
 	}
 
 	function getLogs {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		datasyncBanner;
 		rm -r $dsappupload/* 2>/dev/null
 		mkdir $dsappupload/version
@@ -1065,6 +1087,7 @@ EOF
 	}
 
 function dropDatabases {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	#Dropping Tables
 	echo -e "Dropping datasync database"
 	dropdb -U $dbUsername datasync;
@@ -1077,6 +1100,7 @@ function dropDatabases {
 }
 
 function createDatabases {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	#Recreating Tables - Code from postgres_setup_1.sh
 	PGPASSWORD="$dbPassword" createdb "datasync" -U "$dbUsername" -h "localhost" -p "5432"
 	echo "create datasync database done.."
@@ -1105,6 +1129,7 @@ function createDatabases {
 }
 
 	function  cuso {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		local tempVar=true
 		if [ $(checkDBPass) -eq 0 ];then
 
@@ -1175,6 +1200,7 @@ function createDatabases {
 		}
 
 	function registerDS {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		clear;
 		echo -e "\nThe following will register your Mobility product with Novell, allowing you to use the Novell Update Channel to Install a Mobility Pack Update. If you have not already done so, obtain the Mobility Pack activation code from the Novell Customer Center:";
 		echo -e "\n\t1. Login to Customer Center at http://www.novell.com/center"
@@ -1204,6 +1230,7 @@ function createDatabases {
 	}
 
 	function cleanLog {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		echo -e "\nProcessing...";
 		rm -fvR $log/connectors/*;
 		rm -fvR $log/syncengine/*;
@@ -1214,6 +1241,7 @@ function createDatabases {
 	}
 
 	function rcDS {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		if [ "$1" = "start" ] && [ "$2" = "" ]; then
 			$rcScript start;
 			rccron start 2>/dev/null;
@@ -1246,6 +1274,7 @@ function createDatabases {
 	}
 
 	function dsUpdate {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		zypper ref -f $1;
 		zLU=`zypper lu -r $1`;
 		zLU=`echo $zLU | grep -iwo "No updates found."`;
@@ -1282,6 +1311,7 @@ function createDatabases {
 	}
 
 	function verifyUserDataSyncDB { # Requires $1 passed in as a username
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		if [ -n "$1" ];then
 
 			# Check if user exists in datasync database
@@ -1303,6 +1333,7 @@ function createDatabases {
 	}
 
 	function verifyUserMobilityDB { # Requires $1 passed in as a username
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		if [ -n "$1" ];then
 
 			# Check if user exists in mobility database
@@ -1323,9 +1354,11 @@ function createDatabases {
 		fi
 	}
 
-	function verifyUser { # Can have 2 variables passed in.
+	function verifyUser { 
+	# Can have 2 variables passed in.
 	# $1 to be assigned uid
 	# If $2 = noReturn. Won't check DBs for user
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		uid=""
 		while [ -z "$uid" ]; do
 			datasyncBanner;
@@ -1379,6 +1412,7 @@ function createDatabases {
 	}
 
 	function monitorUser {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		monitorValue=true;
 		verifyUser vuid; verifyReturnNum=$?
 		if [ $verifyReturnNum -eq 2 ] || [ $verifyReturnNum -eq 0 ] ; then
@@ -1387,16 +1421,19 @@ function createDatabases {
 	}
 
 	function monitorSyncingUsers {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		monitorValue=true;
 		echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where state!='2'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\"";
 	}
 
 	function sMonitorUser {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		monitorValue=true;
 		echo -e "\n" && watch -n1 -t "psql -U '$dbUsername' mobility -c \"select state,userID from users where userid ilike '%$vuid%'\"; echo -e \"[ Code |    Status     ]\n[  1   | Initial Sync  ]\n[  9   | Sync Validate ]\n[  2   |    Synced     ]\n[  3   | Syncing-Days+ ]\n[  7   |    Re-Init    ]\n[  5   |    Failed     ]\n[  6   |    Delete     ]\n\n\nPress ctrl + c to close the monitor.\"";
 	}
 
 	function setUserState {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		# verifyUser sets vuid variable used in setUserState and removeAUser functions
 		verifyUser vuid; verifyReturnNum=$?
 		if [ $verifyReturnNum -eq 2 ] || [ $verifyReturnNum -eq 0 ] ; then
@@ -1411,6 +1448,7 @@ EOF
 	}
 
 function dremoveUser {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# verifyUser sets vuid variable used in setUserState and removeAUser functions
 	verifyUser vuid; verifyReturnNum=$?
 	if [ $verifyReturnNum -eq 2 ] || [ $verifyReturnNum -eq 0 ] ; then
@@ -1439,6 +1477,7 @@ EOF
 }
 
 function removeUser {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Remove User Database References according to TID 7008852
 		datasyncBanner;
 		echo -e "\t--- CAUTION ---\n[Removes all reference of userID]\n"
@@ -1456,6 +1495,7 @@ function removeUser {
 }
 
 function mCleanup { # Requires userID passed in.
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	echo -e "\nCleaning up mobility database:\n"
 
 	# Get users mobility guid
@@ -1516,6 +1556,7 @@ EOF
 }
 
 function dCleanup { # Requires userID passed in.
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	echo -e "\nCleaning up datasync database:\n"
 
 	# Get user dn from targets table;
@@ -1539,6 +1580,7 @@ EOF
 
 
 function addGroup {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	datasyncBanner;
 	ldapGroups=$dsapptmp/ldapGroups.txt
 	ldapGroupMembership=$dsapptmp/ldapGroupMembership.txt
@@ -1571,6 +1613,7 @@ function addGroup {
 }
 
 function gwCheck {
+local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 if askYesOrNo $"Do you want to attempt remote gwCheck repair?"; then
 			# read -ep "IP address of $gwVersion `echo $userPO | tr [:lower:] [:upper:]` GroupWise Server: "
 			echo "You will be prompted for the password of root."
@@ -1701,6 +1744,7 @@ fi
 }
 
 function getSOAPLoginRepsonse {
+local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 soapLoginResponse=`netcat $poaAddress $port << EOF
 POST /soap HTTP/1.0
 Accept-Encoding: identity
@@ -1735,8 +1779,9 @@ EOF`
 soapSession=''
 poa=''
 userPO=''
-function soapLogin {
 
+function soapLogin {
+local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 poa=`cat $gconf| grep -i soap | sed 's/<[^>]*[>]//g' | tr -d ' ' | sed 's|[a-zA-Z,]||g' | tr -d '//' | sed 's/^.//'`
 poaAddress=`echo $poa | sed 's+:.*++g'`
 port=`echo $poa | sed 's+.*:++g'`
@@ -1776,6 +1821,7 @@ fi
 
 folderResponse=''
 function checkGroupWise {
+local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 soapLogin
 if [ -n "$soapSession" ];then
 folderResponse=`netcat $poaAddress $port << EOF
@@ -1811,6 +1857,7 @@ perl -e'$x=join("",<STDIN>);$x=~s/\s*[\n]+\s*//gs; $x=~s/^.*?(<gwt:folder.*<\/gw
 rootID=`cat $tempFile | grep Root | awk '!/<.*>/' RS="<"gwt:id">|</"gwt:id">"`
 
 function findParent {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	parentID=`cat $tempFile | grep -m1 $1 | awk '!/<.*>/' RS="<"gwt:parent">|</"gwt:parent">"`
 	# If there is a problem, returning 1
 	if [ "$rootID" = "$parentID" ];
@@ -1820,6 +1867,7 @@ function findParent {
 }
 
 function parentResults {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	echo -e "Folder Structure problem detected in GroupWise with $1."
 }
 
@@ -1856,6 +1904,7 @@ fi
 }
 
 function updateMobilityFTP {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	datasyncBanner;
 	if askYesOrNo $"Permission to restart Mobility when applying update?"; then
 		echo -e "\n"
@@ -1884,6 +1933,7 @@ function updateMobilityFTP {
 }
 
 function checkNightlyMaintenance {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	problem=false
 	echo -e "\nNightly Maintenance:"
 	cat $mconf | grep -i database | fold -s
@@ -1921,6 +1971,7 @@ function checkNightlyMaintenance {
 }
 
 function showStatus {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Pending sync items - Monitor
 	echo -e "\nGroupWise-connector:"
 	tac $gAlog | grep -im1 queue
@@ -1932,14 +1983,17 @@ function showStatus {
 }
 
 function mpsql {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	psql -U $dbUsername mobility
 }
 
 function dpsql {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	psql -U $dbUsername datasync
 }
 
 function whatDeviceDeleted {
+local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 datasyncBanner;
 verifyUser vuid;
 if [ $? -ne 3 ] ; then
@@ -1962,11 +2016,13 @@ fi
 }
 
 function vacuumDB {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	vacuumdb -U $dbUsername -d datasync --full -v;
 	vacuumdb -U $dbUsername -d mobility --full -v;
 }
 
 function indexDB {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	psql -U $dbUsername datasync << EOF
 	reindex database datasync;
 	\c mobility;
@@ -1976,6 +2032,7 @@ EOF
 }
 
 function changeDBPass {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	local lineNumber input vinput
 	datasyncBanner;
 	if askYesOrNo "Change psql datasync_user password?";then
@@ -2035,6 +2092,7 @@ function changeDBPass {
 }
 
 function changeAppName {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	datasyncBanner;
 	verifyUser vuid; verifyReturnNum=$?
 	if [ $verifyReturnNum -eq 1 ] || [ $verifyReturnNum -eq 0 ] ; then
@@ -2073,6 +2131,7 @@ function changeAppName {
 }
 
 function reinitAllUsers {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	echo -e "Note: During the re-initialize, users will not be able to log in. This may take some time."
 	if askYesOrNo $"Are you sure you want to re-initialize all the users?";then
 		mpsql << EOF
@@ -2088,6 +2147,7 @@ EOF
 
 # Certificate functions
 function certPath {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
     while [ true ];do
         read -ep "Enter path to store certificate files: " certPath;
         if [ ! -d $certPath ]; then
@@ -2101,6 +2161,7 @@ function certPath {
 }
 
 function newCertPass {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	while :
         do
             read -p "Enter password for private key: " -s -r pass;
@@ -2116,6 +2177,7 @@ function newCertPass {
 }
 
 function createCSRKey {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
     #Start of Generate CSR and Key script.
     certPath
         cd $certPath;
@@ -2133,6 +2195,7 @@ function createCSRKey {
 }
 
 function signCert {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Presuming we are in the certPath directory
 	isSelfSigned=true
 	crt=${PWD##&/}"/server.crt"
@@ -2150,6 +2213,7 @@ function signCert {
 }
 # TODO: fix password prompts, error checking...
 function createPEM {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
     echo -e "\nCreating PEM..."
 
     # Ask for files/path if not self-signed
@@ -2215,6 +2279,7 @@ function createPEM {
 }
 
 function configureMobility {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
     certInstall=false;
 
     if askYesOrNo "Implement certificate with Mobility devices?";then
@@ -2242,6 +2307,7 @@ function configureMobility {
 }
 
 function verify {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
     echo -e "\nPlease provide the private key and the public key/certificate\n"
     read -ep "Enter the full path for certificate files (ie. /root/certificates): " path;
     if [ -d $path ];then
@@ -2278,6 +2344,7 @@ function verify {
 }
 
 function dumpTable {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# $1 = database name
 	# $2 - Table name
 	# $3 - Path to store file
@@ -2310,7 +2377,7 @@ function dumpTable {
 }
 
 function checkLDAP {
-
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Only test if authentication is ldap in mobility connector.xml
 	if [[ -n `grep -i "<authentication>" $mconf | grep -i ldap` ]]; then
 		if (empty "${ldapPort}" || empty "${ldapAdmin}" || empty "${ldapPassword}"); then
@@ -2341,6 +2408,7 @@ function checkLDAP {
 }
 
 function updateFDN {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	datasyncBanner;
 	if (checkLDAP);then
 		verifyUser vuid;
@@ -2423,13 +2491,16 @@ EOF
 #	Patch / FTF Fixes
 #
 ##################################################################################################
+log_debug "[Section] : Loading Patch section"
 function getExactMobilityVersion {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	if [ -f "/opt/novell/datasync/version" ];then
 		daVersion=`cat /opt/novell/datasync/version | tr -d '.'`
 	fi
 }
 
 function ftfPatchlevel {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	if [ ! -f "$dsappConf/patchlevel" ];then
 		touch $dsappConf/patchlevel
 	else sed -i '/./,$!d' $dsappConf/patchlevel
@@ -2446,6 +2517,7 @@ function ftfPatchlevel {
 }
 
 function ftfPatchlevelCheck {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	if [ ! -f "$dsappConf/patchlevel" ];then
 		return 0;
 	else
@@ -2465,6 +2537,7 @@ function info ()      { echo -e "${@}"; }
 
 # Check for specific version
 function checkVersion {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	if [ "$1" == "$daVersion" ]; then
 		info "\nVersion check ${bGREEN}passed${NC}.\n"
 		return 0;
@@ -2475,6 +2548,7 @@ function checkVersion {
 }
 
 function getFileFromFTP {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	wget "ftp://ftp.novell.com/outgoing/$1"
 	if [ $? -ne 0 ];
 		then error "There was a problem downloading $1 from ftp://ftp.novell.com/outgoing!";
@@ -2483,6 +2557,7 @@ function getFileFromFTP {
 }
 
 function uncompressIt {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	local file="$1"
 	local ext=${file##*.}
 
@@ -2494,7 +2569,7 @@ function uncompressIt {
 }
 
 function patchEm {
-
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	datasyncBanner;
 	local ftpFile="$1"
 	local version="$2"
@@ -2536,6 +2611,7 @@ function patchEm {
 }
 
 function backupDatabase {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	datasyncBanner; #Back up database
 	local time=`date +%m.%d.%y-%s`;
 	read -ep "Enter the full path to place back up files. (ie. /root/backup): " path;
@@ -2554,6 +2630,7 @@ function backupDatabase {
 }
 
 function restoreDatabase {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	#Restore Database
 	datasyncBanner;
 	read -ep "Enter the full path to backup files (ie. /root/backup): " path;
@@ -2670,7 +2747,9 @@ getExactMobilityVersion
 #	General Health Check
 #
 ##################################################################################################
+log_debug "[Section] : Loading General Health Check section"
 function generalHealthCheck {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	datasyncBanner; echo -e "##########################################################\n#	\n#  General Health Check\n#\n##########################################################" > $ghcLog
 	echo -e "Gathered by dsapp v$dsappversion on $(date)\n" >> $ghcLog
 	ghc_problem=false
@@ -2730,12 +2809,14 @@ function generalHealthCheck {
 
 # Utility Functions
 function ghcNewHeader {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	echo -e "\n$1"
 	echo -e "==========================================================\n$1
 ==========================================================" >> $ghcLog
 }
 
 function passFail {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	if [ $1 -eq 1 ]; then
 		echo -e "${bRED}Failed.${NC}"
  		echo -e "\nFailed.\n" >> $ghcLog
@@ -2749,6 +2830,7 @@ function passFail {
 }
 
 function isStringInFile {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# $1=whatString?, $2=filename
 	# echo "$1"
 	# echo -e "isStringInFile: $1:$2\n"
@@ -2761,6 +2843,7 @@ function isStringInFile {
 }
 
 function empty {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
     local var="$1"
 
     # Return true if:
@@ -2791,6 +2874,7 @@ function empty {
 
 # Check Functions/Modules
 function ghc_checkServices {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	ghcNewHeader "Checking Mobility Services..."
 	# Presuming there are no problems (variables set to true), tests should set to false if there is a failure so overall test fails
 	status=true
@@ -2799,6 +2883,7 @@ function ghc_checkServices {
 
 	failure="";
 	function checkStatus {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		rcdatasync-$1 status >> $ghcLog 2>&1
 		if [ $? -ne 0 ]
 			then status=false;
@@ -2807,7 +2892,7 @@ function ghc_checkServices {
 	}
 
 	function checkMobility {
-
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		# netstat -patune | grep -i ":$mPort" | grep -i listen > /dev/null
 		# if [ $? -ne 0 ];then
 			local listener=`netstat -pan | grep -i listen | grep ":$mPort " | rev |awk '{print $1}' | rev | cut -f2 -d '/'`
@@ -2828,6 +2913,7 @@ function ghc_checkServices {
 	}
 
 	function checkGroupWise {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		netstat -patune | grep -i ":$gPort" | grep -i listen > /dev/null
 		if [ $? -ne 0 ]
 			then gstatus=false;
@@ -2837,6 +2923,7 @@ function ghc_checkServices {
 	}
 
 	function checkPostgresql {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		rcpostgresql status >> $ghcLog
 		psqlStatus="$?"
 		if [[ $psqlStatus -ne 0 ]]; then
@@ -2847,6 +2934,7 @@ function ghc_checkServices {
 	}
 
 	function checkPortConnectivity {
+		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		netcat -z -w 2 $mlistenAddress $mPort >> $ghcLog 2>&1
 		if [ $? -ne 0 ]; then
 			mstatus=false
@@ -2882,6 +2970,7 @@ function ghc_checkServices {
 }
 
 function ghc_checkXML {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking XML configuration files..."
 	# Any logging info >> $ghcLog
@@ -2911,6 +3000,7 @@ function ghc_checkXML {
 }
 
 function ghc_checkPSQLConfig {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking PSQL configuration..."
 	pghba="/var/lib/pgsql/data/pg_hba.conf"
@@ -2948,6 +3038,7 @@ function ghc_checkPSQLConfig {
 }
 
 function ghc_checkRPMs {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	ghcNewHeader "Checking RPMs..."
 	problem=false
 
@@ -2972,6 +3063,7 @@ function ghc_checkRPMs {
 }
 
 function ghc_checkLDAP {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking LDAP connectivity..."
 	# Any logging info >> $ghcLog
@@ -3007,6 +3099,7 @@ function ghc_checkLDAP {
 }
 
 function ghc_verifyNightlyMaintenance {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking Nightly Maintenance..."
 	# Any logging info >> $ghcLog
@@ -3019,6 +3112,7 @@ function ghc_verifyNightlyMaintenance {
 }
 
 function ghc_verifyCertificates {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking Certificates..."
 	devCert="/var/lib/datasync/device/mobility.pem"
@@ -3104,6 +3198,7 @@ function ghc_verifyCertificates {
 }
 
 function ghc_checkProxy {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking for proxy configuration..."
 	proxyConf="/etc/sysconfig/proxy"
@@ -3129,6 +3224,7 @@ function ghc_checkProxy {
 }
 
 function ghc_checkManualMaintenance {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking for database maintenance: vacuum & reindex..."
 	dbMaintTolerance=180
@@ -3157,6 +3253,7 @@ function ghc_checkManualMaintenance {
 }
 
 function ghc_checkReferenceCount {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking referenceCount..."
 	problem=false
@@ -3184,6 +3281,7 @@ function ghc_checkReferenceCount {
 }
 
 function ghc_checkDiskSpace {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking disk space..."
 	problem=false
@@ -3203,6 +3301,7 @@ function ghc_checkDiskSpace {
 }
 
 function ghc_checkDiskIO {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking disk IO..."
 	warn=false
@@ -3224,6 +3323,7 @@ function ghc_checkDiskIO {
 }
 
 function ghc_checkMemory {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking Memory..."
 	problem=false
@@ -3265,6 +3365,7 @@ function ghc_checkMemory {
 }
 
 function ghc_checkRPMSave {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking for rpmsave..."
 	problem=false
@@ -3289,6 +3390,7 @@ function ghc_checkRPMSave {
 }
 
 function ghc_checkVMWare {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking for vmware..."
 	problem=false
@@ -3321,6 +3423,7 @@ function ghc_checkVMWare {
 }
 
 function ghc_checkConfig {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking automatic startup..."
 	problem=false
@@ -3340,6 +3443,7 @@ function ghc_checkConfig {
 }
 
 function ghc_checkUpdateSH {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking database schema..."
 	problem=false
@@ -3372,6 +3476,7 @@ function ghc_checkUpdateSH {
 }
 
 function ghc_checkPOA {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking POA status..."
 	problem=false; warn=false;
@@ -3454,6 +3559,7 @@ EOF`
 }
 
 function ghc_checkUserFDN {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Checking users FDN..."
 	problem=false
@@ -3519,6 +3625,7 @@ function ghc_checkUserFDN {
 }
 
 function ghc_verifyDatabaseIntegrity {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Verifiying databases integrity..."
 	problem=false
@@ -3570,6 +3677,7 @@ function ghc_verifyDatabaseIntegrity {
 }
 
 function ghc_verifyTargetsIntegrity {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Verifying targets table integrity..."
 	problem=false
@@ -3608,6 +3716,7 @@ function ghc_verifyTargetsIntegrity {
 }
 
 function ghc_checkTrustedApp {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "Verifying Trusted Application..."
 	problem=false; warn=false
@@ -3650,6 +3759,7 @@ function ghc_checkTrustedApp {
 }
 
 function exampleHealthCheck {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	# Display HealthCheck name to user and create section in logs
 	ghcNewHeader "exampleHealthCheck"
 	problem=false
@@ -3663,6 +3773,7 @@ function exampleHealthCheck {
 }
 
 function removeDisabled_fixReferenceCount {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	datasyncBanner;
 	#disabled+ will remove disabled entries from targets table.
 	if askYesOrNo $"Remove all disabled users/groups from target table?"; then
@@ -3710,6 +3821,7 @@ EOF
 }
 
 function whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	datasyncBanner;
 	read -ep "Item name (subject, folder, contact, calendar): " displayName
 	echo $displayName
@@ -3721,6 +3833,7 @@ function whereDidIComeFromAndWhereAmIGoingOrWhatHappenedToMe {
 }
 
 function dumpSettings {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	datasyncBanner;
 	local dumpPath
 	local time=`date +%m.%d.%y-%s`;
@@ -3789,6 +3902,7 @@ function dumpSettings {
 }
 
 function installMobility { # $1 = repository name
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 	datasyncBanner;
 	local dumpFile path quit passProXML dbpassXML encdbPassword
 	# quitInstall function to quit during any 'q' input
@@ -4084,6 +4198,7 @@ function installMobility { # $1 = repository name
 #	Switches / Command-line parameters
 #
 ##################################################################################################
+log_debug "[Section] : Loading Switches section"
 dsappSwitch=0
 dbMaintenace=false
 while [ "$1" != "" ]; do
@@ -4349,6 +4464,7 @@ fi
 #	Main Menu
 #
 ##################################################################################################
+log_debug "[Section] : Loading Main Menu section"
 
 if [ -z "$1" ];then
 	# Announce new Feature
