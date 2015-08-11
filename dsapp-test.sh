@@ -4890,7 +4890,7 @@ EOF
 					echo -e "\t1. Show Applied Patches"
 					echo -e "\t2. Fix update.sh - clear-text passwords - TID 7016214, Bug 918694"
 					echo -e "\t3. Fix interface for synced admin user - TID 7016212, Bug 918660"
-					echo -e "\t4. Some external messages cannot be opened on iOS -TID 7016617 - Bug 935282"
+					echo -e "\t4. External messages cannot be opened on iOS - TID 7016617 - Bug 935282"
 					echo -e "\n\t0. Back"
 				 	echo -n -e "\n\tSelection: "
 				 	read -n1 opt;
