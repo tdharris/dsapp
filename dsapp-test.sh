@@ -4890,7 +4890,7 @@ EOF
 					echo -e "\t1. Show Applied Patches"
 					echo -e "\t2. Fix update.sh - clear-text passwords - TID 7016214, Bug 918694"
 					echo -e "\t3. Fix interface for synced admin user - TID 7016212, Bug 918660"
-					echo -e "\t4. Unable to see listserv message body on iOS devices - Bug 927003"
+					echo -e "\t4. Some external messages cannot be opened on iOS -TID 7016617 - Bug 935282"
 					echo -e "\n\t0. Back"
 				 	echo -n -e "\n\tSelection: "
 				 	read -n1 opt;
@@ -4915,9 +4915,9 @@ EOF
 							patchEm "918660.zip" "210230"
 							;;
 
-						4) # Fix interface for synced admin user - TID 7016212, Bug 918660
+						4) # Fix sync.pyc for iOS device - TID 7016617, Bug 935282
 							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/sync.pyc" )
-							patchEm "927003.zip" "210230"
+							patchEm "935282.zip" "210230"
 							;;
 
 					 	/q | q | 0) break;;
