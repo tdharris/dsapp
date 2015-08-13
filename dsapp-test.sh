@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='221'
+dsappversion='222'
 
 ##################################################################################################
 #	Set up banner logo
@@ -41,6 +41,13 @@ EOF
 		fi
 	done < $pidFile
 
+	# Running in interactive shell?
+	INTERACTIVE_USER=false
+	tty -s
+	if [ $? -eq 0 ];then
+		INTERACTIVE_USER = true;
+	fi
+
 
 	function trapCall {
 		# Exit watch while staying in dsapp
@@ -70,7 +77,8 @@ EOF
 	}
 
 	# Trap ^Cctrl c
-	trap trapCall SIGINT
+	# trap trapCall SIGINT
+	trap trapCall INT TERM EXIT SIGINT
 	monitorValue=false;
 
 	# Make sure user is root
@@ -140,7 +148,7 @@ EOF
 	function checkInstall {
 	# Check if Mobility is installed.
 	if [[ "$forceMode" -ne "1" ]];then
-		local dsInstalled=`chkconfig | grep -iom 1 datasync`;
+		local dsInstalled=`/sbin/chkconfig | grep -iom 1 datasync`;
 		if [ "$dsInstalled" != "datasync" ];then
 			datasyncBanner;
 			read -p "Mobility is not installed."
@@ -1247,6 +1255,10 @@ function createDatabases {
 			rccron start 2>/dev/null;
 		fi
 
+		if [ "$1" = "start" ] && [ "$2" = "nocron" ]; then
+			$rcScript start;
+		fi
+
 		if [ "$1" = "start" ] && [ "$2" = "silent" ]; then
 				$rcScript start &>/dev/null;
 				rccron start &>/dev/null;
@@ -1256,6 +1268,11 @@ function createDatabases {
 			$rcScript stop;
 			killall -9 python &>/dev/null;
 			rccron stop 2>/dev/null; pkill cron 2>/dev/null
+		fi
+
+		if [ "$1" = "stop" ] && [ "$2" = "nocron" ]; then
+			$rcScript stop;
+			killall -9 python &>/dev/null;
 		fi
 
 		if [ "$1" = "stop" ] && [ "$2" = "silent" ]; then
@@ -1268,6 +1285,7 @@ function createDatabases {
 			$rcScript stop
 			killall -9 python &>/dev/null;
 			rccron stop &>/dev/null; pkill cron 2>/dev/null
+
 			$rcScript start
 			rccron start &>/dev/null;
 		fi
@@ -4240,7 +4258,7 @@ while [ "$1" != "" ]; do
 
 	--vacuum | -v) dsappSwitch=1
 		dbMaintenace=true
-		rcDS stop
+		rcDS stop nocron
 		vacuumDB;
 	;;
 
@@ -4255,7 +4273,7 @@ while [ "$1" != "" ]; do
 
 	--index | -i) dsappSwitch=1
 		dbMaintenace=true
-		rcDS stop
+		rcDS stop nocron
 		indexDB;
 	;;
 
@@ -4450,7 +4468,7 @@ if [ -f db.log ];then
 fi
 
 if ($dbMaintenace);then
-	rcDS start;
+	rcDS start nocron;
 fi
 
 if [ "$dsappSwitch" -eq "1" ];then
