@@ -1610,9 +1610,9 @@ function addGroup {
 	echo -e "\nGroup Membership:"
 	while read p; do
 		if [[ "$ldapPort" -eq "389" ]]; then
-  			`ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/^/"/' | sed 's/$/","'$p'"/' >> $ldapGroupMembership`
+  			`ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/\(.*\)/"\1"/g' >> $ldapGroupMembership`
 		elif [[ "$ldapPort" -eq "636" ]]; then
-			`ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/^/"/' | sed 's/$/","'$p'"/' >> $ldapGroupMembership`
+			`ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/\(.*\)/"\1"/g' >> $ldapGroupMembership`
 		fi
 	done < $ldapGroups
 	cat $ldapGroupMembership
