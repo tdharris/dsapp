@@ -57,7 +57,7 @@ EOF
 		return 1
 	fi
 	echo "dsappversion='$version'" > $tmp_publishedVersion
-	lftp -d -e 'set ssl:ca-file ~/.lftp.support-ftp-internal.ca.crt ; set ftp:ssl-force true; set ssl:verify-certificate true' -u "$userid","$pass" ftp-internal.provo.novell.com <<EOF 
+	lftp -d -e 'set ssl:ca-file ~/.lftp.support-ftp-internal.ca.crt ; set ftp:ssl-force true; set ssl:verify-certificate false' -u "$userid","$pass" ftp-internal.provo.novell.com <<EOF 
 	cd outgoing
 	put dsapp-version.info $tmp_publishedVersion
 EOF
