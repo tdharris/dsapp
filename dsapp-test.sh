@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='222'
+dsappversion='223'
 
 ##################################################################################################
 #	Set up banner logo
@@ -45,7 +45,7 @@ EOF
 	INTERACTIVE_USER=false
 	tty -s
 	if [ $? -eq 0 ];then
-		INTERACTIVE_USER = true;
+		INTERACTIVE_USER=true;
 	fi
 
 
@@ -1610,9 +1610,9 @@ function addGroup {
 	echo -e "\nGroup Membership:"
 	while read p; do
 		if [[ "$ldapPort" -eq "389" ]]; then
-  			`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/\(.*\)/"\1"/g' >> $ldapGroupMembership`
+  			`/usr/bin/ldapsearch -x -H ldap://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/^/"/' | sed 's/$/","'$p'"/' >> $ldapGroupMembership`
 		elif [[ "$ldapPort" -eq "636" ]]; then
-			`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/\(.*\)/"\1"/g' >> $ldapGroupMembership`
+			`/usr/bin/ldapsearch -x -H ldaps://$ldapAddress -D "$ldapAdmin" -w "$ldapPassword" -b $p | perl -p00e 's/\r?\n //g' | grep member: | cut -d ":" -f 2 | sed 's/^[ \t]*//' | sed 's/^/"/' | sed 's/$/","'$p'"/' >> $ldapGroupMembership`
 		fi
 	done < $ldapGroups
 	cat $ldapGroupMembership
@@ -1622,8 +1622,32 @@ function addGroup {
 		psql -U datasync_user datasync -c "delete from \"membershipCache\"" >/dev/null;
 		sed -i '1imemberdn,groupdn' $ldapGroupMembership
 		cat $ldapGroupMembership | psql -U datasync_user datasync -c "\copy \"membershipCache\"(memberdn,groupdn) from STDIN WITH DELIMITER ',' CSV HEADER"
+		
 		psql -U $dbUsername datasync -c "delete from targets where disabled='1'" >/dev/null;
-		psql -U $dbUsername datasync -c "update targets set \"referenceCount\"='1' where disabled='0'" >/dev/null;
+		# Get list of users to increase referenceCount for
+		local userList=`psql -U $dbUsername datasync -t -c "select memberdn from \"membershipCache\";" | sed 's/ //g' | sort`
+		local userCount userLine;
+
+		# Set correct referenceCount for list of memberdns in membershipCache
+		while IFS= read line
+		do
+			if [ -n "$line" ];then
+				if [ -z "$userLine" ];then
+					userLine="$line";
+					userCount=1;
+				elif [ -n "$userLine" ];then
+					if [ "$line" = "$userLine" ];then
+						userCount=$((userCount + 1));
+					elif [ "$line" != "$userLine" ];then
+						psql -U $dbUsername datasync -c "UPDATE targets SET \"referenceCount\"=$userCount where dn='$userLine';"
+						userLine="$line";
+						userCount=1;
+					fi
+				fi
+			fi
+		done <<< "$userList";
+		psql -U $dbUsername datasync -c "UPDATE targets SET \"referenceCount\"=$userCount where dn='$userLine';"
+
 		echo -e "referenceCount has been fixed.\nGroup Membership has been updated.\n"
 		eContinue;
 		else continue;
@@ -2204,7 +2228,7 @@ function createCSRKey {
 
     echo ""
     openssl genrsa -passout pass:${pass} -des3 -out server.key 2048;
-    openssl req -she256 -new -key server.key -out server.csr -passin pass:${pass};
+    openssl req -sha256 -new -key server.key -out server.csr -passin pass:${pass};
     key=${PWD##&/}"/server.key";
     csr=${PWD##&/}"/server.csr";
 
