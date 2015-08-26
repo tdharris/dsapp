@@ -62,9 +62,9 @@ EOF
 	put dsapp-version.info $tmp_publishedVersion
 EOF
 	echo -e "\nCopying to root@snielson17:/wrk/outgoing: "
-	scp dsapp.tgz $tmp_publishedVersion root@tharris7.lab.novell.com:/wrk/outgoing
+	scp dsapp.tgz $tmp_publishedVersion root@snielson17.lab.novell.com:/wrk/outgoing
 	if [ $? -ne 0 ]; then
-		echo "Problem uploading to tharris7.lab.novell.com:/wrk/outgoing..."
+		echo "Problem uploading to snielson17.lab.novell.com:/wrk/outgoing..."
 		return 2
 	fi
 
