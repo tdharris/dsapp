@@ -48,6 +48,23 @@ EOF
 		INTERACTIVE_USER=true;
 	fi
 
+	function cleanup_exit {
+		# Clear dsapp/tmp
+		rm -f /opt/novell/datasync/tools/dsapp/tmp/* 2>/dev/null
+
+		# Removes .pgpass if pgpass=true in dsapp.conf
+		if ($pgpass);then
+			if [ `cat /opt/novell/datasync/tools/dsapp/conf/dsapp.pid | wc -l` -eq '1' ];then
+				rm -f ~/.pgpass;
+			fi
+		fi
+
+		# Remove PID from dsapp.pid
+		sed -i '/'$$'/d' /opt/novell/datasync/tools/dsapp/conf/dsapp.pid
+
+		# Reset the terminal (clear silent mode)
+		stty sane
+	}
 
 	function trapCall {
 		# Exit watch while staying in dsapp
@@ -56,30 +73,20 @@ EOF
 		else
 			# Clean up and exit script
 			clear;
-			# Clear dsapp/tmp
-			rm -f /opt/novell/datasync/tools/dsapp/tmp/* 2>/dev/null
 
-			# Removes .pgpass if pgpass=true in dsapp.conf
-			if ($pgpass);then
-				if [ `cat /opt/novell/datasync/tools/dsapp/conf/dsapp.pid | wc -l` -eq '1' ];then
-					rm -f ~/.pgpass;
-				fi
-			fi
+			# clean up files
+			cleanup_exit;
 
-			# Remove PID from dsapp.pid
-			sed -i '/'$$'/d' /opt/novell/datasync/tools/dsapp/conf/dsapp.pid
-
-			# Reset the terminal
-			reset;
-			echo "Bye $USER"
 			exit 1;
 		fi
 	}
 
 	# Trap ^Cctrl c
-	# trap trapCall SIGINT
-	trap trapCall INT TERM EXIT SIGINT
+	trap trapCall INT TERM SIGINT
 	monitorValue=false;
+
+	# Clean up on exit
+	trap cleanup_exit EXIT
 
 	# Make sure user is root
 	if [ "$(id -u)" != "0" ];then
@@ -306,6 +313,7 @@ EOF
 	# Global variable for verifyUser
 	vuid="";
 	uid="";
+	simpleUID="";
 
 
 	# Get Hostname of server
@@ -1382,13 +1390,16 @@ function createDatabases {
 			datasyncBanner;
 			echo -e "\nEnter 'q' to cancel"
 			read -ep "UserID: " uid;
+			if [ "$uid" = 'q' ];then
+				return 4; # return code 4 for 'q'
+			fi
 			if [ -z "$uid" ];then
 				if ! askYesOrNo $"No input. Try again?"; then
 			    	return 3;
 				fi
 			fi
 		done
-
+		simpleUID=$uid
 		# Return 3 if user input is q | Q
 		if [[ "$uid" = "q" || "$uid" = "Q" ]];then
 				datasyncBanner;
@@ -1500,7 +1511,7 @@ function removeUser {
 		datasyncBanner;
 		echo -e "\t--- CAUTION ---\n[Removes all reference of userID]\n"
 		verifyUser vuid "noReturn"
-		if [ $? -ne 3 ];then
+		if [ $? -lt 3 ];then
 			if askYesOrNo $"Remove [$vuid] from datasync databases?"; then
 				dCleanup "$vuid";
 				echo;
@@ -1666,7 +1677,7 @@ function tryCheck {
 if [ -d /opt/novell/groupwise/gwcheck/bin ]; then" > $dsapptmp/gwCheck.sh
 
 echo "userPO=$userPO" >> $dsapptmp/gwCheck.sh
-echo "vuid=$vuid" >> $dsapptmp/gwCheck.sh
+echo "vuid=$simpleUID" >> $dsapptmp/gwCheck.sh
 
 echo 'poaHome=$(cat /opt/novell/groupwise/agents/share/$userPO.poa | grep -i home | tail -n1 | cut -d " " -f 2)' >> $dsapptmp/gwCheck.sh
 echo 'echo "<?xml version="1.0" encoding="UTF-8"?>
@@ -1804,7 +1815,7 @@ Content-Type: text/xml
    <SOAP-ENV:Body>
       <ns1:loginRequest>
          <auth xmlns="http://schemas.novell.com/2005/01/GroupWise/methods" xsi:type="ns0:TrustedApplication">
-            <ns0:username>$vuid</ns0:username>
+            <ns0:username>$simpleUID</ns0:username>
             <ns0:name>$trustedName</ns0:name>
             <ns0:key>$trustedAppKey</ns0:key>
          </auth>
@@ -1815,6 +1826,7 @@ Content-Type: text/xml
    </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>
 EOF`
+
 }
 
 # The function below sets the SOAP Session Key using global variable 'soapSession'
@@ -1853,16 +1865,32 @@ else
 		echo -e "Redirection detected.\nFailure to connect to $poa"
 	fi
 
+	soap_Description=`echo $soapLoginResponse | grep -iwo "<gwt:description>.*</gwt:description>" | sed 's/<[^>]*[>]//g'`
+	soap_Username=`echo $soapLoginResponse | grep -iwo "<gwt:name>.*</gwt:name>" | sed 's/<[^>]*[>]//g'`
+	soap_UserEmail=`echo $soapLoginResponse | grep -iwo "<gwt:email>.*</gwt:email>" | sed 's/<[^>]*[>]//g'`
+	soap_UserID=`echo $soapLoginResponse | grep -iwo "<gwt:userid>.*</gwt:userid>" | sed 's/<[^>]*[>]//g'`
+	soap_UserFID=`echo $soapLoginResponse | grep -iwo "<gwt:fid>.*</gwt:fid>" | sed 's/<[^>]*[>]//g'`
+	soap_DOM=`echo $soapLoginResponse | grep -iwo "<gwt:domain>.*</gwt:domain>" | sed 's/<[^>]*[>]//g'`
 	userPO=`echo $soapLoginResponse | grep -iwo "<gwt:postOffice>.*</gwt:postOffice>" | sed 's/<[^>]*[>]//g' | tr -d ' ' | tr [:upper:] [:lower:]`
 	gwVersion=`echo $soapLoginResponse | grep -iwo "<gwm:gwVersion>.*</gwm:gwVersion>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
+	soap_POBuild=`echo $soapLoginResponse | grep -iwo "<gwm:build>.*</gwm:build>" | sed 's/<[^>]*[>]//g'`
 	soapSession=`echo $soapLoginResponse | grep -iwo "<gwm:session>.*</gwm:session>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
-	if [[ -z "$soapSession" || -z "$poa" ]]; then echo -e "\nNull response to soapLogin\nPOA: "$poa"\ntrustedName\Key: "$trustedName":"$trustedAppKey"\n\nsoapLoginResponse:\n"$soapLoginResponse"\n"$soapSession
+
+	echo -e "POA: $poa\ntrustedName\Key: "$trustedName":"$trustedAppKey""
+
+	if [ -n "$soap_Description" ];then
+		echo -e "\nProblem with user: $simpleUID"
+		echo -e "Description: $soap_Description\n"
+
+	elif [[ -n "$soapSession" || -n "$poa" ]]; then
+		echo -e "\nDomain: $soap_DOM\nPost Office: $userPO\nPOA version: $gwVersion-$soap_POBuild\n"
+		echo -e "User Name: $soap_Username\nUser Email: $soap_UserEmail\nUser GroupWise ID: $soap_UserID\nUser File ID: $soap_UserFID\n"
 	fi
 fi
 }
 
 folderResponse=''
-function checkGroupWise {
+function checkGroupWiseStructure {
 local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 soapLogin
 if [ -n "$soapSession" ];then
@@ -2038,7 +2066,7 @@ function whatDeviceDeleted {
 local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 datasyncBanner;
 verifyUser vuid;
-if [ $? -ne 3 ] ; then
+if [ $? -lt 3 ] ; then
 	cd $log
 
 	deletions=`cat $mAlog* | grep -i -A 8 "<origSourceName>$vuid</origSourceName>" | grep -i -A 2 "<type>delete</type>" | grep -i "<creationEventID>" | cut -d '.' -f4- | sed 's|<\/creationEventID>||g'`
@@ -2454,7 +2482,7 @@ function updateFDN {
 	datasyncBanner;
 	if (checkLDAP);then
 		verifyUser vuid;
-		if [ $? -ne 3 ] ; then
+		if [ $? -lt 3 ] ; then
 			echo -e "\nSearching LDAP..."
 			local tempVUID=`echo $vuid | cut -f1 -d ',' | cut -f2 -d '='`
 			userFilter="(&(!(objectClass=computer))(cn=$tempVUID)(|(objectClass=Person)(objectClass=orgPerson)(objectClass=inetOrgPerson)))"
@@ -5206,7 +5234,7 @@ done
 
 					2) # Check Sync Count
 						verifyUser vuid;
-						if [ $? -ne 3 ] ; then
+						if [ $? -lt 3 ] ; then
 							echo -e "\nCat result:"
 								cat $mAlog | grep -i percentage | grep -i MC | grep -i count | grep -i $vuid | tail
 							echo ""
@@ -5230,33 +5258,39 @@ done
 			while :
 			do
 				datasyncBanner;
-				echo -e "\t1. Check GroupWise Folder Structure"
-		 		echo -e "\t2. Remote GWCheck DELDUPFOLDERS (beta)"
+				echo -e "\t1. Check User over SOAP"
+				echo -e "\t2. Check GroupWise Folder Structure"
+		 		echo -e "\t3. Remote GWCheck DELDUPFOLDERS (beta)"
 
 		 		echo -e "\n\t0. Back"
 			 	echo -n -e "\n\tSelection: "
 			 	read -n1 opt;
 				case $opt in
 
-					1) # Check GroupWise Folder Structure
+					1) # Check user via SOAP
 						datasyncBanner;
 						verifyUser vuid;
-						if [ $? -ne 3 ] ; then
+						if [ $? -ne 4 ] ; then
 							soapLogin;
-						else
-							echo "No such user '$uid'"
 						fi
 						eContinue;
 						;;
 
-					2) # gwCheck
+					2) # Check GroupWise Folder Structure
+						datasyncBanner;
+						verifyUser vuid;
+						if [ $? -ne 4 ] ; then
+							checkGroupWiseStructure;
+						fi
+						eContinue;
+						;;
+
+					3) # gwCheck
 						datasyncBanner;
 						
 						verifyUser vuid;
-						if [ $? -ne 3 ] ; then
+						if [ $? -ne 4 ] ; then
 							soapLogin;
-						else
-							echo "No such user '$uid'"
 						fi
 
 						if [ -n "$soapSession" ]; then
@@ -5319,7 +5353,7 @@ done
 				echo -e "\nCheck for User Authentication Problems\n"
 				# Confirm user exists in database
 				verifyUser vuid "noReturn";
-					if [ $? -ne 3 ] ; then
+					if [ $? -lt 3 ] ; then
 						echo -e "\nChecking log files..."
 						err=true
 						# User locked/expired/disabled - "authentication problem"
