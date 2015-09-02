@@ -6,6 +6,8 @@ echo "$gitUsername:$gitPassword" > /root/.gitAuth
 fi
 auth=`cat /root/.gitAuth`
 
+cd ../
+
 tmp_publishedVersion="/tmp/dsapp-version.info"
 increment=false;
 

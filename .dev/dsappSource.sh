@@ -1,5 +1,7 @@
 #!/bin/bash
 
+script_dir='/scripts/dsapp'
+
 if [ -z "$1" ];then
    echo "You didn't specify anything to build";
    exit 1;
@@ -9,14 +11,12 @@ fi
 # versions in there when we still have the src.rpms in the SRPMS dir
 rm -f /usr/src/packages/RPMS/*
 rm -f /usr/src/packages/RPMS/noarch/*
-oldDir=$PWD
 
-cd /usr/src/packages/SOURCES/
-cp $oldDir/dsapp-test.sh ./dsapp.sh
-cp $oldDir/filestoreIdToPath.pyc ./
+cp $script_dir/dsapp-test.sh /usr/src/packages/SOURCES/dsapp.sh
+cp $script_dir/lib/filestoreIdToPath.pyc /usr/src/packages/SOURCES/
 
 # Update the spec file version
-version=`cat dsapp.sh | grep -wm 1 "dsappversion" | cut -f2 -d"'"`;
+version=`cat /usr/src/packages/SOURCES/dsapp.sh | grep -wm 1 "dsappversion" | cut -f2 -d"'"`;
 lineNumber=`grep -n -m1 "Release" /home/rpmbuild/rpmbuild/SPECS/dsapp.spec | cut -f1 -d ':'`
 releaseNumber=`grep -m1 "Release" /home/rpmbuild/rpmbuild/SPECS/dsapp.spec | awk '{print $2}'`
 sed -i ""$lineNumber"s|$releaseNumber|$version|g" /home/rpmbuild/rpmbuild/SPECS/dsapp.spec
@@ -26,8 +26,12 @@ sed -i ""$lineNumber"s|$releaseNumber|$version|g" /home/rpmbuild/rpmbuild/SPECS/
 dos2unix /home/rpmbuild/rpmbuild/SPECS/${1}.spec
 su rpmbuild -c "rpmbuild -ba /home/rpmbuild/rpmbuild/SPECS/${1}.spec"
 
-cp /usr/src/packages/RPMS/noarch/dsapp*.rpm $oldDir
-cd $oldDir
-cp dsapp-rpm.sh dsapp.sh
+cp /usr/src/packages/RPMS/noarch/dsapp*.rpm /scripts/dsapp/.dev/rpmbuild/
+cp $script_dir/.dev/dsapp-rpm.sh $script_dir/.dev/rpmbuild/dsapp.sh
+
+# CD into rpmbuild dir
+cd $script_dir/.dev/rpmbuild/
 tar czf dsapp.tgz dsapp*.rpm dsapp.sh
-rm dsapp*.rpm
+
+# Clean up files
+rm dsapp*.rpm dsapp.sh
