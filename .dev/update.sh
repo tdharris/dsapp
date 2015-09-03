@@ -1,3 +1,5 @@
+work_dir='/scripts/dsapp'
+
 #Create / check gitAuth
 if [ ! -f /root/.gitAuth ];then
 read -p "Enter git username: " gitUsername
@@ -5,8 +7,6 @@ read -p "Enter git password: " gitPassword
 echo "$gitUsername:$gitPassword" > /root/.gitAuth
 fi
 auth=`cat /root/.gitAuth`
-
-cd ../
 
 tmp_publishedVersion="/tmp/dsapp-version.info"
 increment=false;
@@ -24,16 +24,16 @@ function incrementBuild {
 	done
 
 	# Get current version
-	version=`cat dsapp-test.sh | grep -wm 1 "dsappversion" | cut -f2 -d"'"`;
+	version=`cat $work_dir/dsapp-test.sh | grep -wm 1 "dsappversion" | cut -f2 -d"'"`;
 
 	if ($increment); then
 		# Release to FTP
 		version=$((version+1))
-		lineNumber=`grep dsappversion= -n -m1 dsapp-test.sh | cut -f1 -d ':'`
-		sed -i ""$lineNumber"s|dsappversion='[0-9]*'|dsappversion='$version'|g" dsapp-test.sh
+		lineNumber=`grep dsappversion= -n -m1 $work_dir/dsapp-test.sh | cut -f1 -d ':'`
+		sed -i ""$lineNumber"s|dsappversion='[0-9]*'|dsappversion='$version'|g" $work_dir/dsapp-test.sh
 
-		lineNumber=`grep dsappversion= -n -m1 dsapp-rpm.sh | cut -f1 -d ':'`
-		sed -i ""$lineNumber"s|dsappversion='[0-9]*'|dsappversion='$version'|g" dsapp-rpm.sh
+		lineNumber=`grep dsappversion= -n -m1 $work_dir/.dev/dsapp-rpm.sh | cut -f1 -d ':'`
+		sed -i ""$lineNumber"s|dsappversion='[0-9]*'|dsappversion='$version'|g" $work_dir/.dev/dsapp-rpm.sh
 	fi
 
 	echo -e $version"\n"
@@ -41,15 +41,13 @@ function incrementBuild {
 
 function uploadFTP {
 	echo -e "-------------------------------\nBuilding with dsappSource.sh\n-------------------------------"
-	$PWD/dsappSource.sh dsapp;
+	$work_dir/dsappSource.sh dsapp;
 	echo
-	# cp dsapp-test.sh dsapp.sh;
-	# tar -czf dsapp.tgz dsapp.sh;
 
 	read -p "Novell FTP User: " userid
 	read -sp "Password: " pass
 
-	
+	cd $work_dir/.dev/rpmbuild
 	lftp -d -e 'set ssl:ca-file ~/.lftp.support-ftp-internal.ca.crt ; set ftp:ssl-force true; set ssl:verify-certificate false' -u "$userid","$pass" ftp-internal.provo.novell.com <<EOF
 	cd outgoing
 	put dsapp.tgz
@@ -64,9 +62,9 @@ EOF
 	put dsapp-version.info $tmp_publishedVersion
 EOF
 	echo -e "\nCopying to root@snielson17:/wrk/outgoing: "
-	scp dsapp.tgz $tmp_publishedVersion root@snielson17.lab.novell.com:/wrk/outgoing
+	cp $work_dir/.dev/rpmbuild/dsapp.tgz $tmp_publishedVersion /mnt/wrk/outgoing/
 	if [ $? -ne 0 ]; then
-		echo "Problem uploading to snielson17.lab.novell.com:/wrk/outgoing..."
+		echo "Problem copying to /mnt/wrk/outgoing/"
 		return 2
 	fi
 
@@ -82,6 +80,7 @@ EOF
 
 function githubPush {
 	#Download latest from Github.com first
+	cd $work_dir/
 	git pull https://$auth@github.com/tdharris/dsapp.git
 	if [ $? -eq 0 ]; then
 		# Upload to Github.com
@@ -132,7 +131,7 @@ function newPublicRelease {
 
 function newInternalRelease {
 	incrementBuild
-	githubPush "dsapp-test.sh update.sh dsapp-rpm.sh dsappSource.sh filestoreIdToPath.pyc"
+	githubPush "dsapp-test.sh .dev/ lib/"
 	echo "v"$version
 	read -p "[Exit]";
 	exit 0
