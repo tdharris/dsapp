@@ -1836,7 +1836,7 @@ userPO=''
 
 function soapLogin {
 local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
-poa=`cat $gconf| grep -i soap | sed 's/<[^>]*[>]//g' | tr -d ' ' | sed 's|[a-zA-Z,]||g' | tr -d '//' | sed 's/^.//'`
+poa=`cat $gconf| grep -i soap | sed 's/<[^>]*[>]//g' | tr -d ' ' | cut -f3 -d '/'`
 poaAddress=`echo $poa | sed 's+:.*++g'`
 port=`echo $poa | sed 's+.*:++g'`
 
