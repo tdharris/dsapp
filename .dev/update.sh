@@ -41,7 +41,7 @@ function incrementBuild {
 
 function uploadFTP {
 	echo -e "-------------------------------\nBuilding with dsappSource.sh\n-------------------------------"
-	$work_dir/dsappSource.sh dsapp;
+	$work_dir/.dev/dsappSource.sh dsapp;
 	echo
 
 	read -p "Novell FTP User: " userid
@@ -70,7 +70,7 @@ EOF
 
 	# Upload .tgz to github
 	echo -e "\nPublishing dsapp.tgz to GitHub..."
-	githubPush "dsapp.tgz"
+	githubPush
 
 	rm -f dsapp.sh dsapp.tgz;
 	echo -e "\n-----------------------------------------"
@@ -85,7 +85,7 @@ function githubPush {
 	if [ $? -eq 0 ]; then
 		# Upload to Github.com
 		echo -e "\nUpload to Github.com:"
-		git add $1 2> /dev/null
+		git add -u 2> /dev/null
 		if [ $? -eq 0 ]; then
 			#prompt for commit message
 			read -ep "Commit message? " message
@@ -131,7 +131,7 @@ function newPublicRelease {
 
 function newInternalRelease {
 	incrementBuild
-	githubPush "dsapp-test.sh .dev/ lib/"
+	githubPush
 	echo "v"$version
 	read -p "[Exit]";
 	exit 0
