@@ -72,7 +72,8 @@ EOF
 	echo -e "\nPublishing dsapp.tgz to GitHub..."
 	githubPush
 
-	rm -f dsapp.sh dsapp.tgz;
+	mv dsapp.tgz $work_dir/
+	rm -f dsapp.sh
 	echo -e "\n-----------------------------------------"
 	echo -e "Added to FTP Successfully!"
 	echo -e "-----------------------------------------\n"
