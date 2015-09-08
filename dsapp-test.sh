@@ -681,7 +681,7 @@ function autoUpdateDsapp {
 		fi
 	}
 	getDSVersion;
-
+	
 	#Get database username (datasync_user by default)
 	dbUsername=`cat $ceconf | grep database -A 7 | grep "<username>" | cut -f2 -d '>' | cut -f1 -d '<'`
 
@@ -1877,14 +1877,17 @@ else
 	soapSession=`echo $soapLoginResponse | grep -iwo "<gwm:session>.*</gwm:session>" | sed 's/<[^>]*[>]//g' | tr -d ' '`
 
 	echo -e "POA: $poa\ntrustedName\Key: "$trustedName":"$trustedAppKey""
+	if [ "$1" != '-no_out' ];then
+		if [ -n "$soap_Description" ];then
+			echo -e "\nProblem with user: $simpleUID"
+			echo -e "Description: $soap_Description\n"
+			return 1
 
-	if [ -n "$soap_Description" ];then
-		echo -e "\nProblem with user: $simpleUID"
-		echo -e "Description: $soap_Description\n"
-
-	elif [[ -n "$soapSession" || -n "$poa" ]]; then
-		echo -e "\nDomain: $soap_DOM\nPost Office: $userPO\nPOA version: $gwVersion-$soap_POBuild\n"
-		echo -e "User Name: $soap_Username\nUser Email: $soap_UserEmail\nUser GroupWise ID: $soap_UserID\nUser File ID: $soap_UserFID\n"
+		elif [[ -n "$soapSession" || -n "$poa" ]]; then
+			echo -e "\nDomain: $soap_DOM\nPost Office: $userPO\nPOA version: $gwVersion-$soap_POBuild\n"
+			echo -e "User Name: $soap_Username\nUser Email: $soap_UserEmail\nUser GroupWise ID: $soap_UserID\nUser File ID: $soap_UserFID\n"
+			return 0
+		fi
 	fi
 fi
 }
@@ -1892,7 +1895,7 @@ fi
 folderResponse=''
 function checkGroupWiseStructure {
 local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
-soapLogin
+soapLogin '-no_out'
 if [ -n "$soapSession" ];then
 folderResponse=`netcat $poaAddress $port << EOF
 POST /soap HTTP/1.0
