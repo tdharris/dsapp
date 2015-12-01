@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='225'
+dsappversion='226'
 
 ##################################################################################################
 #	Set up banner logo
@@ -207,10 +207,10 @@ EOF
 	rpminfo="datasync"
 	dsapp_tar="dsapp.tgz"
 	isNum='^[0-9]+$'
-	ds_20x='2000'
-	ds_21x='2100'
-	previousVersion="20153"
-	latestVersion="210230"
+	ds_1x='1'
+	ds_2x='2'
+	previousVersion="210230"
+	latestVersion="1420228"
 
 	# Configuration Files
 	mconf="/etc/datasync/configengine/engines/default/pipelines/pipeline1/connectors/mobility/connector.xml"
@@ -677,7 +677,7 @@ function autoUpdateDsapp {
 	function getDSVersion {
 		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		if ($dsInstalledCheck);then
-			dsVersion=`cat $version | cut -c1-7 | tr -d '.'`
+			dsVersion=`cat $version | cut -f1 -d '.'`
 		fi
 	}
 	getDSVersion;
@@ -808,7 +808,7 @@ function autoUpdateDsapp {
 	function checkPGPASS {
 		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		#Database .pgpass file / version check.
-		if [ $dsVersion -gt $ds_20x ];then
+		if [ $dsVersion -ge $ds_1x ];then
 		#Log into database or create .pgpass file to login.
 		dbRunning=`rcpostgresql status`;
 		if [ $? -eq '0' ];then
@@ -861,7 +861,7 @@ function autoUpdateDsapp {
 			getDBPassword;
 			getTrustedAppKey;
 			getldapPassword;
-			if [ $dsVersion -gt $ds_20x ]; then
+			if [ $dsVersion -ge $ds_1x ]; then
 				getsmtpPassword;
 			fi
 			if ($decodeProblem);then
@@ -934,7 +934,7 @@ log_debug "[Section] : Loading Initialize Variables section"
 		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
 		# Depends on version 1.x or 2.x
 		if ($dsInstalledCheck);then
-			if [ $dsVersion -gt $ds_20x ]; then
+			if [ $dsVersion -ge $ds_1x ]; then
 				declareVariables2
 			else
 				declareVariables1
@@ -950,7 +950,7 @@ if [ "$1" != "-ch" ] && [ "$1" != "--changeHost" ] && [ "$1" != "-h" ] && [ "$1"
 	getldapPassword;
 	getTrustedAppKey;
 	getDBPassword;
-	if [ $dsVersion -gt $ds_20x ]; then
+	if [ $dsVersion -ge $ds_1x ]; then
 		getsmtpPassword;
 	fi
 	checkHostname;
@@ -1109,7 +1109,7 @@ function dropDatabases {
 	dropdb -U $dbUsername datasync;
 	echo -e "Dropping mobility database"
 	dropdb -U $dbUsername mobility;
-	if [ $dsVersion -gt $ds_20x ];then
+	if [ $dsVersion -ge $ds_1x ];then
 		echo -e "Dropping dsmonitor database"
 		dropdb -U $dbUsername dsmonitor;
 	fi
@@ -1136,7 +1136,7 @@ function createDatabases {
 	PGPASSWORD="$dbPassword" psql -d "mobility" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/syncengine/connectors/mobility/mobility_pgsql.sql"
 	echo "extend schema mobility done.."
 
-	if [ $dsVersion -gt $ds_20x ];then
+	if [ $dsVersion -ge $ds_1x ];then
 		PGPASSWORD="$dbPassword" createdb "dsmonitor" -U $dbUsername
 		echo "create monitor database done.."
 		PGPASSWORD="$dbPassword" psql -d "dsmonitor" -U "$dbUsername" -h "localhost" -p "5432" < "$dirOptMobility/monitorengine/sql/monitor.sql"
@@ -1172,6 +1172,7 @@ function createDatabases {
 				#Repopulating targets and membershipCache
 				psql -U $dbUsername datasync < $dsappConf/targets.sql 2>/dev/null;
 				psql -U $dbUsername datasync < $dsappConf/membershipCache.sql 2>/dev/null;
+				
 				fi
 			fi
 		else
@@ -1221,7 +1222,7 @@ function createDatabases {
 		echo -e "\nThe following will register your Mobility product with Novell, allowing you to use the Novell Update Channel to Install a Mobility Pack Update. If you have not already done so, obtain the Mobility Pack activation code from the Novell Customer Center:";
 		echo -e "\n\t1. Login to Customer Center at http://www.novell.com/center"
 		echo -e "\n\t2. Click My Products | Products"
-		if [ $dsVersion -gt $ds_20x ];then
+		if [ $dsVersion -ge $ds_1x ];then
 			echo -e '\n\t3. Expand "GroupWise Mobility Server"'
 			echo -e '\n\t4. Look under "Novell GroupWise Mobility Server" and check for the "Code". It should be 14 alphanumeric characters.'
 		else
@@ -3029,7 +3030,7 @@ function ghc_checkServices {
 	checkStatus webadmin
 	checkStatus connectors
 	checkStatus syncengine
-	if [ $dsVersion -gt $ds_20x ]; then
+	if [ $dsVersion -ge $ds_1x ]; then
 		checkStatus monitorengine
 	fi
 	checkMobility
@@ -3522,7 +3523,7 @@ function ghc_checkUpdateSH {
 	problem=false
 	# Any logging info >>$ghcLog
 
-	if [ $dsVersion -gt $ds_20x ]; then
+	if [ $dsVersion -ge $ds_1x ]; then
 		ghc_dbVersion=`psql -U $dbUsername datasync -t -c "select service_version from services;" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`
 		echo "Service version: $ghc_dbVersion" >>$ghcLog
 		echo -e "RPM version: $mobilityVersion" >>$ghcLog
@@ -3917,7 +3918,7 @@ function dumpSettings {
 		# Get old XML settings to dump into new install XML
 		local xmlNotification=`echo "cat /config/configengine/notification"| xmllint --shell $ceconf | sed '1d;$d' | sed '1d;$d' | tr -d " \t\n\r"`
 		local xmlLDAP=`echo "cat /config/configengine/ldap"| xmllint --shell $ceconf | sed '1d;$d' | sed '1d;$d' | tr -d " \t\n\r"`
-		if [ $dsVersion -gt $ds_21x ];then
+		if [ $dsVersion -ge $ds_2x ];then
 			local xmlgwAdmins=`echo "cat /config/configengine/gw" | xmllint --shell $ceconf | sed '1d;$d' | sed '1d;$d' | tr -d " \t\n\r"`
 		fi
 
@@ -3943,7 +3944,7 @@ function dumpSettings {
 		echo -e "gPort=\"$gPort\"\ngalUserName=\"$galUserName\"\ngAttachSize=\"$gAttachSize\"\nmAttachSize=\"$mAttachSize\"" >>$dumpFile;
 		echo -en "webAdmins=\"" >> $dumpFile; while IFS= read -r line; do echo -en "$line " >> $dumpFile; done <<< "$webAdmins"; sed -i 's/ *$//' $dumpFile; echo '"' >> $dumpFile;
 		echo -e "provisioning=\"$provisioning\"\nauthentication=\"$authentication\"\nsmtpPassword=\"$smtpPassword\"\n\nxmlNotification=\"$xmlNotification\"\nxmlLDAP=\"$xmlLDAP\"" >> $dumpFile;
-		if [ $dsVersion -gt $ds_21x ];then echo "xmlgwAdmins=\"$xmlgwAdmins\"" >> $dumpFile; fi
+		if [ $dsVersion -ge $ds_2x ];then echo "xmlgwAdmins=\"$xmlgwAdmins\"" >> $dumpFile; fi
 		echo -e "Successfully saved settings to $dumpFile"
 
 		# Dumping target, and membershipCache table
@@ -4199,7 +4200,7 @@ function installMobility { # $1 = repository name
 				# Restore other configengine xml settings with awk as xmllint set has character limits
 				awk '/<notification>/{p=1;print;print "'$xmlNotification'"}/<\/notification>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
 				awk '/<ldap>/{p=1;print;print "'$xmlLDAP'"}/<\/ldap>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
-				if [ $dsVersion -gt $ds_21x ];then
+				if [ $dsVersion -ge $ds_2x ];then
 					awk '/<gw>/{p=1;print;print "'$xmlgwAdmins'"}/<\/gw>/{p=0}!p' $ceconf > $ceconf.2; mv $ceconf.2 $ceconf; xmllint --format $ceconf --output $ceconf
 				fi
 
@@ -4433,7 +4434,7 @@ while [ "$1" != "" ]; do
 		datasyncBanner;
 
 		# Makes sure version is 2.0 +
-		if [ $dsVersion -lt $ds_20x ]; then
+		if [ $dsVersion -le $ds_1x ]; then
 			echo -e "Must be running version 2.0 or greater"
 			break;
 		fi
