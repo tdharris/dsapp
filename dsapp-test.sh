@@ -209,6 +209,7 @@ EOF
 	isNum='^[0-9]+$'
 	ds_1x='1'
 	ds_2x='2'
+	ds_14x='14'
 	previousVersion="210230"
 	latestVersion="1420228"
 
@@ -327,6 +328,13 @@ EOF
 		echo $dsappversion > $dsappConf/dsappVersion
 	fi
 
+	function getDSVersion {
+	local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
+	if ($dsInstalledCheck);then
+		dsVersion=`cat $version | cut -f1 -d '.'`
+	fi
+	}
+
 ##################################################################################################
 # Begin Logging Section
 ##################################################################################################
@@ -430,6 +438,9 @@ log_debug()     { if ($debug); then log "$1" "DEBUG" "${LOG_DEBUG_COLOR}"; fi }
 ##################################################################################################
 log_debug "[Section] : Loading Initialization section"
 
+	#Get datasync version.
+	getDSVersion;
+
 	# Load Menu (Get all needed variables)
 	if [ -z "$1" ];then
 		datasyncBanner; echo "Loading Menu..."; else clear;
@@ -470,7 +481,17 @@ log_debug "[Section] : Loading Initialization section"
 		sPort=`xmlpath 'connector/settings/custom/soapServer' < $gconf | rev | cut -f1 -d ':' | cut -f2 -d '/' | rev`
 
 		log_debug "Assigning sSecure from gconf"
-		sSecure=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f1 -d ':'`
+		if [ "$dsVersion" -ge "$ds_14x" ];then
+			log_debug "Assigning sslPOA from gconf"
+			sslPOAs=`xmlpath 'connector/settings/custom/sslPOAs' < $gconf`
+			if [ "$sslPOAs" -eq '0' ];then
+				sSecure='http'
+			elif [ "$sslPOAs" -eq '1' ];then
+				sSecure='https'
+			fi
+		else
+			sSecure=`xmlpath 'connector/settings/custom/soapServer' < $gconf | cut -f1 -d ':'`
+		fi
 
 		log_debug "Assigning wPort from wconf"
 		wPort=`xmlpath 'config/server/port' < $wconf`
@@ -672,15 +693,6 @@ function autoUpdateDsapp {
 		fi
 	fi
 }
-
-	#Get datasync version.
-	function getDSVersion {
-		local header="[${FUNCNAME[0]}] :"; log_debug "$header Funcation call";
-		if ($dsInstalledCheck);then
-			dsVersion=`cat $version | cut -f1 -d '.'`
-		fi
-	}
-	getDSVersion;
 	
 	#Get database username (datasync_user by default)
 	dbUsername=`cat $ceconf | grep database -A 7 | grep "<username>" | cut -f2 -d '>' | cut -f1 -d '<'`
@@ -4924,53 +4936,6 @@ EOF
 				 	case $opt in
 
 				 		1) # Show current FTF Patch level
-						datasyncBanner;
-						if [ -e "$dsappConf/patchlevel" ]; then
-							cat "$dsappConf/patchlevel"
-						else echo "No patches have been applied to this Mobility server."
-						fi
-						echo; eContinue;
-						;;
-
-					 	2) # Fix slow startup (GMS 2.0.1.53 only) - TID 7014819, Bug 870939
-							patchFiles=( "/opt/novell/datasync/syncengine/connectors/groupwise/lib/gwsoap.pyc" )
-							patchEm "870939.zip" "20153"
-							;;
-
-						3) # fixLGOptimusFwdAttachmentEncoded (GMS 2.0.1.53 only) - TID 7015238, Bug 882909
-							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/mobility_util.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/smartForward.pyc" )
-							patchEm "882909.zip" "20153"
-							;;
-
-						4) # Fix Sony Xperia Z unable to see mails in Inbox (GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698
-							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/itemOperations.pyc" "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/sync.pyc" )
-							patchEm "861830-868698.zip" "20153"
-							;;
-
-						5) # Log in to the web admin using either the GW connector username or the LDAP username (GMS 2.0.1.53 only) - TID 7015622, Bug 895165
-							patchFiles=( "/opt/novell/datasync/common/lib/datasync/auth/ldap_driver.pyc" "/opt/novell/datasync/configengine/lib/configengine/__init__.pyc" )
-							patchEm "895165.zip" "20153"
-							;;
-
-							/q | q | 0) break;;
-						*) ;;
-
-					esac
-				fi
-
-				# Latest version of mobility
-				if [ "$daVersion" = "$latestVersion" ];then
-					datasyncBanner;
-					echo -e "\t1. Show Applied Patches"
-					echo -e "\t2. Fix update.sh - clear-text passwords - TID 7016214, Bug 918694"
-					echo -e "\t3. Fix interface for synced admin user - TID 7016212, Bug 918660"
-					echo -e "\t4. External messages cannot be opened on iOS - TID 7016617 - Bug 935282"
-					echo -e "\n\t0. Back"
-				 	echo -n -e "\n\tSelection: "
-				 	read -n1 opt;
-				 	case $opt in
-
-					 	1) # Show current FTF Patch level
 							datasyncBanner;
 							if [ -e "$dsappConf/patchlevel" ]; then
 								cat "$dsappConf/patchlevel"
@@ -4992,6 +4957,30 @@ EOF
 						4) # Fix sync.pyc for iOS device - TID 7016617, Bug 935282
 							patchFiles=( "/opt/novell/datasync/syncengine/connectors/mobility/lib/device/sync.pyc" )
 							patchEm "935282.zip" "210230"
+							;;
+
+							/q | q | 0) break;;
+						*) ;;
+
+					esac
+				fi
+
+				# Latest version of mobility
+				if [ "$daVersion" = "$latestVersion" ];then
+					datasyncBanner;
+					echo -e "\t1. Show Applied Patches"
+					echo -e "\n\t0. Back"
+				 	echo -n -e "\n\tSelection: "
+				 	read -n1 opt;
+				 	case $opt in
+
+					 	1) # Show current FTF Patch level
+							datasyncBanner;
+							if [ -e "$dsappConf/patchlevel" ]; then
+								cat "$dsappConf/patchlevel"
+							else echo "No patches have been applied to this Mobility server."
+							fi
+							echo; eContinue;
 							;;
 
 					 	/q | q | 0) break;;
