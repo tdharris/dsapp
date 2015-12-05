@@ -8,7 +8,7 @@
 #
 ##################################################################################################
 
-dsappversion='226'
+dsappversion='227'
 
 ##################################################################################################
 #	Set up banner logo
@@ -4926,10 +4926,9 @@ EOF
 				if [ "$daVersion" = "$previousVersion" ];then
 					datasyncBanner;
 					echo -e "\t1. Show Applied Patches"
-					echo -e "\n\t2. Fix slow startup\n\t\t(GMS 2.0.1.53 only) - TID 7014819, Bug 870939"
-					echo -e "\t3. Fix LG Optimus fwd attachment encoded\n\t\t(GMS 2.0.1.53 only) - TID 7015238, Bug 882909"
-					echo -e "\t4. Fix Sony Xperia Z unable to see mails in Inbox\n\t\t(GMS 2.0.1.53 only) - TID 7014337, Bug 861830-868698"
-					echo -e "\t5. Log in to the web admin using either the GW or LDAP userid\n\t\t(GMS 2.0.1.53 only) - TID 7015622, Bug 895165"
+					echo -e "\t2. Fix update.sh - clear-text passwords - TID 7016214, Bug 918694"
+					echo -e "\t3. Fix interface for synced admin user - TID 7016212, Bug 918660"
+					echo -e "\t4. External messages cannot be opened on iOS - TID 7016617 - Bug 935282"
 					echo -e "\n\t0. Back"
 				 	echo -n -e "\n\tSelection: "
 				 	read -n1 opt;

@@ -69,10 +69,10 @@ EOF
 	fi
 
 	# Upload .tgz to github
+	mv $work_dir/.dev/rpmbuild/dsapp.tgz $work_dir/
 	echo -e "\nPublishing dsapp.tgz to GitHub..."
 	githubPush
 
-	mv dsapp.tgz $work_dir/
 	rm -f dsapp.sh
 	echo -e "\n-----------------------------------------"
 	echo -e "Added to FTP Successfully!"
