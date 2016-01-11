@@ -264,6 +264,7 @@ EOF
 	systemagentlog="$log/monitorengine/systemagent.log"
 	updatelog="$log/update.log"
 	webadminlog="$log/webadmin/server.log"
+	sudslog="$log/suds.log"
 
 	# System logs
 	messages="/var/log/messages"
@@ -1083,7 +1084,7 @@ log_debug "[Section] : Loading Declaration of Function section"
 			cat $dsappLogs/dsapp.tmp | sed "s/[[:cntrl:]]\[[0-9;]*m//g" > $dsappLogs/dsapp.log
 
 			# Tar up all files
-			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $webadminlog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog $dsappLog `find /etc/datasync/ -name *.xml -type f` `ls $mAlog-* | tail -n1 2>/dev/null` `ls $gAlog-* | tail -n1 2>/dev/null` 2>/dev/null;
+			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $webadminlog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $sudslog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog $dsappLog `find /etc/datasync/ -name *.xml -type f` `ls $mAlog-* | tail -n1 2>/dev/null` `ls $gAlog-* | tail -n1 2>/dev/null` 2>/dev/null;
 
 			# Move tmp log back
 			mv $dsappLogs/dsapp.tmp $dsappLogs/dsapp.log
@@ -2004,7 +2005,7 @@ function updateMobilityFTP {
 		if [ $? -ne 1 ];then
 			tar xvfz --overwrite $ds 2>/dev/null;
 			unzip -o $ds 2>/dev/null;
-		dsISO=`find /root/Downloads/ -type f -name 'novell*mobility-*'$dbuild'.iso' | head -n 1 |sed 's!.*/!!'`
+		dsISO=`find /root/Downloads/ -type f -name 'novell*mobility-*'$dbuild'*.iso' | head -n 1 |sed 's!.*/!!'`
 			zypper rr mobility 2>/dev/null;
 			zypper addrepo 'iso:///?iso='$dsISO'&url=file:///root/Downloads' mobility;
 		dsUpdate mobility;
