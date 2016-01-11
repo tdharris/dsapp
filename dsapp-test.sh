@@ -264,7 +264,7 @@ EOF
 	systemagentlog="$log/monitorengine/systemagent.log"
 	updatelog="$log/update.log"
 	webadminlog="$log/webadmin/server.log"
-	sudslog="$log/suds.log"
+	sudslog="$log/connectors/suds.log"
 
 	# System logs
 	messages="/var/log/messages"
@@ -1084,7 +1084,7 @@ log_debug "[Section] : Loading Declaration of Function section"
 			cat $dsappLogs/dsapp.tmp | sed "s/[[:cntrl:]]\[[0-9;]*m//g" > $dsappLogs/dsapp.log
 
 			# Tar up all files
-			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $webadminlog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $sudslog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog $dsappLog `find /etc/datasync/ -name *.xml -type f` `ls $mAlog-* | tail -n1 2>/dev/null` `ls $gAlog-* | tail -n1 2>/dev/null` 2>/dev/null;
+			tar czfv $srn"_"$d.tgz $mAlog $gAlog $mlog $glog $sudslog $webadminlog $configenginelog $connectormanagerlog $syncenginelog $monitorlog $systemagentlog $messages $warn $updatelog version/* nightlyMaintenance syncStatus mobility-logging-info $ghcLog $dsappLog `find /etc/datasync/ -name *.xml -type f` `ls $mAlog-* | tail -n1 2>/dev/null` `ls $gAlog-* | tail -n1 2>/dev/null` 2>/dev/null;
 
 			# Move tmp log back
 			mv $dsappLogs/dsapp.tmp $dsappLogs/dsapp.log
